@@ -36,3 +36,5 @@ func main() {
 	fmt.Println("等待执行结束")
 	wg.Wait()
 }
+
+//来源:https://www.cnblogs.com/dcz2015/p/10375333.html
