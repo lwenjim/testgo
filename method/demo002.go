@@ -16,10 +16,10 @@ func Run3(a, b int) int { //同类型，可以省略  a, b int
 }
 
 //多个返回值
-func Run4(a, b int) (c int, err error) {  //返回值还可以是   (int, error)
-	return a+b, nil
+func Run4(a, b int) (c int, err error) { //返回值还可以是   (int, error)
+	return a + b, nil
 }
 
 func Run5(A, B int) (int, int) {
-	return A+B, A*B
+	return A + B, A * B
 }

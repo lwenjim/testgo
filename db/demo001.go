@@ -28,7 +28,7 @@ func query(quitionID string) (string, string) {
 	return answer, codeName
 }
 
-func getDB() *sql.DB  {
+func getDB() *sql.DB {
 	str := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&timeout=5000ms", mysql_user, mysql_passwd, mysql_ip, mysql_port, mysql_qyDB)
 	db, errOpen := sql.Open("mysql", str)
 	if errOpen != nil {

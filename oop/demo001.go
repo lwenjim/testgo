@@ -1,4 +1,4 @@
-package main
+package oop
 
 import "fmt"
 
@@ -24,6 +24,6 @@ func main() {
 	p := Person2{"xxx", "male", 20}
 	p.PrintInfo()
 	s := Student{Person2{"yyy", "male", 20}, 1, "bj"}
-	s.Person2 =Person2{name:"lwenjin", age:33}
+	s.Person2 = Person2{name: "lwenjin", age: 33}
 	s.PrintInfo()
 }
