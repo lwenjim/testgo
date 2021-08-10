@@ -1,16 +1,24 @@
 package main
 
+import (
+	"fmt"
+	"github.com/go-redis/redis"
+	_ "github.com/go-sql-driver/mysql"
+	"strings"
+	"time"
+)
+
 func main() {
-	//redis := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
+	redis := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})
 
-	//for message := range redis.PSubscribe("abc").Channel() {
-	//	fmt.Printf("payload:%s, channel:%s\n", message.Payload, message.Channel)
-	//}
+	for message := range redis.PSubscribe("abc").Channel() {
+		fmt.Printf("payload:%s, channel:%s\n", message.Payload, message.Channel)
+	}
 
-	//redis.Publish("abc", "123")
+	redis.Publish("abc", "123")
 
-	//res, _ := redis.PubSubChannels("*").Result()
-	//println(strings.Join(res, ""))
+	res, _ := redis.PubSubChannels("*").Result()
+	println(strings.Join(res, ""))
 
 	//message := redis.Subscribe("a")
 	//defer message.Close()
@@ -43,4 +51,49 @@ func main() {
 	//println(redis.ClientGetName().String())
 
 	//println(redis.RandomKey().String())
+
+	//type CourseModel struct {
+	//	CourseId   string
+	//	CourseName string
+	//}
+	//var list map[string]int
+	//list = make(map[string]int)
+	//db, _ := sql.Open("mysql", "root:123456!@#@tcp(localhost-dev:3306)/course_db?charset=utf8")
+	//rows, _ := db.Query("select course_id,course_name from course limit 1")
+	//for rows.Next() {
+	//	var course_id int
+	//	var course_name string
+	//	//rows.Columns()
+	//	_ = rows.Scan(&course_id, &course_name)
+	//	list[course_name] = course_id
+	//}
+	//for k, v := range list {
+	//	println(k, v)
+	//}
+
+	//var list map[string]int
+	//list = make(map[string]int)
+	//db, _ := sql.Open("mysql", "root:123456!@#@tcp(localhost-dev:3306)/course_db?charset=utf8")
+	//tx, _ := db.Begin()
+	//rows, _ := tx.Query("select course_id,course_name from course limit 1")
+	//for rows.Next() {
+	//	var course_id int
+	//	var course_name string
+	//	//rows.Columns()
+	//	_ = rows.Scan(&course_id, &course_name)
+	//	list[course_name] = course_id
+	//}
+	//for k, v := range list {
+	//	println(k, v)
+	//}
+	t := time.Now().Unix()
+	c := 0
+	for i := 0; i < 100000000; i++ {
+		if time.Now().Unix() > t+1 {
+			break
+		}
+		c++
+	}
+	a := 0
+	println(a)
 }
