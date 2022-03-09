@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/go-redis/redis"
 	_ "github.com/go-sql-driver/mysql"
-	"strings"
-	"time"
 )
 
 func main() {
@@ -86,14 +86,15 @@ func main() {
 	//for k, v := range list {
 	//	println(k, v)
 	//}
-	t := time.Now().Unix()
-	c := 0
-	for i := 0; i < 100000000; i++ {
-		if time.Now().Unix() > t+1 {
-			break
-		}
-		c++
-	}
-	a := 0
-	println(a)
+
+	// t := time.Now().Unix()
+	// c := 0
+	// for i := 0; i < 100000000; i++ {
+	// 	if time.Now().Unix() > t+1 {
+	// 		break
+	// 	}
+	// 	c++
+	// }
+	// a := 0
+	// println(a)
 }
