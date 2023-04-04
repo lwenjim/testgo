@@ -5,5 +5,7 @@ import (
 )
 
 func main() {
-	fmt.Printf("\"aa\": %v\n", "aa")
+	i := 1231
+	i %= 1024
+	fmt.Println(i)
 }
