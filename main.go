@@ -3,18 +3,20 @@ package main
 import (
 	"fmt"
 	"sync"
-	"time"
+	"sync/atomic"
 )
 
 func main() {
-	var num int32
-	var w sync.WaitGroup
-	start := time.Now()
-	for i := 0; i < 100000; i++ {
-		num++
-		fmt.Printf("num: %v\n", num)
+	var n int32
+	var wg sync.WaitGroup
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go func() {
+			atomic.AddInt32(&n, 1)
+			wg.Done()
+		}()
 	}
-	w.Wait()
-	fmt.Printf("%+v\n", time.Since(start).Seconds())
-	fmt.Printf("%+v\n", "done")
+	wg.Wait()
+
+	fmt.Println(atomic.LoadInt32(&n)) // 1000
 }
