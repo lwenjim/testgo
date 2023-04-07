@@ -2,21 +2,22 @@ package main
 
 import (
 	"fmt"
-	"sync"
-	"sync/atomic"
+	"io"
+	"net/http"
 )
 
 func main() {
-	var n int32
-	var wg sync.WaitGroup
-	for i := 0; i < 1000; i++ {
-		wg.Add(1)
-		go func() {
-			atomic.AddInt32(&n, 1)
-			wg.Done()
-		}()
+	var c http.Client
+	resp, err := c.Get("https://www.baidu.com")
+	if err != nil {
+		fmt.Printf("err: %v\n", err)
+		return
 	}
-	wg.Wait()
-
-	fmt.Println(atomic.LoadInt32(&n)) // 1000
+	defer func() { _ = resp.Body.Close() }()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		println(err)
+		return
+	}
+	fmt.Println(string(data))
 }
