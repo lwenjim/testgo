@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-<<<<<<< HEAD
 	"os"
 	"os/signal"
 	"syscall"
@@ -33,18 +31,4 @@ func main() {
 	<-done
 	fmt.Println("exiting")
 
-=======
-	"os/exec"
-)
-
-func main() {
-	cmd := exec.Command("ls")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("err: %v\n", err)
-		return
-	}
-	fmt.Printf("out.String(): %v\n", out.String())
->>>>>>> 6c95224d651c4a65bef49ec87c91a0b5db36089a
 }
