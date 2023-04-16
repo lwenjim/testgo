@@ -1,34 +1,41 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
+	"reflect"
+	"unsafe"
+
+	"github.com/fengyoulin/hookingo"
 )
 
+var hno hookingo.Hook
+
+//go:linkname newobject runtime.newobject
+func newobject(typ unsafe.Pointer) unsafe.Pointer
+
+func fno(typ unsafe.Pointer) unsafe.Pointer {
+	t := reflect.TypeOf(0)
+	(*(*[2]unsafe.Pointer)(unsafe.Pointer(&t)))[1] = typ // 相当于反射了闭包对象类型
+	println(t.String())
+	if fn, ok := hno.Origin().(func(typ unsafe.Pointer) unsafe.Pointer); ok {
+		return fn(typ) // 调用原runtime.newobject
+	}
+	return nil
+}
+
+// 创建一个闭包，make closure
+func mc(start int) func() int {
+	return func() int {
+		start++
+		return start
+	}
+}
+
 func main() {
-
-	sigs := make(chan os.Signal, 1)
-	done := make(chan bool, 1)
-	fmt.Println(os.Getpid())
-	// `signal.Notify` registers the given channel to
-	// receive notifications of the specified signals.
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR1, syscall.SIGUSR2)
-	// This goroutine executes a blocking receive for
-	// signals. When it gets one it'll print it out
-	// and then notify the program that it can finish.
-	go func() {
-		sig := <-sigs
-		fmt.Println()
-		fmt.Println(sig)
-		done <- true
-	}()
-	// The program will wait here until it gets the
-	// expected signal (as indicated by the goroutine
-	// above sending a value on `done`) and then exit.
-	fmt.Println("awaiting signal")
-	<-done
-	fmt.Println("exiting")
-
+	var err error
+	hno, err = hookingo.Apply(newobject, fno) // 应用钩子，替换函数
+	if err != nil {
+		panic(err)
+	}
+	f := mc(10)
+	println(f())
 }
