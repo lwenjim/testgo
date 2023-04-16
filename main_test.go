@@ -1,10 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"testing"
-	"time"
 )
 
 func Test_main(t *testing.T) {
-	println(time.Now().Format("2006-01-02"))
+	num := 0x488b442408
+	fmt.Println(num)
 }
