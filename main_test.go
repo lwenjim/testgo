@@ -1,11 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 )
 
-func Test_main(t *testing.T) {
-	num := 0x488b442408
-	fmt.Println(num)
+func TestMain(m *testing.M) {
+	m.Run()
+}
+
+func Test_aa(t *testing.T) {
+	t.Errorf("ok")
 }
