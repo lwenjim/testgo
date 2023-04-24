@@ -1,7 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 func main() {
-	fmt.Println(123)
+	fmt.Printf("%s\n", time.Now().AddDate(0, 0, -90).Format("200601"))
 }
