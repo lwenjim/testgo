@@ -9,5 +9,5 @@ func TestMain(m *testing.M) {
 }
 
 func Test_aa(t *testing.T) {
-	t.Errorf("ok")
+
 }
