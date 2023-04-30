@@ -57,7 +57,7 @@ func TestRestfullClient(t *testing.T) {
 	}
 }
 
-func TestSss(t *testing.T) {
+func TestSharedInformerFactory(t *testing.T) {
 	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
 	if err != nil {
 		panic(err)
