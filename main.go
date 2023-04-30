@@ -1,10 +1,23 @@
 package main
 
 import (
-	"fmt"
-	"time"
+	"bytes"
+	"io"
+	"net/http"
 )
 
 func main() {
-	fmt.Printf("%s\n", time.Now().AddDate(0, 0, -90).Format("200601"))
+	buf := bytes.NewBufferString("")
+	resp, err := http.Post("http://www.baidu.com", "application/json", buf)
+	if err != nil {
+		println(err)
+	} else {
+		defer resp.Body.Close()
+		buff, err := io.ReadAll(resp.Body)
+		if err != nil {
+			println(err)
+		} else {
+			println(string(buff))
+		}
+	}
 }
