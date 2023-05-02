@@ -10,6 +10,12 @@ import (
 )
 
 func main() {
+	//1. config
+	//2. client
+	//3. informer
+	//4. add event handler
+	//5. informer.Start
+
 	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
 	if err != nil {
 		inClusterConfig, err := rest.InClusterConfig()

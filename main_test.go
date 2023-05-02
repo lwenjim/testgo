@@ -90,3 +90,7 @@ func TestSharedInformerFactory(t *testing.T) {
 	factory.WaitForCacheSync(stopCh)
 	<-stopCh
 }
+
+func TestEventHandler(t *testing.T) {
+
+}
