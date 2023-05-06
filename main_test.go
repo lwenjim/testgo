@@ -3,10 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"os"
+	"strings"
+	"testing"
+
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"testing"
 
 	"github.com/peterhellberg/giphy"
 	v1 "k8s.io/api/core/v1"
@@ -93,4 +97,26 @@ func TestSharedInformerFactory(t *testing.T) {
 
 func TestEventHandler(t *testing.T) {
 
+}
+
+func TestGeneralSql(t *testing.T) {
+	lMap := map[string]uint8{
+		"短信":   0,
+		"电话铃声": 1,
+	}
+	path := "/Users/jim/Library/Application Support/jspp/4185955/message/834c38e419a387453405f67c1373d052c9a13902/file/75688595411f66de667cb8a4560ca1cc18b40b1a/铃声-2/"
+	for key, val := range lMap {
+
+		dirEntries, err := os.ReadDir(path + key)
+		if err != nil {
+			return
+		}
+		var values []string
+		for _, entry := range dirEntries {
+			split := strings.Split(entry.Name(), "-")
+			remoteUrl := "https://jspp-dev.oss-cn-shanghai.aliyuncs.com/phonesound/%E9%93%83%E5%A3%B0-2/%E7%94%B5%E8%AF%9D%E9%93%83%E5%A3%B0/" + url.QueryEscape(entry.Name())
+			values = append(values, fmt.Sprintf("INSERT INTO `jspp`.`t_push_phone_sound` (`name`, `url`, `sound_type`, `channel_type`) VALUES ('%s', '%s', %d, %d);", split[0], remoteUrl, val, 1))
+		}
+		println(strings.Join(values, "\n"))
+	}
 }
