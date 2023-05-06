@@ -1,9 +1,0 @@
-FROM golang:1.17
-
-WORKDIR /app
-
-COPY . .
-
-RUN CGO_ENABLE=0 go build -o ingress-manager main.go
-
-CMD ["./ingress-manager"]
