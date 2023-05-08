@@ -107,19 +107,19 @@ func TestGeneralSql(t *testing.T) {
 		"电话铃声": 1,
 	}
 	path := "/Users/jim/Library/Application Support/jspp/4185955/message/834c38e419a387453405f67c1373d052c9a13902/file/75688595411f66de667cb8a4560ca1cc18b40b1a/铃声-2/"
+	var values []string
 	for key, val := range lMap {
 		dirEntries, err := os.ReadDir(path + key)
 		if err != nil {
 			continue
 		}
-		var values []string
 		for _, entry := range dirEntries {
 			split := strings.Split(entry.Name(), "-")
-			remoteUrl := "https://jspp-dev.oss-cn-shanghai.aliyuncs.com/phonesound/%E9%93%83%E5%A3%B0-2/%E7%94%B5%E8%AF%9D%E9%93%83%E5%A3%B0/" + url.QueryEscape(entry.Name())
+			remoteUrl := "/phonesound/%E9%93%83%E5%A3%B0-2/" + url.QueryEscape(key+"/"+entry.Name())
 			values = append(values, fmt.Sprintf("INSERT INTO `jspp`.`t_push_phone_sound` (`name`, `url`, `sound_type`, `channel_type`) VALUES ('%s', '%s', %d, %d);", split[0], remoteUrl, val, 1))
 		}
-		println(strings.Join(values, "\n"))
 	}
+	println(strings.Join(values, "\n"))
 }
 
 func TestSql(t *testing.T) {
@@ -168,10 +168,15 @@ func TestSql(t *testing.T) {
 	}
 	updateOne(i, "1")
 	getOne(i)
+
 }
 
 func TestString(t *testing.T) {
 	s := "abc"
 	s = s[:0]
 	fmt.Printf("s: %v\n", s)
+}
+
+func TestRedis(t *testing.T) {
+
 }
