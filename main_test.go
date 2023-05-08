@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/url"
 	"os"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -17,13 +21,15 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/kubectl/pkg/scheme"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func TestMain(m *testing.M) {
 	m.Run()
 }
 
-func Test_aa(t *testing.T) {
+func TestGighy(t *testing.T) {
 	g := giphy.DefaultClient
 	g.APIKey = "xVXd8j7UxP8Lvn8Dn1aLjLAd5EHYGE31"
 	g.Rating = "pg-13"
@@ -95,10 +101,6 @@ func TestSharedInformerFactory(t *testing.T) {
 	<-stopCh
 }
 
-func TestEventHandler(t *testing.T) {
-
-}
-
 func TestGeneralSql(t *testing.T) {
 	lMap := map[string]uint8{
 		"短信":   0,
@@ -106,10 +108,9 @@ func TestGeneralSql(t *testing.T) {
 	}
 	path := "/Users/jim/Library/Application Support/jspp/4185955/message/834c38e419a387453405f67c1373d052c9a13902/file/75688595411f66de667cb8a4560ca1cc18b40b1a/铃声-2/"
 	for key, val := range lMap {
-
 		dirEntries, err := os.ReadDir(path + key)
 		if err != nil {
-			return
+			continue
 		}
 		var values []string
 		for _, entry := range dirEntries {
@@ -119,4 +120,58 @@ func TestGeneralSql(t *testing.T) {
 		}
 		println(strings.Join(values, "\n"))
 	}
+}
+
+func TestSql(t *testing.T) {
+	db, err := sql.Open("mysql", "root@tcp(127.0.0.1:33060)/test")
+	assert.Nil(t, err)
+
+	db.SetConnMaxLifetime(time.Minute * 3)
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(10)
+
+	getOne := func(id int64) {
+		var password, username string
+
+		s2, err5 := db.Prepare("select username, password from user where id = ?")
+		assert.Nil(t, err5)
+
+		err = s2.QueryRow(id).Scan(&username, &password)
+		assert.Nil(t, err)
+
+		fmt.Printf("username: %s, password: %s\n", username, password)
+	}
+	getOne(2)
+
+	insertOne := func() int64 {
+		r, err2 := db.Exec("insert into user (username, password) values (?, ?)", "liusongjiu"+time.Now().Format("05"), time.Now().String())
+		assert.Nil(t, err2)
+		i, err := r.LastInsertId()
+		assert.Nil(t, err)
+		_, err = r.RowsAffected()
+		assert.Nil(t, err)
+		return i
+	}
+	i := insertOne()
+
+	updateOne := func(id int64, mark string) {
+		s, err := db.Prepare("update user set mark = ? where id = ?")
+		assert.Nil(t, err)
+		defer s.Close()
+		r2, err := s.Exec(mark, id)
+		assert.Nil(t, err)
+
+		_, err = r2.LastInsertId()
+		assert.Nil(t, err)
+		_, err = r2.RowsAffected()
+		assert.Nil(t, err)
+	}
+	updateOne(i, "1")
+	getOne(i)
+}
+
+func TestString(t *testing.T) {
+	s := "abc"
+	s = s[:0]
+	fmt.Printf("s: %v\n", s)
 }
