@@ -2,14 +2,18 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
+	"math/rand"
 	"net/url"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/client-go/informers"
@@ -103,7 +107,7 @@ func TestSharedInformerFactory(t *testing.T) {
 
 func TestGeneralSql(t *testing.T) {
 	lMap := map[string]uint8{
-		"短信":   0,
+		"短信":     0,
 		"电话铃声": 1,
 	}
 	path := "/Users/jim/Library/Application Support/jspp/4185955/message/834c38e419a387453405f67c1373d052c9a13902/file/75688595411f66de667cb8a4560ca1cc18b40b1a/铃声-2/"
@@ -123,6 +127,22 @@ func TestGeneralSql(t *testing.T) {
 }
 
 func TestSql(t *testing.T) {
+	/**
+	DROP TABLE IF EXISTS `user`;
+		CREATE TABLE `user` (
+		  `id` int unsigned NOT NULL AUTO_INCREMENT COMMENT '编号',
+		  `username` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '用户名',
+		  `password` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '密码',
+		  `mark` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注',
+		  `created_time` timestamp(3) NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+		  `updated_time` timestamp(3) NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '修改时间',
+		  PRIMARY KEY (`id`) COMMENT '主键索引',
+		  UNIQUE KEY `password` (`password`) USING BTREE COMMENT '唯一索引',
+		  KEY `username` (`username`) USING BTREE COMMENT '普通索引',
+		  FULLTEXT KEY `ftext` (`mark`) COMMENT '全文索引'
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+	*/
+
 	db, err := sql.Open("mysql", "root@tcp(127.0.0.1:33060)/test")
 	assert.Nil(t, err)
 
@@ -141,10 +161,21 @@ func TestSql(t *testing.T) {
 
 		fmt.Printf("username: %s, password: %s\n", username, password)
 	}
-	getOne(2)
+	getOne(1)
 
 	insertOne := func() int64 {
-		r, err2 := db.Exec("insert into user (username, password) values (?, ?)", "liusongjiu"+time.Now().Format("05"), time.Now().String())
+		password := time.Now().String()
+
+		hash := md5.New()
+		_, err := hash.Write([]byte(password))
+		assert.Nil(t, err)
+
+		var outData = make([]byte, 22)
+		base64.RawStdEncoding.Encode(outData, hash.Sum(nil))
+		password = string(outData)
+
+		rand.Seed(time.Now().UnixNano())
+		r, err2 := db.Exec("insert into user (username, password) values (?, ?)", RandStringRunes(20), password)
 		assert.Nil(t, err2)
 		i, err := r.LastInsertId()
 		assert.Nil(t, err)
@@ -179,4 +210,33 @@ func TestString(t *testing.T) {
 
 func TestRedis(t *testing.T) {
 
+}
+
+func TestSqlx(t *testing.T) {
+	d, err := sqlx.Open("mysql", "root@tcp(127.0.0.1:33060)/test")
+	assert.Nil(t, err)
+	var data []struct {
+		Id       sql.NullInt64  `json:"id"`
+		UserName sql.NullString `json:"username,omitempty"`
+		Password sql.NullString `json:"password,omitempty"`
+		Mark     sql.NullString `json:"mark,omitempty"`
+	}
+	err = d.Select(&data, "select id, username, password, mark from user")
+	assert.Nil(t, err)
+
+	for index := range data {
+		fmt.Printf("id: %v\n", data[index].Id.Int64)
+		fmt.Printf("username: %v\n", data[index].UserName.String)
+		fmt.Printf("password: %v\n", data[index].Password.String)
+		fmt.Printf("mark: %v\n\n", data[index].Mark.String)
+	}
+}
+
+func RandStringRunes(n int) string {
+	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
 }
