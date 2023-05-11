@@ -7,13 +7,21 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math/rand"
+	"net"
 	"net/url"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/bitly/go-simplejson"
+	"github.com/dolthub/go-mysql-server/memory"
+	"github.com/dolthub/go-mysql-server/server"
+	"github.com/dolthub/go-mysql-server/sql/information_schema"
+	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
+	"github.com/qustavo/sqlhooks/v2"
+
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/client-go/informers"
@@ -27,6 +35,9 @@ import (
 	"k8s.io/kubectl/pkg/scheme"
 
 	_ "github.com/go-sql-driver/mysql"
+
+	sqle "github.com/dolthub/go-mysql-server"
+	ssql "github.com/dolthub/go-mysql-server/sql"
 )
 
 func TestMain(m *testing.M) {
@@ -107,7 +118,7 @@ func TestSharedInformerFactory(t *testing.T) {
 
 func TestGeneralSql(t *testing.T) {
 	lMap := map[string]uint8{
-		"短信":     0,
+		"短信":   0,
 		"电话铃声": 1,
 	}
 	path := "/Users/jim/Library/Application Support/jspp/4185955/message/834c38e419a387453405f67c1373d052c9a13902/file/75688595411f66de667cb8a4560ca1cc18b40b1a/铃声-2/"
@@ -212,16 +223,91 @@ func TestRedis(t *testing.T) {
 
 }
 
-func TestSqlx(t *testing.T) {
-	d, err := sqlx.Open("mysql", "root@tcp(127.0.0.1:33060)/test")
+func RandStringRunes(n int) string {
+	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
+type Hooks struct{}
+
+func (h *Hooks) Before(ctx context.Context, query string, args ...interface{}) (context.Context, error) {
+	fmt.Printf("> %s %q", query, args)
+	return context.WithValue(ctx, "begin", time.Now()), nil
+}
+
+func (h *Hooks) After(ctx context.Context, query string, args ...interface{}) (context.Context, error) {
+	begin := ctx.Value("begin").(time.Time)
+	fmt.Printf(". took: %s\n", time.Since(begin))
+	return ctx, nil
+}
+
+func getFreePort() (port int, err error) {
+	var a *net.TCPAddr
+	if a, err = net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
+		var l *net.TCPListener
+		if l, err = net.ListenTCP("tcp", a); err == nil {
+			defer l.Close()
+			return l.Addr().(*net.TCPAddr).Port, nil
+		}
+	}
+	return
+}
+
+func TestMockMysql(t *testing.T) {
+	dbName := RandStringRunes(10)
+	engine := sqle.NewDefault(ssql.NewDatabaseProvider(
+		memory.NewDatabase(dbName),
+		information_schema.NewInformationSchemaDatabase(),
+	))
+	port, err := getFreePort()
+	assert.Nil(t, err)
+	config := server.Config{
+		Protocol: "tcp",
+		Address:  fmt.Sprintf("localhost:%d", port),
+	}
+	s, err := server.NewDefaultServer(config, engine)
+	assert.Nil(t, err)
+
+	go func() {
+		t2 := s.Start()
+		assert.Nil(t, t2)
+	}()
+	sql.Register("mysqlWithHooks", sqlhooks.Wrap(&mysql.MySQLDriver{}, &Hooks{}))
+	assert.Nil(t, err)
+
+	dsn := fmt.Sprintf("root@tcp(localhost:%d)/%s", port, dbName)
+	db3, _ := sql.Open("mysqlWithHooks", dsn)
+	result, err := db3.Exec(`
+		CREATE TABLE t_user(
+		  id int unsigned NOT NULL AUTO_INCREMENT COMMENT '编号',
+		  user_name varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '用户名',
+		  pass_word varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '密码',
+		  mark varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注',
+		  created_time timestamp(3) NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+		  updated_time timestamp(3) NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '修改时间',
+		  PRIMARY KEY (id) COMMENT '主键索引',
+		  UNIQUE KEY pass_word (pass_word) USING BTREE COMMENT '唯一索引',
+		  KEY user_name (user_name) USING BTREE COMMENT '普通索引'
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;	
+	`)
+	assert.Nil(t, err)
+
+	_, err = result.RowsAffected()
+	assert.Nil(t, err)
+
+	d, err := sqlx.Connect("mysql", dsn)
 	assert.Nil(t, err)
 	var data []struct {
 		Id       sql.NullInt64  `json:"id"`
-		UserName sql.NullString `json:"username,omitempty"`
-		Password sql.NullString `json:"password,omitempty"`
+		UserName sql.NullString `json:"user_name,omitempty" db:"user_name"`
+		Password sql.NullString `json:"pass_word,omitempty"  db:"pass_word"`
 		Mark     sql.NullString `json:"mark,omitempty"`
 	}
-	err = d.Select(&data, "select id, username, password, mark from user")
+	err = d.Select(&data, "select id, user_name, pass_word, mark from t_user")
 	assert.Nil(t, err)
 
 	for index := range data {
@@ -230,13 +316,109 @@ func TestSqlx(t *testing.T) {
 		fmt.Printf("password: %v\n", data[index].Password.String)
 		fmt.Printf("mark: %v\n\n", data[index].Mark.String)
 	}
+
+	var schema = `
+		CREATE TABLE person (
+			first_name text,
+			last_name text,
+			email text
+		);
+		
+		CREATE TABLE place (
+			country text,
+			city text NULL,
+			telcode integer
+		)`
+
+	type Person struct {
+		FirstName string `db:"first_name"`
+		LastName  string `db:"last_name"`
+		Email     string
+	}
+
+	type Place struct {
+		Country string
+		City    sql.NullString
+		TelCode int
+	}
+
+	db, err := sqlx.Connect("mysqlWithHooks", dsn)
+	assert.Nil(t, err)
+
+	for _, s := range strings.Split(schema, ";") {
+		db.MustExec(s)
+	}
+
+	tx := db.MustBegin()
+	tx.MustExec("INSERT INTO person (first_name, last_name, email) VALUES (?, ?, ?)", "Jason", "Moiron", "jmoiron@jmoiron.net")
+	tx.MustExec("INSERT INTO person (first_name, last_name, email) VALUES (?, ?, ?)", "John", "Doe", "johndoeDNE@gmail.net")
+	tx.MustExec("INSERT INTO place (country, city, telcode) VALUES (?, ?, ?)", "United States", "New York", "1")
+	tx.MustExec("INSERT INTO place (country, telcode) VALUES (?, ?)", "Hong Kong", "852")
+	tx.MustExec("INSERT INTO place (country, telcode) VALUES (?, ?)", "Singapore", "65")
+	tx.NamedExec("INSERT INTO person (first_name, last_name, email) VALUES (:first_name, :last_name, :email)", &Person{"Jane", "Citizen", "jane.citzen@example.com"})
+	tx.Commit()
+
+	people := []Person{}
+	db.Select(&people, "SELECT * FROM person ORDER BY first_name ASC")
+	jason, john := people[0], people[1]
+	fmt.Printf("%#v\n%#v\n", jason, john)
+
+	jason = Person{}
+	err = db.Get(&jason, "SELECT * FROM person WHERE first_name=$1", "Jason")
+	assert.Nil(t, err)
+	fmt.Printf("%#v\n", jason)
+
+	places := []Place{}
+	err = db.Select(&places, "SELECT * FROM place ORDER BY telcode ASC")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	usa, singsing, honkers := places[0], places[1], places[2]
+	fmt.Printf("%#v\n%#v\n%#v\n", usa, singsing, honkers)
+
+	place := Place{}
+	rows, err := db.Queryx("SELECT * FROM place")
+	assert.Nil(t, err)
+	for rows.Next() {
+		err := rows.StructScan(&place)
+		assert.Nil(t, err)
+		fmt.Printf("%#v\n", place)
+	}
+
+	_, err = db.NamedExec(`INSERT INTO person (first_name,last_name,email) VALUES (:first,:last,:email)`, map[string]interface{}{
+		"first": "Bin",
+		"last":  "Smuth",
+		"email": "bensmith@allblacks.nz",
+	})
+	assert.Nil(t, err)
+
+	_, err = db.NamedQuery(`SELECT * FROM person WHERE first_name=:fn`, map[string]interface{}{"fn": "Bin"})
+	assert.Nil(t, err)
+
+	_, err = db.NamedQuery(`SELECT * FROM person WHERE first_name=:first_name`, jason)
+	assert.Nil(t, err)
+
+	personStructs := []Person{
+		{FirstName: "Ardie", LastName: "Savea", Email: "asavea@ab.co.nz"},
+		{FirstName: "Sonny Bill", LastName: "Williams", Email: "sbw@ab.co.nz"},
+		{FirstName: "Ngani", LastName: "Laumape", Email: "nlaumape@ab.co.nz"},
+	}
+	_, err = db.NamedExec(`INSERT INTO person (first_name, last_name, email) VALUES (:first_name, :last_name, :email)`, personStructs)
+	assert.Nil(t, err)
+
+	personMaps := []map[string]interface{}{
+		{"first_name": "Ardie", "last_name": "Savea", "email": "asavea@ab.co.nz"},
+		{"first_name": "Sonny Bill", "last_name": "Williams", "email": "sbw@ab.co.nz"},
+		{"first_name": "Ngani", "last_name": "Laumape", "email": "nlaumape@ab.co.nz"},
+	}
+	_, err = db.NamedExec(`INSERT INTO person (first_name, last_name, email) VALUES (:first_name, :last_name, :email)`, personMaps)
+	assert.Nil(t, err)
+
 }
 
-func RandStringRunes(n int) string {
-	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
-	}
-	return string(b)
+func TestJson(t *testing.T) {
+	js, _ := simplejson.NewJson([]byte("{\"authToken\":\"abc\"}"))
+	fmt.Println(js.Get("authToken").String())
+
 }
