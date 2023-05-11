@@ -1,7 +1,12 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/bitly/go-simplejson"
+)
 
 func main() {
-	fmt.Println(123)
+	js, _ := simplejson.NewJson([]byte(`{"authToken":"abc"}`))
+	fmt.Printf("js.Get(\"authToken\"): %v\n", js.Get("authToken"))
 }
