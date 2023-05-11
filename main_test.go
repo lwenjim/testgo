@@ -18,6 +18,7 @@ import (
 	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
+
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/qustavo/sqlhooks/v2"
@@ -38,6 +39,7 @@ import (
 
 	sqle "github.com/dolthub/go-mysql-server"
 	ssql "github.com/dolthub/go-mysql-server/sql"
+	"github.com/redis/go-redis/v9"
 )
 
 func TestMain(m *testing.M) {
@@ -118,7 +120,7 @@ func TestSharedInformerFactory(t *testing.T) {
 
 func TestGeneralSql(t *testing.T) {
 	lMap := map[string]uint8{
-		"短信":   0,
+		"短信":     0,
 		"电话铃声": 1,
 	}
 	path := "/Users/jim/Library/Application Support/jspp/4185955/message/834c38e419a387453405f67c1373d052c9a13902/file/75688595411f66de667cb8a4560ca1cc18b40b1a/铃声-2/"
@@ -220,7 +222,19 @@ func TestString(t *testing.T) {
 }
 
 func TestRedis(t *testing.T) {
+	var ctx = context.Background()
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
+	})
 
+	err := rdb.Set(ctx, "key", "value", 10*time.Minute).Err()
+	assert.Nil(t, err)
+
+	val, err := rdb.Get(ctx, "key").Result()
+	assert.Nil(t, err)
+	fmt.Println("key", val)
 }
 
 func RandStringRunes(n int) string {
@@ -420,5 +434,4 @@ func TestMockMysql(t *testing.T) {
 func TestJson(t *testing.T) {
 	js, _ := simplejson.NewJson([]byte("{\"authToken\":\"abc\"}"))
 	fmt.Println(js.Get("authToken").String())
-
 }
