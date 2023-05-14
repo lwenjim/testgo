@@ -40,6 +40,8 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	ssql "github.com/dolthub/go-mysql-server/sql"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/alicebob/miniredis/v2"
 )
 
 func TestMain(m *testing.M) {
@@ -47,6 +49,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestGighy(t *testing.T) {
+
 	g := giphy.DefaultClient
 	g.APIKey = "xVXd8j7UxP8Lvn8Dn1aLjLAd5EHYGE31"
 	g.Rating = "pg-13"
@@ -55,6 +58,7 @@ func TestGighy(t *testing.T) {
 	for _, trending := range trendings.Data {
 		fmt.Println(trending.MediaURL())
 	}
+
 }
 
 func TestClientSet(t *testing.T) {
@@ -120,7 +124,7 @@ func TestSharedInformerFactory(t *testing.T) {
 
 func TestGeneralSql(t *testing.T) {
 	lMap := map[string]uint8{
-		"短信":     0,
+		"短信":   0,
 		"电话铃声": 1,
 	}
 	path := "/Users/jim/Library/Application Support/jspp/4185955/message/834c38e419a387453405f67c1373d052c9a13902/file/75688595411f66de667cb8a4560ca1cc18b40b1a/铃声-2/"
@@ -222,14 +226,20 @@ func TestString(t *testing.T) {
 }
 
 func TestRedis(t *testing.T) {
-	var ctx = context.Background()
+	s, err := miniredis.Run()
+	if err != nil {
+		panic(err)
+	}
+
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
+		Addr:     s.Addr(),
 		Password: "",
 		DB:       0,
 	})
 
-	err := rdb.Set(ctx, "key", "value", 10*time.Minute).Err()
+	var ctx = context.Background()
+
+	err = rdb.Set(ctx, "key", "value", 10*time.Minute).Err()
 	assert.Nil(t, err)
 
 	val, err := rdb.Get(ctx, "key").Result()
@@ -249,8 +259,10 @@ func RandStringRunes(n int) string {
 type Hooks struct{}
 
 func (h *Hooks) Before(ctx context.Context, query string, args ...interface{}) (context.Context, error) {
+	type GolbalValue string
+	var name GolbalValue = "begin"
 	fmt.Printf("> %s %q", query, args)
-	return context.WithValue(ctx, "begin", time.Now()), nil
+	return context.WithValue(ctx, name, time.Now()), nil
 }
 
 func (h *Hooks) After(ctx context.Context, query string, args ...interface{}) (context.Context, error) {
@@ -369,11 +381,11 @@ func TestMockMysql(t *testing.T) {
 	tx.MustExec("INSERT INTO place (country, city, telcode) VALUES (?, ?, ?)", "United States", "New York", "1")
 	tx.MustExec("INSERT INTO place (country, telcode) VALUES (?, ?)", "Hong Kong", "852")
 	tx.MustExec("INSERT INTO place (country, telcode) VALUES (?, ?)", "Singapore", "65")
-	tx.NamedExec("INSERT INTO person (first_name, last_name, email) VALUES (:first_name, :last_name, :email)", &Person{"Jane", "Citizen", "jane.citzen@example.com"})
-	tx.Commit()
+	_, _ = tx.NamedExec("INSERT INTO person (first_name, last_name, email) VALUES (:first_name, :last_name, :email)", &Person{"Jane", "Citizen", "jane.citzen@example.com"})
+	_ = tx.Commit()
 
 	people := []Person{}
-	db.Select(&people, "SELECT * FROM person ORDER BY first_name ASC")
+	_ = db.Select(&people, "SELECT * FROM person ORDER BY first_name ASC")
 	jason, john := people[0], people[1]
 	fmt.Printf("%#v\n%#v\n", jason, john)
 
