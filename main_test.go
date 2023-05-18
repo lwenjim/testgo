@@ -3,13 +3,18 @@ package main
 import (
 	"context"
 	"crypto/md5"
+	"crypto/tls"
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"math/rand"
 	"net"
+	"net/mail"
+	"net/smtp"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -42,6 +47,8 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/alicebob/miniredis/v2"
+
+	"github.com/jordan-wright/email"
 )
 
 func TestMain(m *testing.M) {
@@ -446,4 +453,157 @@ func TestMockMysql(t *testing.T) {
 func TestJson(t *testing.T) {
 	js, _ := simplejson.NewJson([]byte("{\"authToken\":\"abc\"}"))
 	fmt.Println(js.Get("authToken").String())
+}
+
+func TestStructSlice(t *testing.T) {
+	type book struct {
+		Name  string `json:"name"`
+		Count int    `json:"count"`
+	}
+
+	data := []book{
+		{
+			Name:  "golang",
+			Count: 11,
+		},
+		{
+			Name:  "java",
+			Count: 21,
+		},
+	}
+
+	fmt.Printf("%+v\n", data)
+}
+
+func TestPhoneEmail(t *testing.T) {
+	// email := "779772852@qq.com"
+	email := "779772852@qq.com"
+	pattern := `^(\w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*|1[345789]{1}\\d{9})$`
+	reg := regexp.MustCompile(pattern)
+	result := reg.MatchString(email)
+	fmt.Printf("result: %v\n", result)
+}
+
+func TestSendMailQQ(t *testing.T) {
+	from := os.Getenv("IMail")
+	password := os.Getenv("IMailPassword")
+
+	fmt.Printf("from: %v\n", from)
+	fmt.Printf("password: %v\n", password)
+
+	to := []string{
+		os.Getenv("IMail"),
+	}
+	smtpHost := "smtp.exmail.qq.com"
+	smtpPort := "465" // 465 / 587 / 25 / 465
+	message := []byte("This is a test email message.")
+
+	auth := smtp.PlainAuth("", from, password, smtpHost)
+	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, to, message)
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println("Email Sent Successfully!")
+}
+
+func TestSendMail163(t *testing.T) {
+	from := "lwenjim@163.com"
+	password := "lwenjin163123"
+	smtpHost := "smtp.163.com"
+	smtpPort := "25"
+	auth := smtp.PlainAuth("", from, password, smtpHost)
+	to := []string{from}
+	msg := []byte(fmt.Sprintf("To: %s\r\n"+
+		"Subject: discount Gophers!\r\n"+
+		"\r\n"+
+		"This is the email body.\r\n", from))
+	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, to, msg)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println("Email Sent Successfully!")
+}
+
+func TestSmtpSSl(t *testing.T) {
+	from := mail.Address{Name: "", Address: "liuwenjin@1foli.com"}
+	to := mail.Address{Name: "", Address: "liuwenjin@1foli.com"}
+
+	subj := "This is the email subject"
+	body := "This is an example body.\n With two lines."
+
+	headers := make(map[string]string)
+	headers["From"] = from.String()
+	headers["To"] = to.String()
+	headers["Subject"] = subj
+
+	message := ""
+	for k, v := range headers {
+		message += fmt.Sprintf("%s: %s\r\n", k, v)
+	}
+	message += "\r\n" + body
+
+	servername := "smtp.exmail.qq.com:465"
+
+	host, _, _ := net.SplitHostPort(servername)
+
+	auth := smtp.PlainAuth("", "liuwenjin@1foli.com", "lwenjin8098098A", host)
+
+	tlsconfig := &tls.Config{
+		ServerName: host,
+	}
+
+	conn, err := tls.Dial("tcp", servername, tlsconfig)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	c, err := smtp.NewClient(conn, host)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	if err = c.Auth(auth); err != nil {
+		log.Panic(err)
+	}
+
+	if err = c.Mail(from.Address); err != nil {
+		log.Panic(err)
+	}
+
+	if err = c.Rcpt(to.Address); err != nil {
+		log.Panic(err)
+	}
+
+	w, err := c.Data()
+	if err != nil {
+		log.Panic(err)
+	}
+
+	_, err = w.Write([]byte(message))
+	if err != nil {
+		log.Panic(err)
+	}
+
+	err = w.Close()
+	if err != nil {
+		log.Panic(err)
+	}
+
+	_ = c.Quit()
+}
+
+func TestSmtpWithTls(t *testing.T) {
+	e := email.NewEmail()
+	e.From = "Jordan Wright <liuwenjin@1foli.com>"
+	e.To = []string{"liuwenjin@1foli.com"}
+	e.Bcc = []string{"liuwenjin@1foli.com"}
+	e.Cc = []string{"liuwenjin@1foli.com"}
+	e.Subject = "Awesome Subject"
+	e.Text = []byte("Text Body is, of course, supported!")
+	e.HTML = []byte("<h1>Fancy HTML is supported, too!</h1>")
+	err := e.Send("smtp.exmail.qq.com:587", smtp.PlainAuth("", "liuwenjin@1foli.com", "lwenjin8098098A", "smtp.exmail.qq.com"))
+	assert.Nil(t, err)
 }
