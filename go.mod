@@ -10,8 +10,8 @@ require (
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/mock v1.6.0
 	github.com/jmoiron/sqlx v1.3.5
-	github.com/jordan-wright/email v0.0.0-00010101000000-000000000000
 	github.com/lib/pq v1.10.9
+	github.com/lwenjim/email v0.0.0-20230518034844-b876db983aa3
 	github.com/peterhellberg/giphy v0.0.2
 	github.com/qustavo/sqlhooks/v2 v2.1.0
 	github.com/redis/go-redis/v9 v9.0.4
@@ -20,5 +20,3 @@ require (
 	k8s.io/client-go v0.27.1
 	k8s.io/kubectl v0.27.1
 )
-
-replace github.com/jordan-wright/email => ../github.com/jordan-wright/email

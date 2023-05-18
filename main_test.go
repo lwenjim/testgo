@@ -48,7 +48,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 
-	"github.com/jordan-wright/email"
+	"github.com/lwenjim/email"
 )
 
 func TestMain(m *testing.M) {
