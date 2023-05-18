@@ -5,6 +5,9 @@
     },
     {
       "path": "../study-golang"
+    },
+    {
+      "path": "../github.com/jordan-wright/email"
     }
   ],
   "settings": {}
