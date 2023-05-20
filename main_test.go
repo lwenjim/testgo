@@ -1,15 +1,18 @@
 package main
 
 import (
-<<<<<<< HEAD
-	"fmt"
-=======
 	"context"
 	"crypto/md5"
 	"crypto/tls"
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"github.com/bitly/go-simplejson"
+	"github.com/dolthub/go-mysql-server/memory"
+	"github.com/dolthub/go-mysql-server/server"
+	"github.com/dolthub/go-mysql-server/sql/information_schema"
+	"github.com/qustavo/sqlhooks/v2"
+	"k8s.io/client-go/informers"
 	"log"
 	"math/rand"
 	"net"
@@ -19,28 +22,19 @@ import (
 	"os"
 	"regexp"
 	"strings"
->>>>>>> main
 	"testing"
 	"time"
 
-	"github.com/bitly/go-simplejson"
-	"github.com/dolthub/go-mysql-server/memory"
-	"github.com/dolthub/go-mysql-server/server"
-	"github.com/dolthub/go-mysql-server/sql/information_schema"
-
+	"github.com/alicebob/miniredis/v2"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-	"github.com/qustavo/sqlhooks/v2"
-
-	"github.com/stretchr/testify/assert"
-
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
-
 	"github.com/peterhellberg/giphy"
+	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/kubectl/pkg/scheme"
 
@@ -48,12 +42,7 @@ import (
 
 	sqle "github.com/dolthub/go-mysql-server"
 	ssql "github.com/dolthub/go-mysql-server/sql"
-	"github.com/redis/go-redis/v9"
-
-	"github.com/alicebob/miniredis/v2"
-
 	"github.com/lwenjim/email"
-
 	smtpmock "github.com/mocktools/go-smtp-mock/v2"
 )
 
@@ -61,11 +50,11 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-<<<<<<< HEAD
 func Test_aa(t *testing.T) {
 	name := 123
 	fmt.Printf("name: %v\n", name)
-=======
+
+}
 func TestGighy(t *testing.T) {
 
 	g := giphy.DefaultClient
@@ -77,7 +66,6 @@ func TestGighy(t *testing.T) {
 		fmt.Println(trending.MediaURL())
 	}
 
->>>>>>> main
 }
 
 func TestClientSet(t *testing.T) {
@@ -156,7 +144,8 @@ func TestGeneralSql(t *testing.T) {
 		for _, entry := range dirEntries {
 			split := strings.Split(entry.Name(), "-")
 			remoteUrl := "/phonesound/%E9%93%83%E5%A3%B0-2/" + url.QueryEscape(key+"/"+entry.Name())
-			values = append(values, fmt.Sprintf("INSERT INTO `jspp`.`t_push_phone_sound` (`name`, `url`, `sound_type`, `channel_type`) VALUES ('%s', '%s', %d, %d);", split[0], remoteUrl, val, 1))
+			sqlQuery := "insert into `jspp`.`t_push_phone_sound` (`name`, `url`, `sound_type`, `channel_type`) VALUES ('%s', '%s', %d, %d)"
+			values = append(values, fmt.Sprintf(sqlQuery, split[0], remoteUrl, val, 1))
 		}
 	}
 	println(strings.Join(values, "\n"))
@@ -488,11 +477,11 @@ func TestStructSlice(t *testing.T) {
 }
 
 func TestPhoneEmail(t *testing.T) {
-	// email := "779772852@qq.com"
-	email := "779772852@qq.com"
+	// emailAddress := "779772852@qq.com"
+	emailAddress := "779772852@qq.com"
 	pattern := `^(\w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*|1[345789]{1}\\d{9})$`
 	reg := regexp.MustCompile(pattern)
-	result := reg.MatchString(email)
+	result := reg.MatchString(emailAddress)
 	fmt.Printf("result: %v\n", result)
 }
 
@@ -622,21 +611,21 @@ func TestSmtpWithTls(t *testing.T) {
 
 func TestSendMailTls(t *testing.T) {
 	// You can pass empty smtpmock.ConfigurationAttr{}. It means that smtpmock will use default settings
-	server := smtpmock.New(smtpmock.ConfigurationAttr{
+	s := smtpmock.New(smtpmock.ConfigurationAttr{
 		LogToStdout:       true,
 		LogServerActivity: true,
 	})
 
-	// To start server use Start() method
-	if err := server.Start(); err != nil {
+	// To start s use Start() method
+	if err := s.Start(); err != nil {
 		fmt.Println(err)
 	}
 
-	// Server's port will be assigned dynamically after server.Start()
+	// Server's port will be assigned dynamically after s.Start()
 	// for case when portNumber wasn't specified
-	hostAddress, portNumber := "127.0.0.1", server.PortNumber()
+	hostAddress, portNumber := "127.0.0.1", s.PortNumber()
 
-	// Possible SMTP-client stuff for iteration with mock server
+	// Possible SMTP-client stuff for iteration with mock s
 	address := fmt.Sprintf("%s:%d", hostAddress, portNumber)
 	timeout := time.Duration(2) * time.Second
 
@@ -647,13 +636,41 @@ func TestSendMailTls(t *testing.T) {
 	client.Close()
 
 	// Each result of SMTP session will be saved as message.
-	// To get access to server messages use Messages() method
-	server.Messages()
+	// To get access to s messages use Messages() method
+	s.Messages()
 
-	// To stop the server use Stop() method. Please note, smtpmock uses graceful shutdown.
+	// To stop the s use Stop() method. Please note, smtpmock uses graceful shutdown.
 	// It means that smtpmock will end all sessions after client responses or by session
 	// timeouts immediately.
-	if err := server.Stop(); err != nil {
+	if err := s.Stop(); err != nil {
+		fmt.Println(err)
+	}
+}
+
+func TestMockSmtp(t *testing.T) {
+	s := smtpmock.New(smtpmock.ConfigurationAttr{
+		LogToStdout:       true,
+		LogServerActivity: true,
+	})
+
+	if err := s.Start(); err != nil {
+		fmt.Println(err)
+	}
+
+	hostAddress, portNumber := "127.0.0.1", s.PortNumber()
+
+	address := fmt.Sprintf("%s:%d", hostAddress, portNumber)
+	timeout := time.Duration(2) * time.Second
+
+	connection, _ := net.DialTimeout("tcp", address, timeout)
+	client, _ := smtp.NewClient(connection, hostAddress)
+	client.Hello("example.com")
+	client.Quit()
+	client.Close()
+
+	s.Messages()
+
+	if err := s.Stop(); err != nil {
 		fmt.Println(err)
 	}
 }

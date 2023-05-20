@@ -1,14 +1,7 @@
-<<<<<<< HEAD
 go 1.20
 
 use (
 	.
 	./cgo/demo04
-=======
-go 1.19
-
-use (
-	.
 	../email
->>>>>>> main
 )
