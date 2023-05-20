@@ -7,12 +7,6 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
-	"github.com/bitly/go-simplejson"
-	"github.com/dolthub/go-mysql-server/memory"
-	"github.com/dolthub/go-mysql-server/server"
-	"github.com/dolthub/go-mysql-server/sql/information_schema"
-	"github.com/qustavo/sqlhooks/v2"
-	"k8s.io/client-go/informers"
 	"log"
 	"math/rand"
 	"net"
@@ -24,6 +18,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bitly/go-simplejson"
+	"github.com/dolthub/go-mysql-server/memory"
+	"github.com/dolthub/go-mysql-server/server"
+	"github.com/dolthub/go-mysql-server/sql/information_schema"
+	"github.com/qustavo/sqlhooks/v2"
+	"k8s.io/client-go/informers"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/go-sql-driver/mysql"
@@ -43,7 +44,7 @@ import (
 	sqle "github.com/dolthub/go-mysql-server"
 	ssql "github.com/dolthub/go-mysql-server/sql"
 	"github.com/lwenjim/email"
-	smtpmock "github.com/mocktools/go-smtp-mock/v2"
+	smtpMock "github.com/mocktools/go-smtp-mock/v2"
 )
 
 func TestMain(m *testing.M) {
@@ -144,7 +145,7 @@ func TestGeneralSql(t *testing.T) {
 		for _, entry := range dirEntries {
 			split := strings.Split(entry.Name(), "-")
 			remoteUrl := "/phonesound/%E9%93%83%E5%A3%B0-2/" + url.QueryEscape(key+"/"+entry.Name())
-			sqlQuery := "insert into `jspp`.`t_push_phone_sound` (`name`, `url`, `sound_type`, `channel_type`) VALUES ('%s', '%s', %d, %d)"
+			sqlQuery := "insert into  `jspp`.`t_push_phone_sound` (`name`, `url`, `sound_type`, `channel_type`) VALUES ('%s', '%s', %d, %d)"
 			values = append(values, fmt.Sprintf(sqlQuery, split[0], remoteUrl, val, 1))
 		}
 	}
@@ -610,8 +611,8 @@ func TestSmtpWithTls(t *testing.T) {
 }
 
 func TestSendMailTls(t *testing.T) {
-	// You can pass empty smtpmock.ConfigurationAttr{}. It means that smtpmock will use default settings
-	s := smtpmock.New(smtpmock.ConfigurationAttr{
+	// You can pass empty smtpMock.ConfigurationAttr{}. It means that smtpMock will use default settings
+	s := smtpMock.New(smtpMock.ConfigurationAttr{
 		LogToStdout:       true,
 		LogServerActivity: true,
 	})
@@ -631,16 +632,19 @@ func TestSendMailTls(t *testing.T) {
 
 	connection, _ := net.DialTimeout("tcp", address, timeout)
 	client, _ := smtp.NewClient(connection, hostAddress)
-	client.Hello("example.com")
-	client.Quit()
-	client.Close()
+	err := client.Hello("example.com")
+	assert.Nil(t, err)
+	err = client.Quit()
+	assert.Nil(t, err)
+	err = client.Close()
+	assert.Nil(t, err)
 
 	// Each result of SMTP session will be saved as message.
 	// To get access to s messages use Messages() method
 	s.Messages()
 
-	// To stop the s use Stop() method. Please note, smtpmock uses graceful shutdown.
-	// It means that smtpmock will end all sessions after client responses or by session
+	// To stop the s use Stop() method. Please note, smtpMock uses graceful shutdown.
+	// It means that smtpMock will end all sessions after client responses or by session
 	// timeouts immediately.
 	if err := s.Stop(); err != nil {
 		fmt.Println(err)
@@ -648,7 +652,7 @@ func TestSendMailTls(t *testing.T) {
 }
 
 func TestMockSmtp(t *testing.T) {
-	s := smtpmock.New(smtpmock.ConfigurationAttr{
+	s := smtpMock.New(smtpMock.ConfigurationAttr{
 		LogToStdout:       true,
 		LogServerActivity: true,
 	})
@@ -664,9 +668,12 @@ func TestMockSmtp(t *testing.T) {
 
 	connection, _ := net.DialTimeout("tcp", address, timeout)
 	client, _ := smtp.NewClient(connection, hostAddress)
-	client.Hello("example.com")
-	client.Quit()
-	client.Close()
+	err := client.Hello("example.com")
+	assert.Nil(t, err)
+	err = client.Quit()
+	assert.Nil(t, err)
+	err = client.Close()
+	assert.Nil(t, err)
 
 	s.Messages()
 
