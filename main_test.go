@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -9,5 +10,6 @@ func TestMain(m *testing.M) {
 }
 
 func Test_aa(t *testing.T) {
-
+	name := 123
+	fmt.Printf("name: %v\n", name)
 }
