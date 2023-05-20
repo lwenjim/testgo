@@ -12,6 +12,7 @@ require (
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/lib/pq v1.10.9
 	github.com/lwenjim/email v0.0.0-20230518034844-b876db983aa3
+	github.com/mocktools/go-smtp-mock/v2 v2.0.5
 	github.com/peterhellberg/giphy v0.0.2
 	github.com/qustavo/sqlhooks/v2 v2.1.0
 	github.com/redis/go-redis/v9 v9.0.4
