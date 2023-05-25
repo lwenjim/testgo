@@ -1,8 +1,18 @@
 package main
 
-import "fmt"
+import "time"
 
 func main() {
-	str := fmt.Sprintf("%d", 1)
-	println(str)
+	for i := 0; i < 10; i++ {
+		go func() {
+			time.Sleep(3 * time.Second)
+		}()
+	}
+	go func() {
+		for {
+			time.Sleep(1 * time.Second)
+		}
+	}()
+	select {}
+
 }

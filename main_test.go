@@ -120,9 +120,7 @@ func TestSharedInformerFactory(t *testing.T) {
 			fmt.Println("Delete Event")
 		},
 	})
-	if err != nil {
-		panic(err)
-	}
+	assert.Nil(t, err)
 
 	stopCh := make(chan struct{})
 	factory.Start(stopCh)
@@ -334,7 +332,7 @@ func TestMockMysql(t *testing.T) {
 	_, err = result.RowsAffected()
 	assert.Nil(t, err)
 
-	d, err := sqlx.Connect("mysql", dsn)
+	dbhelp, err := sqlx.Connect("mysql", dsn)
 	assert.Nil(t, err)
 	var data []struct {
 		Id       sql.NullInt64  `json:"id"`
@@ -342,7 +340,7 @@ func TestMockMysql(t *testing.T) {
 		Password sql.NullString `json:"pass_word,omitempty"  db:"pass_word"`
 		Mark     sql.NullString `json:"mark,omitempty"`
 	}
-	err = d.Select(&data, "select id, user_name, pass_word, mark from t_user")
+	err = dbhelp.Select(&data, "select id, user_name, pass_word, mark from t_user")
 	assert.Nil(t, err)
 
 	for index := range data {

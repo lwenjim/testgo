@@ -1,0 +1,4 @@
+{
+  "*.go": {"alternate": "test/{}.go"},
+  "test/*.go": {"alternate": "src/{}.go"}
+}
