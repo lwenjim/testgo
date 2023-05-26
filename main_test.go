@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -23,6 +24,9 @@ import (
 	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
+	OrmMysql "gorm.io/driver/mysql"
+	"gorm.io/gorm"
+
 	"github.com/qustavo/sqlhooks/v2"
 	"k8s.io/client-go/informers"
 
@@ -43,19 +47,12 @@ import (
 
 	sqle "github.com/dolthub/go-mysql-server"
 	ssql "github.com/dolthub/go-mysql-server/sql"
-	"github.com/lwenjim/email"
-	smtpMock "github.com/mocktools/go-smtp-mock/v2"
 )
 
 func TestMain(m *testing.M) {
 	m.Run()
 }
 
-func Test_aa(t *testing.T) {
-	name := 123
-	fmt.Printf("name: %v\n", name)
-
-}
 func TestGighy(t *testing.T) {
 
 	g := giphy.DefaultClient
@@ -223,7 +220,6 @@ func TestSql(t *testing.T) {
 	}
 	updateOne(i, "1")
 	getOne(i)
-
 }
 
 func TestString(t *testing.T) {
@@ -484,30 +480,6 @@ func TestPhoneEmail(t *testing.T) {
 	fmt.Printf("result: %v\n", result)
 }
 
-func TestSendMailQQ(t *testing.T) {
-	from := os.Getenv("IMail")
-	password := os.Getenv("IMailPassword")
-
-	fmt.Printf("from: %v\n", from)
-	fmt.Printf("password: %v\n", password)
-
-	to := []string{
-		os.Getenv("IMail"),
-	}
-	smtpHost := "smtp.exmail.qq.com"
-	smtpPort := "465" // 465 / 587 / 25 / 465
-	message := []byte("This is a test email message.")
-
-	auth := smtp.PlainAuth("", from, password, smtpHost)
-	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, to, message)
-
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println("Email Sent Successfully!")
-}
-
 func TestSendMail163(t *testing.T) {
 	from := "lwenjim@163.com"
 	password := "lwenjin163123"
@@ -595,87 +567,49 @@ func TestSmtpSSl(t *testing.T) {
 	_ = c.Quit()
 }
 
-func TestSmtpWithTls(t *testing.T) {
-	e := email.NewEmail()
-	e.From = "Jordan Wright <liuwenjin@1foli.com>"
-	e.To = []string{"liuwenjin@1foli.com"}
-	e.Bcc = []string{"liuwenjin@1foli.com"}
-	e.Cc = []string{"liuwenjin@1foli.com"}
-	e.Subject = "Awesome Subject"
-	e.Text = []byte("Text Body is, of course, supported!")
-	e.HTML = []byte("<h1>Fancy HTML is supported, too!</h1>")
-	err := e.Send("smtp.exmail.qq.com:587", smtp.PlainAuth("", "liuwenjin@1foli.com", "lwenjin8098098A", "smtp.exmail.qq.com"))
+func TestGromMysql(t *testing.T) {
+	dbName := RandStringRunes(10)
+	engine := sqle.NewDefault(ssql.NewDatabaseProvider(
+		memory.NewDatabase(dbName),
+		information_schema.NewInformationSchemaDatabase(),
+	))
+	port, err := getFreePort()
 	assert.Nil(t, err)
-}
+	config := server.Config{
+		Protocol: "tcp",
+		Address:  fmt.Sprintf("localhost:%d", port),
+	}
+	s, err := server.NewDefaultServer(config, engine)
+	assert.Nil(t, err)
 
-func TestSendMailTls(t *testing.T) {
-	// You can pass empty smtpMock.ConfigurationAttr{}. It means that smtpMock will use default settings
-	s := smtpMock.New(smtpMock.ConfigurationAttr{
-		LogToStdout:       true,
-		LogServerActivity: true,
+	go func() {
+		t2 := s.Start()
+		assert.Nil(t, t2)
+	}()
+	type Product struct {
+		gorm.Model
+		Code  string
+		Price uint
+	}
+	dsn := fmt.Sprintf("root@tcp(127.0.0.1:%d)/%s", port, dbName)
+	fmt.Printf("dsn: %v\n", dsn)
+	dsn = fmt.Sprintf("root@tcp(127.0.0.1:%d)/%s", 33060, "test")
+	db, err := gorm.Open(OrmMysql.Open(dsn), &gorm.Config{})
+	assert.Nil(t, err)
+
+	err = db.AutoMigrate(&Product{})
+	assert.Nil(t, err)
+
+	db.Create(&Product{
+		Code:  "D42",
+		Price: 100,
 	})
 
-	// To start s use Start() method
-	if err := s.Start(); err != nil {
-		fmt.Println(err)
-	}
+	var product Product
+	db.First(&product, 1)
 
-	// Server's port will be assigned dynamically after s.Start()
-	// for case when portNumber wasn't specified
-	hostAddress, portNumber := "127.0.0.1", s.PortNumber()
-
-	// Possible SMTP-client stuff for iteration with mock s
-	address := fmt.Sprintf("%s:%d", hostAddress, portNumber)
-	timeout := time.Duration(2) * time.Second
-
-	connection, _ := net.DialTimeout("tcp", address, timeout)
-	client, _ := smtp.NewClient(connection, hostAddress)
-	err := client.Hello("example.com")
-	assert.Nil(t, err)
-	err = client.Quit()
-	assert.Nil(t, err)
-	err = client.Close()
+	buf, err := json.Marshal(product)
 	assert.Nil(t, err)
 
-	// Each result of SMTP session will be saved as message.
-	// To get access to s messages use Messages() method
-	s.Messages()
-
-	// To stop the s use Stop() method. Please note, smtpMock uses graceful shutdown.
-	// It means that smtpMock will end all sessions after client responses or by session
-	// timeouts immediately.
-	if err := s.Stop(); err != nil {
-		fmt.Println(err)
-	}
-}
-
-func TestMockSmtp(t *testing.T) {
-	s := smtpMock.New(smtpMock.ConfigurationAttr{
-		LogToStdout:       true,
-		LogServerActivity: true,
-	})
-
-	if err := s.Start(); err != nil {
-		fmt.Println(err)
-	}
-
-	hostAddress, portNumber := "127.0.0.1", s.PortNumber()
-
-	address := fmt.Sprintf("%s:%d", hostAddress, portNumber)
-	timeout := time.Duration(2) * time.Second
-
-	connection, _ := net.DialTimeout("tcp", address, timeout)
-	client, _ := smtp.NewClient(connection, hostAddress)
-	err := client.Hello("example.com")
-	assert.Nil(t, err)
-	err = client.Quit()
-	assert.Nil(t, err)
-	err = client.Close()
-	assert.Nil(t, err)
-
-	s.Messages()
-
-	if err := s.Stop(); err != nil {
-		fmt.Println(err)
-	}
+	fmt.Printf("product: %v\n", string(buf))
 }
