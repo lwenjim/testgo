@@ -1,4 +1,4 @@
-module testgo
+module github.com/lwenjim/testgo
 
 go 1.16
 

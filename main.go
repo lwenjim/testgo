@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"os"
+
+	"github.com/lwenjim/testgo/sub1"
 )
 
 func main() {
-	fmt.Println(os.Args)
+	fmt.Println(sub1.ViewData())
 }
