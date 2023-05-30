@@ -3,16 +3,21 @@
 # cp ../pushersv/.git/hooks/{commit-msg,pre-commit} .git/hooks
 
 shopt -s expand_aliases
-
 source ~/.bashrc
 
-Do() {
+viewLog() {
     case $1 in
     usersv)
         app=usersv
         ;;
     messagesv)
         app=messagesv
+        ;;
+    momentsv)
+        app=momentsv
+        ;;
+    pushersv)
+        app=pushersv
         ;;
     esac
     if [ -n $app ]; then
@@ -21,25 +26,37 @@ Do() {
 }
 
 Help() {
-    echo "Add description of the script functions here."
+    echo "Automation Script"
     echo
-    echo "Syntax: scriptTemplate [-g|h|v|V]"
+    echo "Syntax: scriptTemplate [-m|h]"
     echo "options:"
-    echo "l     call kubectl return log"
+    echo "m     actioin"
     echo "h     Print this Help."
-    echo "v     Verbose mode."
-    echo "V     Print software version and exit."
     echo
 }
 
-while getopts "l:h" option; do
-    case $option in
-    l)
-        echo
-        Do $OPTARG
+ARGS=$(getopt -a -o log-view:,help -n "tool.sh" -- "$@")
+echo $1
+echo $2
+[ $? -ne 0 ] && usage
+set -- $args
+while true; do
+    case "$1" in
+    -l|--log-view)
+    echo $app
+        app="$2"
+        shift
         ;;
-    h)
+    -h | --help)
         Help
         ;;
+    --)
+        shift
+        break
+        ;;
     esac
+    shift
 done
+echo $app
+echo $@
+# viewLog $app
