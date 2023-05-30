@@ -2,17 +2,10 @@ package main
 
 import (
 	"context"
-	"crypto/md5"
-	"crypto/tls"
-	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/rand"
 	"net"
-	"net/mail"
-	"net/smtp"
 	"net/url"
 	"os"
 	"regexp"
@@ -31,10 +24,6 @@ import (
 	"github.com/peterhellberg/giphy"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/kubectl/pkg/scheme"
 
 	_ "github.com/go-sql-driver/mysql"
 
@@ -59,29 +48,6 @@ func TestGighy(t *testing.T) {
 
 }
 
-func TestRestfullClient(t *testing.T) {
-	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
-	println(clientcmd.RecommendedHomeFile)
-	if err != nil {
-		panic(err)
-	}
-	config.GroupVersion = &v1.SchemeGroupVersion
-	config.NegotiatedSerializer = scheme.Codecs
-	config.APIPath = "/api"
-
-	restClient, err := rest.RESTClientFor(config)
-	if err != nil {
-		panic(err)
-	}
-	pod := v1.Pod{}
-	err = restClient.Get().Namespace("default").Resource("pods").Name("bar-app").Do(context.TODO()).Into(&pod)
-	if err != nil {
-		println(err)
-	} else {
-		println(pod.Name)
-	}
-}
-
 func TestGeneralSql(t *testing.T) {
 	lMap := map[string]uint8{
 		"短信":   0,
@@ -102,65 +68,6 @@ func TestGeneralSql(t *testing.T) {
 		}
 	}
 	println(strings.Join(values, "\n"))
-}
-
-func TestSql(t *testing.T) {
-	db, err := sql.Open("mysql", "root@tcp(127.0.0.1:33060)/test")
-	assert.Nil(t, err)
-
-	db.SetConnMaxLifetime(time.Minute * 3)
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(10)
-
-	getOne := func(id int64) {
-		var password, username string
-
-		s2, err5 := db.Prepare("select username, password from user where id = ?")
-		assert.Nil(t, err5)
-
-		err = s2.QueryRow(id).Scan(&username, &password)
-		assert.Nil(t, err)
-
-		fmt.Printf("username: %s, password: %s\n", username, password)
-	}
-	getOne(1)
-
-	insertOne := func() int64 {
-		password := time.Now().String()
-
-		hash := md5.New()
-		_, err := hash.Write([]byte(password))
-		assert.Nil(t, err)
-
-		var outData = make([]byte, 22)
-		base64.RawStdEncoding.Encode(outData, hash.Sum(nil))
-		password = string(outData)
-
-		rand.Seed(time.Now().UnixNano())
-		r, err2 := db.Exec("insert into user (username, password) values (?, ?)", RandStringRunes(20), password)
-		assert.Nil(t, err2)
-		i, err := r.LastInsertId()
-		assert.Nil(t, err)
-		_, err = r.RowsAffected()
-		assert.Nil(t, err)
-		return i
-	}
-	i := insertOne()
-
-	updateOne := func(id int64, mark string) {
-		s, err := db.Prepare("update user set mark = ? where id = ?")
-		assert.Nil(t, err)
-		defer s.Close()
-		r2, err := s.Exec(mark, id)
-		assert.Nil(t, err)
-
-		_, err = r2.LastInsertId()
-		assert.Nil(t, err)
-		_, err = r2.RowsAffected()
-		assert.Nil(t, err)
-	}
-	updateOne(i, "1")
-	getOne(i)
 }
 
 func TestString(t *testing.T) {
@@ -253,7 +160,6 @@ func TestStructSlice(t *testing.T) {
 }
 
 func TestPhoneEmail(t *testing.T) {
-	// emailAddress := "779772852@qq.com"
 	emailAddress := "779772852@qq.com"
 	pattern := `^(\w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*|1[345789]{1}\\d{9})$`
 	reg := regexp.MustCompile(pattern)
@@ -261,123 +167,16 @@ func TestPhoneEmail(t *testing.T) {
 	fmt.Printf("result: %v\n", result)
 }
 
-func TestSendMail163(t *testing.T) {
-	from := "lwenjim@163.com"
-	password := "lwenjin163123"
-	smtpHost := "smtp.163.com"
-	smtpPort := "25"
-	auth := smtp.PlainAuth("", from, password, smtpHost)
-	to := []string{from}
-	msg := []byte(fmt.Sprintf("To: %s\r\n"+
-		"Subject: discount Gophers!\r\n"+
-		"\r\n"+
-		"This is the email body.\r\n", from))
-	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, to, msg)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println("Email Sent Successfully!")
-}
-
-func TestSmtpSSl(t *testing.T) {
-	from := mail.Address{Name: "", Address: "liuwenjin@1foli.com"}
-	to := mail.Address{Name: "", Address: "liuwenjin@1foli.com"}
-
-	subj := "This is the email subject"
-	body := "This is an example body.\n With two lines."
-
-	headers := make(map[string]string)
-	headers["From"] = from.String()
-	headers["To"] = to.String()
-	headers["Subject"] = subj
-
-	message := ""
-	for k, v := range headers {
-		message += fmt.Sprintf("%s: %s\r\n", k, v)
-	}
-	message += "\r\n" + body
-
-	servername := "smtp.exmail.qq.com:465"
-
-	host, _, _ := net.SplitHostPort(servername)
-
-	auth := smtp.PlainAuth("", "liuwenjin@1foli.com", "lwenjin8098098A", host)
-
-	tlsconfig := &tls.Config{
-		ServerName: host,
-	}
-
-	conn, err := tls.Dial("tcp", servername, tlsconfig)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	c, err := smtp.NewClient(conn, host)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	if err = c.Auth(auth); err != nil {
-		log.Panic(err)
-	}
-
-	if err = c.Mail(from.Address); err != nil {
-		log.Panic(err)
-	}
-
-	if err = c.Rcpt(to.Address); err != nil {
-		log.Panic(err)
-	}
-
-	w, err := c.Data()
-	if err != nil {
-		log.Panic(err)
-	}
-
-	_, err = w.Write([]byte(message))
-	if err != nil {
-		log.Panic(err)
-	}
-
-	err = w.Close()
-	if err != nil {
-		log.Panic(err)
-	}
-
-	_ = c.Quit()
-}
-
 func TestGromMysql(t *testing.T) {
-	dbName := RandStringRunes(10)
-	engine := sqle.NewDefault(ssql.NewDatabaseProvider(
-		memory.NewDatabase(dbName),
-		information_schema.NewInformationSchemaDatabase(),
-	))
-	port, err := getFreePort()
+	dsn, err := startTempMysqlServer()
 	assert.Nil(t, err)
-	config := server.Config{
-		Protocol: "tcp",
-		Address:  fmt.Sprintf("localhost:%d", port),
-	}
-	s, err := server.NewDefaultServer(config, engine)
+	db, err := gorm.Open(OrmMysql.Open(*dsn), &gorm.Config{})
 	assert.Nil(t, err)
-
-	go func() {
-		t2 := s.Start()
-		assert.Nil(t, t2)
-	}()
 	type Product struct {
 		gorm.Model
 		Code  string
 		Price uint
 	}
-	dsn := fmt.Sprintf("root@tcp(127.0.0.1:%d)/%s", port, dbName)
-	fmt.Printf("dsn: %v\n", dsn)
-	dsn = fmt.Sprintf("root@tcp(127.0.0.1:%d)/%s", 33060, "test")
-	db, err := gorm.Open(OrmMysql.Open(dsn), &gorm.Config{})
-	assert.Nil(t, err)
-
 	err = db.AutoMigrate(&Product{})
 	assert.Nil(t, err)
 
@@ -393,4 +192,31 @@ func TestGromMysql(t *testing.T) {
 	assert.Nil(t, err)
 
 	fmt.Printf("product: %v\n", string(buf))
+}
+
+func startTempMysqlServer() (*string, error) {
+	dbName := RandStringRunes(10)
+	engine := sqle.NewDefault(ssql.NewDatabaseProvider(
+		memory.NewDatabase(dbName),
+		information_schema.NewInformationSchemaDatabase(),
+	))
+	port, err := getFreePort()
+	if err != nil {
+		return nil, err
+	}
+	config := server.Config{
+		Protocol: "tcp",
+		Address:  fmt.Sprintf("localhost:%d", port),
+	}
+	s, err := server.NewDefaultServer(config, engine)
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		_ = s.Start()
+	}()
+
+	dsn := fmt.Sprintf("root@tcp(127.0.0.1:%d)/%s", port, dbName)
+	return &dsn, nil
 }
