@@ -5,7 +5,7 @@
 shopt -s expand_aliases
 source ~/.bashrc
 
-viewLog() {
+ViewLog() {
     case $1 in
     usersv)
         app=usersv
@@ -28,35 +28,33 @@ viewLog() {
 Help() {
     echo "Automation Script"
     echo
-    echo "Syntax: scriptTemplate [-m|h]"
-    echo "options:"
-    echo "m     actioin"
-    echo "h     Print this Help."
+    echo "sub cmd:               ./tool.sh [[-c|--cmd|--command] cmd]"
+    echo "help:                  ./tool.sh [-h|--help]"
     echo
 }
 
-ARGS=$(getopt -a -o log-view:,help -n "tool.sh" -- "$@")
-echo $1
-echo $2
-[ $? -ne 0 ] && usage
-set -- $args
-while true; do
+args=$(getopt -o c:h --long help,cmd:,command: -- "$@")
+
+if [ $? -ne 0 ]; then
+    echo 'Usage: ...'
+    exit 2
+fi
+eval set -- "$args"
+
+while :; do
     case "$1" in
-    -l|--log-view)
-    echo $app
-        app="$2"
+    -c | --cmd | --command)
+        shift
+        ViewLog $1
         shift
         ;;
     -h | --help)
         Help
+        shift
         ;;
     --)
         shift
         break
         ;;
     esac
-    shift
 done
-echo $app
-echo $@
-# viewLog $app
