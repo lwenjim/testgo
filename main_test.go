@@ -1,14 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"math/rand"
 	"net"
 	"net/url"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +20,8 @@ import (
 	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	OrmMysql "gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
@@ -219,4 +224,69 @@ func startTempMysqlServer() (*string, error) {
 
 	dsn := fmt.Sprintf("root@tcp(127.0.0.1:%d)/%s", port, dbName)
 	return &dsn, nil
+}
+
+func TestRuntime(t *testing.T) {
+	fmt.Println(runtime.GOMAXPROCS(0) + 1)
+}
+
+func TestViper(t *testing.T) {
+	viper.SetDefault("ContentDir", "content")
+	viper.SetDefault("LayoutDir", "layouts")
+	viper.SetDefault("Taxonomies", map[string]string{"tag": "tags", "category": "categories"})
+
+	viper.SetConfigName("config")      // name of config file (without extension)
+	viper.SetConfigType("yaml")        // REQUIRED if the config file does not have the extension in the name
+	viper.AddConfigPath("/Users/jim/") // path to look for the config file in
+	viper.AddConfigPath(".")           // optionally look for config in the working directory
+	err := viper.ReadInConfig()        // Find and read the config file
+	assert.Nil(t, err)
+
+	viper.SetConfigType("yaml") // or viper.SetConfigType("YAML")
+
+	// any approach to require this configuration into your program.
+	var yamlExample = []byte(`
+Hacker: true
+name: steve
+hobbies:
+- skateboarding
+- snowboarding
+- go
+clothing:
+jacket: leather
+trousers: denim
+age: 35
+eyes : brown
+beard: true
+`)
+
+	_ = viper.ReadConfig(bytes.NewBuffer(yamlExample))
+
+	fmt.Println(viper.Get("name"))
+
+	viper.RegisterAlias("loud", "Verbose")
+
+	viper.Set("verbose", true) // same result as next line
+	viper.Set("loud", true)    // same result as prior line
+
+	fmt.Printf("%+v\n", viper.GetBool("loud"))    // true
+	fmt.Printf("%+v\n", viper.GetBool("verbose")) // true
+
+	viper.SetEnvPrefix("spf") // will be uppercased automatically
+	_ = viper.BindEnv("id")
+
+	os.Setenv("SPF_ID", "13") // typically done outside of the app
+
+	id := viper.Get("id") // 13
+	fmt.Println(id)
+
+	// using standard library "flag" package
+	flag.Int("flagname", 1234, "help message for flagname")
+
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
+	_ = viper.BindPFlags(pflag.CommandLine)
+
+	i := viper.GetInt("flagname") // retrieve value from viper
+	fmt.Println(i)
 }
