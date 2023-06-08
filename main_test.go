@@ -94,13 +94,20 @@ func TestRedis(t *testing.T) {
 	})
 
 	var ctx = context.Background()
-
 	err = rdb.Set(ctx, "key", "value", 10*time.Minute).Err()
 	assert.Nil(t, err)
 
 	val, err := rdb.Get(ctx, "key").Result()
 	assert.Nil(t, err)
 	fmt.Println("key", val)
+
+	str, err := rdb.Set(ctx, "abc", 123, time.Hour*12).Result()
+	assert.Nil(t, err)
+	fmt.Printf("result:%s\n", str)
+
+	i, err := rdb.Exists(ctx, "abc").Result()
+	assert.Nil(t, err)
+	fmt.Printf("%+v\n", i)
 }
 
 func RandStringRunes(n int) string {
@@ -289,4 +296,10 @@ beard: true
 
 	i := viper.GetInt("flagname") // retrieve value from viper
 	fmt.Println(i)
+}
+
+func TestDemo(t *testing.T) {
+	// print(144536398 - 143878550 - 400000 - 24800 - 4700 - 36000*3)
+	// println("  ")
+	print(1900 - 1440 - 100 + 180)
 }
