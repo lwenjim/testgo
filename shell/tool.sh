@@ -11,7 +11,7 @@ ViewLog() {
 
 UpdateHook() {
     cd /Users/jim/Workdata/goland/src/pushersv
-    for item in usersv messagesv momentsv; do
+    for item in usersv messagesv momentsv authsv deliversv edgesv groupsv pushersv uploadsv; do
         cp -rf .git/hooks/{commit-msg,pre-commit} "../$item/.git/hooks"
     done
 }

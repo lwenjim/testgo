@@ -10,8 +10,10 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"reflect"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"gopkg.in/validator.v2"
 	OrmMysql "gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
@@ -41,7 +44,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestGighy(t *testing.T) {
-
 	g := giphy.DefaultClient
 	g.APIKey = "xVXd8j7UxP8Lvn8Dn1aLjLAd5EHYGE31"
 	g.Rating = "pg-13"
@@ -50,7 +52,6 @@ func TestGighy(t *testing.T) {
 	for _, trending := range trendings.Data {
 		fmt.Println(trending.MediaURL())
 	}
-
 }
 
 func TestGeneralSql(t *testing.T) {
@@ -301,5 +302,95 @@ beard: true
 func TestDemo(t *testing.T) {
 	// print(144536398 - 143878550 - 400000 - 24800 - 4700 - 36000*3)
 	// println("  ")
-	print(1900 - 1440 - 100 + 180)
+	// print(1900 - 1440 - 100 + 180)
+	// println(time.Now().AddDate(0, -1, 0).Format("200601"))
+	// println(500 / 187)
+	iMap := map[string]string{
+		"abc": "123",
+	}
+	iMap["ddd"] = "111"
+	for k, v := range iMap {
+		println(k)
+		println(v)
+	}
+}
+
+func TestValidate(t *testing.T) {
+	in := struct {
+		UserID           uint64 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty" db:"user_id"`
+		Birthday         int64  `protobuf:"varint,2,opt,name=birthday,proto3" json:"birthday,omitempty" db:"birthday"`
+		Gender           int32  `protobuf:"varint,3,opt,name=gender,proto3" json:"gender,omitempty" db:"gender" validate:"min=-1,max=2"`
+		VerifyStatus     int32  `protobuf:"varint,4,opt,name=verify_status,json=verifyStatus,proto3" json:"verify_status,omitempty" db:"verify_status" validate:"min=-1, max=1"`
+		HandVerifyStatus string `protobuf:"varint,5,opt,name=hand_verify_status,json=handVerifyStatus,proto3" json:"hand_verify_status,omitempty" db:"hand_verify_status" validate:"in=1    2"`
+	}{
+		UserID:           0,
+		Birthday:         0,
+		Gender:           0,
+		VerifyStatus:     0,
+		HandVerifyStatus: "2",
+	}
+	err := validator.Validate(in)
+	assert.Nil(t, err)
+}
+
+func ValidateInt[T int8 | uint8 | int16 | uint16 | int | uint | int32 | uint32 | int64 | uint64](param string, v interface{}) error {
+	strs := strings.Split(param, " ")
+	for _, s := range strs {
+		s = strings.Trim(s, " ")
+		if len(s) == 0 {
+			continue
+		}
+		if newV, ok := v.(T); ok {
+			newS, err := strconv.Atoi(s)
+			if err != nil {
+				return err
+			}
+			if T(newS) == newV {
+				return nil
+			}
+		}
+	}
+	return validator.ErrUnsupported
+}
+
+func init() {
+	_ = validator.SetValidationFunc("in", func(v interface{}, param string) error {
+		st := reflect.ValueOf(v)
+		err := fmt.Errorf("error type")
+		switch st.Kind() {
+		case reflect.Int:
+			err = ValidateInt[int](param, v)
+		case reflect.Uint:
+			err = ValidateInt[uint](param, v)
+		case reflect.Int8:
+			err = ValidateInt[int8](param, v)
+		case reflect.Uint8:
+			err = ValidateInt[uint8](param, v)
+		case reflect.Uint16:
+			err = ValidateInt[uint16](param, v)
+		case reflect.Int16:
+			err = ValidateInt[int16](param, v)
+		case reflect.Int32:
+			err = ValidateInt[int32](param, v)
+		case reflect.Uint32:
+			err = ValidateInt[uint32](param, v)
+		case reflect.Int64:
+			err = ValidateInt[int64](param, v)
+		case reflect.Uint64:
+			err = ValidateInt[uint64](param, v)
+		case reflect.String:
+			strs := strings.Split(param, " ")
+			for _, s := range strs {
+				s = strings.Trim(s, " ")
+				if len(s) == 0 {
+					continue
+				}
+				newV, _ := v.(string)
+				if s == newV {
+					return nil
+				}
+			}
+		}
+		return err
+	})
 }
