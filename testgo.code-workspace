@@ -1,14 +1,8 @@
 {
-  "folders": [
-    {
-      "path": "."
-    },
-    {
-      "path": "../study-golang"
-    },
-    {
-      "path": "../email"
-    }
-  ],
-  "settings": {}
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {}
 }
