@@ -1,17 +1,11 @@
 package main
 
 import (
-	"net/http"
+	"fmt"
 
-	"github.com/gin-gonic/gin"
+	"github.com/lwenjim/testgo/sub1"
 )
 
 func main() {
-	r := gin.Default()
-	r.POST("/ping", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "pong",
-		})
-	})
-	r.Run()
+	fmt.Println(sub1.ViewData())
 }

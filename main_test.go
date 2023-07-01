@@ -2,123 +2,304 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
-	"io"
-	"net/http"
-	"net/http/httputil"
+	"math/rand"
+	"net"
+	"net/url"
 	"os"
+	"regexp"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/bitly/go-simplejson"
+	"github.com/dolthub/go-mysql-server/memory"
+	"github.com/dolthub/go-mysql-server/server"
+	"github.com/dolthub/go-mysql-server/sql/information_schema"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
+	OrmMysql "gorm.io/driver/mysql"
+	"gorm.io/gorm"
+
+	"github.com/alicebob/miniredis/v2"
+	"github.com/peterhellberg/giphy"
+	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/assert"
+
+	_ "github.com/go-sql-driver/mysql"
+
+	sqle "github.com/dolthub/go-mysql-server"
+	ssql "github.com/dolthub/go-mysql-server/sql"
 )
 
-func CustomTimer(w io.Writer) func(http.RoundTripper) http.RoundTripper {
-	return func(rt http.RoundTripper) http.RoundTripper {
-		func1 := func(req *http.Request) (*http.Response, error) {
-			startTime := time.Now()
-			defer func() {
-				_, _ = fmt.Fprintf(w, ">>> request duration: %s", time.Since(startTime))
-			}()
-			return rt.RoundTrip(req)
+func TestMain(m *testing.M) {
+	m.Run()
+}
+
+func TestGighy(t *testing.T) {
+
+	g := giphy.DefaultClient
+	g.APIKey = "xVXd8j7UxP8Lvn8Dn1aLjLAd5EHYGE31"
+	g.Rating = "pg-13"
+	g.Limit = 2
+	trendings, _ := g.Search([]string{"11"})
+	for _, trending := range trendings.Data {
+		fmt.Println(trending.MediaURL())
+	}
+
+}
+
+func TestGeneralSql(t *testing.T) {
+	lMap := map[string]uint8{
+		"短信":   0,
+		"电话铃声": 1,
+	}
+	path := "/Users/jim/Library/Application Support/jspp/4185955/message/834c38e419a387453405f67c1373d052c9a13902/file/75688595411f66de667cb8a4560ca1cc18b40b1a/铃声-2/"
+	var values []string
+	for key, val := range lMap {
+		dirEntries, err := os.ReadDir(path + key)
+		if err != nil {
+			continue
 		}
-		return internalRoundTripper(func1)
-	}
-}
-
-func DumpResponse(includeBody bool) func(http.RoundTripper) http.RoundTripper {
-	return func(rt http.RoundTripper) http.RoundTripper {
-		func1 := func(req *http.Request) (resp *http.Response, err error) {
-			defer func() {
-				if err == nil {
-					o, err := httputil.DumpResponse(resp, includeBody)
-					if err != nil {
-						panic(err)
-					}
-					fmt.Println(string(o))
-				}
-			}()
-			return rt.RoundTrip(req)
+		for _, entry := range dirEntries {
+			split := strings.Split(entry.Name(), "-")
+			remoteUrl := "/phonesound/%E9%93%83%E5%A3%B0-2/" + url.QueryEscape(key+"/"+entry.Name())
+			sqlQuery := "insert into  `jspp`.`t_push_phone_sound` (`name`, `url`, `sound_type`, `channel_type`) VALUES ('%s', '%s', %d, %d)"
+			values = append(values, fmt.Sprintf(sqlQuery, split[0], remoteUrl, val, 1))
 		}
-		return internalRoundTripper(func1)
 	}
+	println(strings.Join(values, "\n"))
 }
 
-func AddHeader(key, value string) func(http.RoundTripper) http.RoundTripper {
-	return func(rt http.RoundTripper) http.RoundTripper {
-		func1 := func(req *http.Request) (*http.Response, error) {
-			header := req.Header
-			if header == nil {
-				header = make(http.Header)
-			}
-			header.Set(key, value)
-			return rt.RoundTrip(req)
+func TestString(t *testing.T) {
+	s := "abc"
+	s = s[:0]
+	fmt.Printf("s: %v\n", s)
+}
+
+func TestRedis(t *testing.T) {
+	s, err := miniredis.Run()
+	if err != nil {
+		panic(err)
+	}
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     s.Addr(),
+		Password: "",
+		DB:       0,
+	})
+
+	var ctx = context.Background()
+	err = rdb.Set(ctx, "key", "value", 10*time.Minute).Err()
+	assert.Nil(t, err)
+
+	val, err := rdb.Get(ctx, "key").Result()
+	assert.Nil(t, err)
+	fmt.Println("key", val)
+
+	str, err := rdb.Set(ctx, "abc", 123, time.Hour*12).Result()
+	assert.Nil(t, err)
+	fmt.Printf("result:%s\n", str)
+
+	i, err := rdb.Exists(ctx, "abc").Result()
+	assert.Nil(t, err)
+	fmt.Printf("%+v\n", i)
+}
+
+func RandStringRunes(n int) string {
+	var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
+type Hooks struct{}
+
+func (h *Hooks) Before(ctx context.Context, query string, args ...interface{}) (context.Context, error) {
+	type GolbalValue string
+	var name GolbalValue = "begin"
+	fmt.Printf("> %s %q", query, args)
+	return context.WithValue(ctx, name, time.Now()), nil
+}
+
+func (h *Hooks) After(ctx context.Context, query string, args ...interface{}) (context.Context, error) {
+	begin := ctx.Value("begin").(time.Time)
+	fmt.Printf(". took: %s\n", time.Since(begin))
+	return ctx, nil
+}
+
+func getFreePort() (port int, err error) {
+	var a *net.TCPAddr
+	if a, err = net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
+		var l *net.TCPListener
+		if l, err = net.ListenTCP("tcp", a); err == nil {
+			defer l.Close()
+			return l.Addr().(*net.TCPAddr).Port, nil
 		}
-		return internalRoundTripper(func1)
 	}
+	return
 }
 
-type internalRoundTripper func(*http.Request) (*http.Response, error)
-
-func (rt internalRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	return rt(req)
+func TestJson(t *testing.T) {
+	js, _ := simplejson.NewJson([]byte("{\"authToken\":\"abc\"}"))
+	fmt.Println(js.Get("authToken").String())
 }
 
-func Chain(rt http.RoundTripper, middlewares ...func(http.RoundTripper) http.RoundTripper) http.RoundTripper {
-	if rt == nil {
-		rt = http.DefaultTransport
+func TestStructSlice(t *testing.T) {
+	type book struct {
+		Name  string `json:"name"`
+		Count int    `json:"count"`
 	}
-	rt = middlewares[0](rt)
-	rt = middlewares[1](rt)
-	rt = middlewares[2](rt)
-	return rt
+
+	data := []book{
+		{
+			Name:  "golang",
+			Count: 11,
+		},
+		{
+			Name:  "java",
+			Count: 21,
+		},
+	}
+
+	fmt.Printf("%+v\n", data)
 }
 
-func Test_2main(t *testing.T) {
-	chain := Chain(
-		nil,
-		AddHeader("key", "value"),
-		CustomTimer(os.Stdout),
-		DumpResponse(false),
-	)
-	var c = http.Client{
-		Transport: chain,
-	}
-	resp, err := c.Get("https://www.baidu.com")
-	if err != nil {
-		fmt.Printf("err: %v\n", err)
-		return
-	}
-	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		println(err)
-		return
-	}
-	fmt.Println(string(data))
+func TestPhoneEmail(t *testing.T) {
+	emailAddress := "779772852@qq.com"
+	pattern := `^(\w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*|1[345789]{1}\\d{9})$`
+	reg := regexp.MustCompile(pattern)
+	result := reg.MatchString(emailAddress)
+	fmt.Printf("result: %v\n", result)
 }
 
-func TestAge(t *testing.T) {
-	body := bytes.NewBufferString("{}")
-	resp, err := http.Post("http://localhost:8080/ping", "application/json", body)
+func TestGromMysql(t *testing.T) {
+	dsn, err := startTempMysqlServer()
+	assert.Nil(t, err)
+	db, err := gorm.Open(OrmMysql.Open(*dsn), &gorm.Config{})
+	assert.Nil(t, err)
+	type Product struct {
+		gorm.Model
+		Code  string
+		Price uint
+	}
+	err = db.AutoMigrate(&Product{})
+	assert.Nil(t, err)
+
+	db.Create(&Product{
+		Code:  "D42",
+		Price: 100,
+	})
+
+	var product Product
+	db.First(&product, 1)
+
+	buf, err := json.Marshal(product)
+	assert.Nil(t, err)
+
+	fmt.Printf("product: %v\n", string(buf))
+}
+
+func startTempMysqlServer() (*string, error) {
+	dbName := RandStringRunes(10)
+	engine := sqle.NewDefault(ssql.NewDatabaseProvider(
+		memory.NewDatabase(dbName),
+		information_schema.NewInformationSchemaDatabase(),
+	))
+	port, err := getFreePort()
 	if err != nil {
-		fmt.Println(err)
-		return
+		return nil, err
 	}
-	defer resp.Body.Close()
-
-	// str, _ := bufio.NewReader(resp.Body).ReadString('\n')
-	// fmt.Printf("str: %v\n", str)
-
-	buf, err := io.ReadAll(resp.Body)
+	config := server.Config{
+		Protocol: "tcp",
+		Address:  fmt.Sprintf("localhost:%d", port),
+	}
+	s, err := server.NewDefaultServer(config, engine)
 	if err != nil {
-		fmt.Printf("err: %v\n", err)
-		return
+		return nil, err
 	}
 
-	var data struct {
-		Message string `json:"message"`
-	}
-	json.Unmarshal(buf, &data)
+	go func() {
+		_ = s.Start()
+	}()
 
-	fmt.Printf("data.Message: %v\n", data.Message)
+	dsn := fmt.Sprintf("root@tcp(127.0.0.1:%d)/%s", port, dbName)
+	return &dsn, nil
+}
+
+func TestRuntime(t *testing.T) {
+	fmt.Println(runtime.GOMAXPROCS(0) + 1)
+}
+
+func TestViper(t *testing.T) {
+	viper.SetDefault("ContentDir", "content")
+	viper.SetDefault("LayoutDir", "layouts")
+	viper.SetDefault("Taxonomies", map[string]string{"tag": "tags", "category": "categories"})
+
+	viper.SetConfigName("config")      // name of config file (without extension)
+	viper.SetConfigType("yaml")        // REQUIRED if the config file does not have the extension in the name
+	viper.AddConfigPath("/Users/jim/") // path to look for the config file in
+	viper.AddConfigPath(".")           // optionally look for config in the working directory
+	err := viper.ReadInConfig()        // Find and read the config file
+	assert.Nil(t, err)
+
+	viper.SetConfigType("yaml") // or viper.SetConfigType("YAML")
+
+	// any approach to require this configuration into your program.
+	var yamlExample = []byte(`
+Hacker: true
+name: steve
+hobbies:
+- skateboarding
+- snowboarding
+- go
+clothing:
+jacket: leather
+trousers: denim
+age: 35
+eyes : brown
+beard: true
+`)
+
+	_ = viper.ReadConfig(bytes.NewBuffer(yamlExample))
+
+	fmt.Println(viper.Get("name"))
+
+	viper.RegisterAlias("loud", "Verbose")
+
+	viper.Set("verbose", true) // same result as next line
+	viper.Set("loud", true)    // same result as prior line
+
+	fmt.Printf("%+v\n", viper.GetBool("loud"))    // true
+	fmt.Printf("%+v\n", viper.GetBool("verbose")) // true
+
+	viper.SetEnvPrefix("spf") // will be uppercased automatically
+	_ = viper.BindEnv("id")
+
+	os.Setenv("SPF_ID", "13") // typically done outside of the app
+
+	id := viper.Get("id") // 13
+	fmt.Println(id)
+
+	// using standard library "flag" package
+	flag.Int("flagname", 1234, "help message for flagname")
+
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
+	_ = viper.BindPFlags(pflag.CommandLine)
+
+	i := viper.GetInt("flagname") // retrieve value from viper
+	fmt.Println(i)
+}
+
+func TestDemo(t *testing.T) {
+	// print(144536398 - 143878550 - 400000 - 24800 - 4700 - 36000*3)
+	// println("  ")
+	print(1900 - 1440 - 100 + 180)
 }
