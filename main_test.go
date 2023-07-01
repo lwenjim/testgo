@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -71,7 +73,7 @@ func Chain(rt http.RoundTripper, middlewares ...func(http.RoundTripper) http.Rou
 	return rt
 }
 
-func Test_main(t *testing.T) {
+func Test_2main(t *testing.T) {
 	chain := Chain(
 		nil,
 		AddHeader("key", "value"),
@@ -93,4 +95,30 @@ func Test_main(t *testing.T) {
 		return
 	}
 	fmt.Println(string(data))
+}
+
+func TestAge(t *testing.T) {
+	body := bytes.NewBufferString("{}")
+	resp, err := http.Post("http://localhost:8080/ping", "application/json", body)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer resp.Body.Close()
+
+	// str, _ := bufio.NewReader(resp.Body).ReadString('\n')
+	// fmt.Printf("str: %v\n", str)
+
+	buf, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("err: %v\n", err)
+		return
+	}
+
+	var data struct {
+		Message string `json:"message"`
+	}
+	json.Unmarshal(buf, &data)
+
+	fmt.Printf("data.Message: %v\n", data.Message)
 }

@@ -1,18 +1,17 @@
 package main
 
 import (
-	"bytes"
-	"fmt"
-	"os/exec"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	cmd := exec.Command("ls")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("err: %v\n", err)
-		return
-	}
-	fmt.Printf("out.String(): %v\n", out.String())
+	r := gin.Default()
+	r.POST("/ping", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "pong",
+		})
+	})
+	r.Run()
 }
