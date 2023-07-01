@@ -1,0 +1,7 @@
+mode: count
+github.com/lwenjim/testgo/sub1/sub.go:3.21,5.2 1 0
+github.com/lwenjim/testgo/main.go:9.13,11.2 1 0
+github.com/lwenjim/testgo/once.go:13.29,14.37 1 0
+github.com/lwenjim/testgo/once.go:17.2,19.17 3 0
+github.com/lwenjim/testgo/once.go:14.37,16.3 1 0
+github.com/lwenjim/testgo/once.go:19.17,22.3 2 0
