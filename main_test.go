@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"reflect"
@@ -393,4 +394,21 @@ func init() {
 		}
 		return err
 	})
+}
+
+func TestProxy(t *testing.T) {
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: func(in *http.Request) (*url.URL, error) {
+				fmt.Printf("in.Host: %v\n", in.Host)
+				return url.Parse("http://127.0.0.1:33210")
+			},
+		},
+	}
+	resp, err := client.Get("https://www.google.com")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(resp)
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -12,8 +11,8 @@ const defaultExpireTime = time.Second * 10
 
 // 分布式锁
 type Locker struct {
-	key        string        // redis key
-	unlock     bool          // 是否已经解锁 ，解锁则不用续租
+	key string // redis key
+	// unlock     bool          // 是否已经解锁 ，解锁则不用续租
 	incrScript *redis.Script // lua script
 	option     options       // 可选项
 }
@@ -84,33 +83,33 @@ func (this *Locker) Lock() (*Locker, bool) {
 	if ok, err := boolcmd.Result(); err != nil || !ok {
 		return this, false
 	}
-	this.expandLockTime()
+	// this.expandLockTime()
 	return this, true
 }
 
-// 续租
-func (this *Locker) expandLockTime() {
-	sleepTime := this.option.expire * 2 / 3
-	go func() {
-		for {
-			time.Sleep(sleepTime)
-			if this.unlock {
-				break
-			}
-			this.resetExpire()
-		}
-	}()
-}
+// // 续租
+// func (this *Locker) expandLockTime() {
+// 	sleepTime := this.option.expire * 2 / 3
+// 	go func() {
+// 		for {
+// 			time.Sleep(sleepTime)
+// 			if this.unlock {
+// 				break
+// 			}
+// 			this.resetExpire()
+// 		}
+// 	}()
+// }
 
-// 重新设置过期时间
-func (this *Locker) resetExpire() {
-	cmd := this.incrScript.Run(this.option.ctx, this.option.redisClient, []string{this.key}, 1, this.option.expire.Seconds())
-	v, err := cmd.Result()
-	log.Printf("key=%s ,续期结果:%v,%v\n", this.key, err, v)
-}
+// // 重新设置过期时间
+// func (this *Locker) resetExpire() {
+// 	cmd := this.incrScript.Run(this.option.ctx, this.option.redisClient, []string{this.key}, 1, this.option.expire.Seconds())
+// 	v, err := cmd.Result()
+// 	log.Printf("key=%s ,续期结果:%v,%v\n", this.key, err, v)
+// }
 
-// 释放锁  干完活后释放锁
-func (this *Locker) Unlock() {
-	this.unlock = true
-	this.option.redisClient.Del(this.option.ctx, this.key)
-}
+// // 释放锁  干完活后释放锁
+// func (this *Locker) Unlock() {
+// 	this.unlock = true
+// 	this.option.redisClient.Del(this.option.ctx, this.key)
+// }
