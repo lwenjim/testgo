@@ -412,3 +412,14 @@ func TestProxy(t *testing.T) {
 	}
 	fmt.Println(resp)
 }
+
+func TestGeneric(t *testing.T) {
+	type Foo[T int | string] struct {
+		Name T
+		age  T
+	}
+	var f Foo[int]
+	fmt.Printf("f: %v\n", f)
+	fmt.Printf("f.age: %v\n", f.age)
+	fmt.Printf("f.Name: %v\n", f.Name)
+}
