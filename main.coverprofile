@@ -1,5 +1,4 @@
 mode: count
-github.com/lwenjim/testgo/main.go:3.14,5.2 0 0
 github.com/lwenjim/testgo/once.go:13.29,14.37 1 0
 github.com/lwenjim/testgo/once.go:17.2,19.17 3 0
 github.com/lwenjim/testgo/once.go:14.37,16.3 1 0
@@ -27,3 +26,4 @@ github.com/lwenjim/testgo/redis.go:50.2,50.26 1 0
 github.com/lwenjim/testgo/redis.go:17.28,45.17 3 0
 github.com/lwenjim/testgo/redis.go:48.3,48.20 1 0
 github.com/lwenjim/testgo/redis.go:45.17,47.4 1 0
+github.com/lwenjim/testgo/main.go:3.14,5.2 0 0
