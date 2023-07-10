@@ -9,9 +9,6 @@ require (
 	github.com/dolthub/go-mysql-server v0.15.0
 	github.com/go-redis/redis/v8 v8.11.4
 	github.com/go-sql-driver/mysql v1.7.0
-	github.com/golang/mock v1.6.0
-	github.com/jmoiron/sqlx v1.3.5
-	github.com/lib/pq v1.10.9
 	github.com/peterhellberg/giphy v0.0.2
 	github.com/redis/go-redis/v9 v9.0.4
 	github.com/spf13/pflag v1.0.5
@@ -40,7 +37,9 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
+	github.com/jmoiron/sqlx v1.3.5 // indirect
 	github.com/lestrrat-go/strftime v1.0.4 // indirect
+	github.com/lib/pq v1.10.9 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-sqlite3 v1.14.16 // indirect
 	github.com/mitchellh/hashstructure v1.1.0 // indirect
