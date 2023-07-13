@@ -189,3 +189,27 @@ func TestGeneric(t *testing.T) {
 	fmt.Printf("f.age: %v\n", f.age)
 	fmt.Printf("f.Name: %v\n", f.Name)
 }
+
+func TestSql(t *testing.T) {
+	buff, err := os.ReadFile("data.txt")
+	assert.Nil(t, err)
+	for _, data := range strings.Split(string(buff), "\n") {
+		data = strings.Trim(data, "\n\r\t")
+		strs := strings.Split(data, "|")
+		if len(strs) <= 1 {
+			fmt.Println(data)
+			continue
+		}
+		list := strings.Split(strs[4], "[")
+		sql := list[0]
+		for _, val := range strings.Split(strings.Trim(list[1], "]"), " ") {
+			switch reflect.TypeOf(val).String() {
+			case "string":
+				sql = strings.Replace(sql, "?", "'"+val+"'", 1)
+			case "uint32":
+				sql = strings.Replace(sql, "?", val, 1)
+			}
+		}
+		fmt.Println(sql)
+	}
+}
