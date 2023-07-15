@@ -52,10 +52,9 @@ func TestString(t *testing.T) {
 }
 
 func TestRedis(t *testing.T) {
+	fmt.Println(123)
 	s, err := miniredis.Run()
-	if err != nil {
-		panic(err)
-	}
+	assert.Nil(t, err)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     s.Addr(),
