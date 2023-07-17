@@ -5,7 +5,7 @@ source ~/.bashrc
 
 ViewLog() {
     if [[ "usersv messagesv momentsv pushersv" == *"$1"* ]]; then
-        jspp-kubectl get pods | grep $1 | awk -F'[ -]' '{print "jspp-kubectl logs -c "$1" --tail 1000 "$1"-"$2"-"$3}' | bash -i
+        jspp-kubectl get pods | grep $1 | awk -F'[ -]' '{print "jspp-kubectl logs -c "$1" --tail 20 -f "$1"-"$2"-"$3}' | bash -i
     fi
 }
 

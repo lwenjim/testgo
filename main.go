@@ -1,7 +1,27 @@
 package main
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 func main() {
-	println(time.Now().Format("2006-1-2 15:04:05"))
+
+	var i int = 0
+	go func() {
+		for {
+			i++
+			fmt.Println("subroutine: i = ", i)
+			time.Sleep(1 * time.Second)
+		}
+	}()
+	for {
+		i++
+		fmt.Println("mainroutine: i = ", i)
+		time.Sleep(1 * time.Second)
+	}
+}
+
+func Foo() {
+	println(123)
 }

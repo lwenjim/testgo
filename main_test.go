@@ -212,3 +212,21 @@ func TestSql(t *testing.T) {
 		fmt.Println(sql)
 	}
 }
+
+func TestSwith(t *testing.T) {
+	i := time.Now().Unix()
+	switch i % 2 {
+	default:
+		println(789)
+	case 0:
+		println(123)
+		// case 1:
+		// 	println(456)
+	}
+	println(i)
+}
+
+func TestFoo(t *testing.T) {
+	println(123)
+	Foo()
+}
