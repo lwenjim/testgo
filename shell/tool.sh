@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 
 shopt -s expand_aliases
-source ~/.bashrc
+
+# shellcheck source=/dev/null
+source /Users/jim/.bashrc
 
 ViewLog() {
-    if [[ "usersv messagesv momentsv pushersv" == *"$1"* ]]; then
-        jspp-kubectl get pods | grep $1 | awk -F'[ -]' '{print "jspp-kubectl logs -c "$1" --tail 20 -f "$1"-"$2"-"$3}' | bash -i
+    if [[ "usersv messagesv momentsv pushersv paysv" == *"$1"* ]]; then
+        jspp-kubectl get pods | grep "$1" | awk -F'[ -]' '{print "jspp-kubectl logs -c "$1" --tail 20 -f "$1"-"$2"-"$3}' | bash -i
     fi
 }
 
 UpdateHook() {
-    cd /Users/jim/Workdata/goland/src/pushersv
-    for item in usersv messagesv momentsv authsv deliversv edgesv groupsv pushersv uploadsv; do
+    cd /Users/jim/Workdata/goland/src/pushersv || exit 1
+    for item in usersv messagesv momentsv authsv deliversv edgesv groupsv pushersv uploadsv paysv; do
         cp -rf .git/hooks/{commit-msg,pre-commit} "../$item/.git/hooks"
     done
 }
@@ -25,14 +27,14 @@ Help() {
     echo
 }
 
-args=$(getopt -o uc:h --long update-hook,command,help: -- $*)
+args=$(getopt -o uc:h --long update-hook,command,help: -- "$@")
 
-if [ $? -ne 0 ]; then
+if [ $? ]; then
     Help
     exit 2
 fi
 eval set -- "$args"
-
+UpdateHook
 while :; do
     case "$1" in
     -u | --update-hook)
@@ -41,7 +43,7 @@ while :; do
         ;;
     -c | --command)
         shift
-        ViewLog $1
+        ViewLog "$1"
         shift
         ;;
     -h | --help)

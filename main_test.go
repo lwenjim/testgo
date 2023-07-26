@@ -12,8 +12,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/bitly/go-simplejson"
+	"github.com/lwenjim/testgo/foo"
 	"gopkg.in/validator.v2"
 
 	"github.com/alicebob/miniredis/v2"
@@ -226,7 +228,31 @@ func TestSwith(t *testing.T) {
 	println(i)
 }
 
-func TestFoo(t *testing.T) {
-	println(123)
-	Foo()
+func TestPrivateField(t *testing.T) {
+	p := foo.InitProgrammer()
+	fmt.Println(p)
+	lang := (*string)(unsafe.Pointer(uintptr(unsafe.Pointer(&p)) + unsafe.Sizeof(int(0))))
+	*lang = "Golang"
+	fmt.Println(p)
+
+	T := foo.TestPointer{A: 1}
+	pb := (*int)(unsafe.Pointer(uintptr(unsafe.Pointer(&T)) + 8))
+	/*
+	   Tmp := uintptr(unsafe.Pointer(&T)) + 8)
+	   pb := (*int)(unsafe.Pointer(Tmp)
+	   千万不能出现这种用临时变量中转一下的情况。因为GC可能因为优化内存碎片的原因移动了这个对象。只保留了指针的地址是没有意义的。
+	*/
+	*pb = 2
+
+	c := (*string)(unsafe.Pointer(uintptr(unsafe.Pointer(&T)) + 8 + 8))
+	*c = "abc"
+
+	d := (*int)(unsafe.Pointer(uintptr(unsafe.Pointer(&T)) + unsafe.Sizeof(int(0)) + unsafe.Sizeof(int(0)) + unsafe.Sizeof(string(""))))
+	*d = 4
+
+	T.OouPut() //1 2
+
+	fmt.Printf("unsafe.Sizeof(int(0)): %v\n", unsafe.Sizeof(string("")))
+
+	fmt.Printf("unsafe.Alignof(p): %v\n", unsafe.Alignof(p))
 }
