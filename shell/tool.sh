@@ -6,8 +6,13 @@ shopt -s expand_aliases
 source /Users/jim/.bashrc
 
 ViewLog() {
-    if [[ "usersv messagesv momentsv pushersv paysv" == *"$1"* ]]; then
-        jspp-kubectl get pods | grep "$1" | awk -F'[ -]' '{print "jspp-kubectl logs -c "$1" --tail 20 -f "$1"-"$2"-"$3}' | bash -i
+    if [[ "usersv messagesv momentsv pushersv paysv authsv" == *"$1"* ]]; then
+        result=$(jspp-kubectl get pods | grep "$1" | awk -F'[ -]' '{print "jspp-kubectl logs -c "$1" --tail 1000 -f "$1"-"$2"-"$3}')
+        if [ "$2" != "" ]; then
+            echo "${result}|$2" | bash -i
+        else
+            jspp-kubectl get pods | grep "$1" | awk -F'[ -]' '{print "jspp-kubectl logs -c "$1" --tail 1000 -f "$1"-"$2"-"$3}' | bash -i
+        fi
     fi
 }
 
@@ -27,27 +32,32 @@ Help() {
     echo
 }
 
-args=$(getopt -o uc:h --long update-hook,command,help: -- "$@")
-
-if [ $? ]; then
-    Help
-    exit 2
-fi
+update_hook=false
+help=false
+view_log=""
+view_log_sub=""
+args=$(getopt -o uc:h:v --long update-hook,view-log,help,view-sub -- "$@")
 eval set -- "$args"
-UpdateHook
+
 while :; do
     case "$1" in
     -u | --update-hook)
-        UpdateHook
+        update_hook=true
         shift
         ;;
-    -c | --command)
+    -c | --view-log)
         shift
-        ViewLog "$1"
+        view_log="$1"
+        shift
+        ;;
+    -v | --view-sub)
+        shift
+        view_log_sub="$1"
+        echo "$1"
         shift
         ;;
     -h | --help)
-        Help
+        help=true
         shift
         ;;
     -- | *)
@@ -55,3 +65,12 @@ while :; do
         ;;
     esac
 done
+
+if [ "$update_hook" = true ]; then
+    UpdateHook
+elif [ "$view_log" != "" ]; then
+    # ViewLog "$view_log" "$view_log_sub"
+    echo "$view_log_sub"
+elif [ "$help" != "" ]; then
+    Help
+fi
