@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 shopt -s expand_aliases
 
@@ -26,7 +26,7 @@ UpdateHook() {
 Help() {
     echo "Automation Script"
     echo
-    echo "get log:               ./tool.sh [-c|--command] cmd"
+    echo "get log:               ./tool.sh [-c|--show-log-sub] cmd"
     echo "sync config:           ./tool.sh [-u|--update-hook]"
     echo "help:                  ./tool.sh [-h|--help]"
     echo
@@ -36,8 +36,9 @@ update_hook=false
 help=false
 view_log=""
 view_log_sub=""
-args=$(getopt -o uc:h:v --long update-hook,view-log,help,view-sub -- "$@")
-eval set -- "$args"
+
+args=$(getopt -o uc:h:v -l "update-hook,view-log,help,view-log-sub" -n "$0" -- "$@")
+eval set -- "${args}"
 
 while :; do
     case "$1" in
@@ -50,18 +51,17 @@ while :; do
         view_log="$1"
         shift
         ;;
-    -v | --view-sub)
+    -v | --view-log-sub)
         shift
         view_log_sub="$1"
-        echo "$1"
         shift
         ;;
     -h | --help)
         help=true
         shift
         ;;
-    -- | *)
-        break
+    *)
+        shift
         ;;
     esac
 done
