@@ -8,12 +8,14 @@ import (
 	"github.com/labstack/echo"
 )
 
+// nolint
 type jwtCustomClaims struct {
 	Name  string
 	Admin bool
 	jwt.RegisteredClaims
 }
 
+// nolint
 func login(c echo.Context) error {
 	username := c.FormValue("username")
 	password := c.FormValue("password")
@@ -41,10 +43,12 @@ func login(c echo.Context) error {
 	})
 }
 
+// nolint
 func accessible(c echo.Context) error {
 	return c.String(http.StatusOK, "Accessible")
 }
 
+// nolint
 func restricted(c echo.Context) error {
 	user := c.Get("user").(*jwt.Token)
 	claims := user.Claims.(*jwtCustomClaims)
