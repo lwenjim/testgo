@@ -2,16 +2,17 @@
 
 shopt -s expand_aliases
 
-# shellcheck source=/dev/null
 source /Users/jim/.bashrc
 
 ViewLog() {
-    if [[ "usersv messagesv momentsv pushersv paysv authsv" == *"$1"* ]]; then
-        result=$(jspp-kubectl get pods | grep "$1" | awk -F'[ -]' '{print "jspp-kubectl logs -c "$1" --tail 1000 -f "$1"-"$2"-"$3}')
-        if [ "$2" != "" ]; then
-            echo "${result}|$2" | bash -i
+    service="$1"
+    pipe="$2"
+    if [[ "usersv messagesv momentsv pushersv paysv authsv" == *"${service}"* ]]; then
+        result=$(jspp-kubectl get pods | grep "${service}" | awk -F'[ -]' '{print "jspp-kubectl logs -c "$1" --tail 1000 -f "$1"-"$2"-"$3}')
+        if [ "${pipe}" != "" ]; then
+            echo "${result}|${pipe}" | bash -i
         else
-            jspp-kubectl get pods | grep "$1" | awk -F'[ -]' '{print "jspp-kubectl logs -c "$1" --tail 1000 -f "$1"-"$2"-"$3}' | bash -i
+            jspp-kubectl get pods | grep "${service}" | awk -F'[ -]' '{print "jspp-kubectl logs -c "$1" --tail 1000 -f "$1"-"$2"-"$3}' | bash -i
         fi
     fi
 }
@@ -26,51 +27,56 @@ UpdateHook() {
 Help() {
     echo "Automation Script"
     echo
-    echo "get log:               ./tool.sh [-c|--show-log-sub] cmd"
-    echo "sync config:           ./tool.sh [-u|--update-hook]"
+    echo "get log:               ./tool.sh [-c|--show-log cmd] [--show-log-pipe pipe]"
+    echo "sync config:           ./tool.sh [-u|--update-git-hook]"
     echo "help:                  ./tool.sh [-h|--help]"
     echo
 }
 
-update_hook=false
-help=false
-view_log=""
-view_log_sub=""
+update_git_hook=
+help=
+service=
+service_pipe=
 
-args=$(getopt -o uc:h:v -l "update-hook,view-log,help,view-log-sub" -n "$0" -- "$@")
+args=$(getopt -o uc:hv: -l update-git-hook,service:,help,service-pipe: -n "$0" --  "$@")
 eval set -- "${args}"
-
-while :; do
+echo "$args"
+while true; do
     case "$1" in
-    -u | --update-hook)
-        update_hook=true
+    -u | --update-git-hook)
+        update_git_hook=true
         shift
         ;;
-    -c | --view-log)
+    -c | --service)
+        service="$2"
         shift
-        view_log="$1"
         shift
         ;;
-    -v | --view-log-sub)
+    -v | --service-pipe)
+        service_pipe="$2"
         shift
-        view_log_sub="$1"
         shift
         ;;
     -h | --help)
         help=true
         shift
         ;;
-    *)
+    --)
         shift
+        break
+        ;;
+    *)
+        exit
         ;;
     esac
 done
 
-if [ "$update_hook" = true ]; then
+if [ "$update_git_hook" != "" ]; then
     UpdateHook
-elif [ "$view_log" != "" ]; then
-    # ViewLog "$view_log" "$view_log_sub"
-    echo "$view_log_sub"
+elif [ "$service" != "" ]; then
+    echo ViewLog "$service" "$service_pipe"
 elif [ "$help" != "" ]; then
     Help
+else
+    echo
 fi
