@@ -4,7 +4,7 @@ shopt -s expand_aliases
 
 source /Users/jim/.bashrc
 
-ViewLog() {
+ServiceLog() {
     service="$1"
     pipe="$2"
     if [[ "usersv messagesv momentsv pushersv paysv authsv" == *"${service}"* ]]; then
@@ -17,7 +17,7 @@ ViewLog() {
     fi
 }
 
-UpdateHook() {
+UpdateGitHook() {
     cd /Users/jim/Workdata/goland/src/pushersv || exit 1
     for item in usersv messagesv momentsv authsv deliversv edgesv groupsv pushersv uploadsv paysv; do
         cp -rf .git/hooks/{commit-msg,pre-commit} "../$item/.git/hooks"
@@ -72,9 +72,9 @@ while true; do
 done
 
 if [ "$update_git_hook" != "" ]; then
-    UpdateHook
+    UpdateGitHook
 elif [ "$service" != "" ]; then
-    echo ViewLog "$service" "$service_pipe"
+    echo ServiceLog "$service" "$service_pipe"
 elif [ "$help" != "" ]; then
     Help
 else
