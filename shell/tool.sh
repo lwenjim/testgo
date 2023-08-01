@@ -27,7 +27,7 @@ UpdateGitHook() {
 Help() {
     echo "Automation Script"
     echo
-    echo "get log:               ./tool.sh [-c|--show-log cmd] [--show-log-pipe pipe]"
+    echo "get log:               ./tool.sh [-c|--service cmd] [--service-pipe pipe]"
     echo "sync config:           ./tool.sh [-u|--update-git-hook]"
     echo "help:                  ./tool.sh [-h|--help]"
     echo
@@ -38,7 +38,7 @@ help=
 service=
 service_pipe=
 
-args=$(getopt -o uc:hv: -l update-git-hook,service:,help,service-pipe: -n "$0" --  "$@")
+args=$(getopt -o uc:hv: -l update-git-hook,service:,help,service-pipe: -n "$0" -- "$@")
 eval set -- "${args}"
 echo "$args"
 while true; do
