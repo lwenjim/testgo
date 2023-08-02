@@ -35,7 +35,7 @@ my_function() {
                     item=$(echo "$1" | cut -c 1-"$len")
                     if [ "$current" = "$item" ]; then
                         arr[index]=$1
-                        index=$(($index + 1))
+                        index=$((index + 1))
                     fi
                     shift
                 done
