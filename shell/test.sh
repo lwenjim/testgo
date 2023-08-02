@@ -1,6 +1,7 @@
-#!/bin/sh
-
-    mapping="
+#! /bin/bash
+# shellcheck disable=SC2086
+mapping="
+        usersv
         mongo
         mysql
         redis
@@ -8,45 +9,45 @@
         messagesv
         squaresv 
         edgesv
-        usersv
         authsv
         uploadsv
         deliversv
         usergrowthsv
         riskcontrolsv
-        paysv"    
-        service="$2"
-    {
-        # shellcheck disable=SC2317
-        my_function() {
-            while test $# -gt 0; do
-                if [ "$service" = "$1" ];then
-                    in=true
-                fi
-                shift
-            done
-            if [ "$in" -eq "" ];then
-                # shellcheck disable=SC2034
-                len=${#service}
-                arr=()
-                index=0
-                # 遍历每列
-                while $len -gt 0;do
-                    current=$(echo "$service"|cut -c 1-"$len")
-                    # 遍历每行
-                    while test $# -gt 0; do
-                        item=$(echo "$1"|cut -c 1-"$len")
-                        if [ "$current" = "$item" ];then
-                            arr[index]=$1
-                            index=$index+1
-                        fi
-                        shift
-                    done                  
-
+        paysv"
+service="$2"
+my_function() {
+    arr=()
+    index=0
+    while test $# -gt 0; do
+        if [ "$service" = "$1" ]; then
+            arr[index]=$1
+            break
+        fi
+        shift
+    done
+    if [ ${#arr[@]} -eq 0 ]; then
+        len=${#service}
+        for ((i = 0; i < ${#service}; i++)); do
+            current=$(echo "$service" | cut -c 1-"$len")
+            for2() {
+                while test $# -gt 0; do
+                    item=$(echo "$1" | cut -c 1-"$len")
+                    if [ "$current" = "$item" ]; then
+                        arr[index]=$1
+                        index=$(($index + 1))
+                    fi
+                    shift
                 done
+            }
+            for2 $mapping
+            if [ ${#arr[@]} -gt 0 ]; then
+                break
             fi
-        }
-        # shellcheck disable=SC2086
-        # shellcheck disable=SC2317
-        my_function $mapping
-    }
+        done
+    fi
+    for i in "${arr[@]}"; do
+        echo "$i"
+    done
+}
+my_function $mapping
