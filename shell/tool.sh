@@ -10,10 +10,10 @@ source /Users/jim/.bashrc
 function jspp-k8s-port-forward-simple() {
     if [[ "mongo mysql redis" == *"${1}"* ]]; then
         name="${1}-0"
-            jspp-kubectl port-forward "${name}" "${2}:${2}" >"/tmp/$1.log" 2>&1 &
+        jspp-kubectl port-forward "${name}" "${2}:${2}" >"/tmp/$1.log" 2>&1 &
     else
         name=$(jspp-kubectl get pods | grep "$1" | awk '{if(NR==1){print $1}}')
-            jspp-kubectl port-forward "${name}" "${2}:9090" >"/tmp/$1.log" 2>&1 &
+        jspp-kubectl port-forward "${name}" "${2}:9090" >"/tmp/$1.log" 2>&1 &
     fi
 
     if [ ! $? ]; then
@@ -26,21 +26,36 @@ function jspp-k8s-port-forward-simple() {
 function jspp-k8s-port-forward() {
     ps aux | pgrep kube | awk '{print "kill -9 " $1}' | sudo bash
 
-    jspp-k8s-port-forward-simple mongo 27017
-    jspp-k8s-port-forward-simple mysql 3306
-    jspp-k8s-port-forward-simple redis 6379
+    mapping="
+        mongo 27017
+        mysql 3306
+        redis 6379
+        pusher 64440
+        messagesv 64441
+        squaresv 64442
+        edgesv 64443
+        usersv 64444
+        authsv 64445
+        uploadsv 64446
+        deliversv 64447
+        usergrowthsv 64448
+        riskcontrolsv 64449
+        paysv 64450    
+            "
 
-    jspp-k8s-port-forward-simple pusher 64440
-    jspp-k8s-port-forward-simple messagesv 64441
-    jspp-k8s-port-forward-simple squaresv 64442
-    jspp-k8s-port-forward-simple edgesv 64443
-    jspp-k8s-port-forward-simple usersv 64444
-    jspp-k8s-port-forward-simple authsv 64445
-    jspp-k8s-port-forward-simple uploadsv 64446
-    jspp-k8s-port-forward-simple deliversv 64447
-    jspp-k8s-port-forward-simple usergrowthsv 64448
-    jspp-k8s-port-forward-simple riskcontrolsv 64449
-    jspp-k8s-port-forward-simple paysv 64450
+    {
+        # shellcheck disable=SC2317
+        my_function() {
+            while test $# -gt 0; do
+                jspp-k8s-port-forward-simple "$1" "$2"
+                shift
+                shift
+            done
+        }
+        # shellcheck disable=SC2086
+        # shellcheck disable=SC2317
+        my_function $mapping
+    }
 }
 
 function service-log() {
@@ -70,20 +85,59 @@ function iip() {
 function help() {
     echo "Automation Script"
     echo
-    echo "get log:               ./tool.sh [--service-log cmd] [--service-log-pipe pipe]"
+    echo "get log:               ./tool.sh [-s|--service-log cmd] [--service-log-pipe pipe]"
     echo "sync config:           ./tool.sh [--update-git-hook]"
     echo "show ip:               ./tool.sh [--iip]"
     echo "help:                  ./tool.sh [--help]"
     echo
 }
 
-args=$(getopt -o h -l "service-log:,service-log-pipe:,help,update-git-hook,iip,jspp-k8s-port-forward" -n "$0" -- "$@")
+args=$(getopt -o hs: -l "service-log:,service-log-pipe:,help,update-git-hook,iip,jspp-k8s-port-forward" -n "$0" -- "$@")
 eval set -- "${args}"
 echo "$args"
 while true; do
     case "$1" in
-    --service-log)
+    -s | --service-log)
+    mapping="
+        mongo
+        mysql
+        redis
+        pusher
+        messagesv
+        squaresv 
+        edgesv
+        usersv
+        authsv
+        uploadsv
+        deliversv
+        usergrowthsv
+        riskcontrolsv
+        paysv"    
         service="$2"
+    {
+        # shellcheck disable=SC2317
+        my_function() {
+            while test $# -gt 0; do
+                if [ "$service" = "$1" ];then
+                    in=true
+                fi
+                shift
+            done
+            if [ "$in" == "" ];then
+                # shellcheck disable=SC2034
+                len=${#service}
+                while $len > 0;do
+                    
+                done
+            fi
+        }
+        # shellcheck disable=SC2086
+        # shellcheck disable=SC2317
+        my_function $mapping
+    }
+
+
+
         shift
         shift
         ;;
@@ -110,7 +164,11 @@ while true; do
 done
 
 if [ "$service" != "" ]; then
-    service-log "$service" "$service_pipe"
+    if [ "$service_pipe" != "" ]; then
+        service-log "$service" "$service_pipe"
+    else
+        service-log "$service"
+    fi
 else
     echo
 fi
