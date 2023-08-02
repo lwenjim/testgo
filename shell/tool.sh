@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2046
+# shellcheck disable=SC2086
 # SHELL_FOLDER=$(dirname $(readlink -f "$0"))
 shopt -s expand_aliases
 
@@ -98,7 +98,8 @@ echo "$args"
 while true; do
     case "$1" in
     -s | --service-log)
-    mapping="
+        mapping="
+        usersv
         mongo
         mysql
         redis
@@ -106,37 +107,48 @@ while true; do
         messagesv
         squaresv 
         edgesv
-        usersv
         authsv
         uploadsv
         deliversv
         usergrowthsv
         riskcontrolsv
-        paysv"    
+        paysv"
         service="$2"
-    {
-        # shellcheck disable=SC2317
         my_function() {
+            arr=()
+            index=0
             while test $# -gt 0; do
-                if [ "$service" = "$1" ];then
-                    in=true
+                if [ "$service" = "$1" ]; then
+                    arr[index]=$1
+                    break
                 fi
                 shift
             done
-            if [ "$in" == "" ];then
-                # shellcheck disable=SC2034
+            if [ ${#arr[@]} -eq 0 ]; then
                 len=${#service}
-                while $len > 0;do
-                    
+                for ((i = 0; i < ${#service}; i++)); do
+                    current=$(echo "$service" | cut -c 1-"$len")
+                    for2() {
+                        while test $# -gt 0; do
+                            item=$(echo "$1" | cut -c 1-"$len")
+                            if [ "$current" = "$item" ]; then
+                                arr[index]=$1
+                                index=$(($index + 1))
+                            fi
+                            shift
+                        done
+                    }
+                    for2 $mapping
+                    if [ ${#arr[@]} -gt 0 ]; then
+                        break
+                    fi
                 done
             fi
+            for i in "${arr[@]}"; do
+                echo "$i"
+            done
         }
-        # shellcheck disable=SC2086
-        # shellcheck disable=SC2317
         my_function $mapping
-    }
-
-
 
         shift
         shift
