@@ -1,30 +1,22 @@
-#! /bin/bash
-# shellcheck disable=SC2086
-SHELL_FOLDER=$(dirname $(readlink -f "$0"))
-shopt -s expand_aliases
-source /Users/jim/.bashrc
+#!/bin/bash
+# shellcheck disable=SC2317
 
-# source "$SHELL_FOLDER"/functions.sh
 # service=
 # service_pipe=
 # service_option=
-function service-log-pre() {
+# simple_command=
+
+function auto-match-cmd() {
     local pattern="$1"
-    local mapping="
-        usersv
-        mongo
-        mysql
-        redis
-        pusher
-        messagesv
-        squaresv 
-        edgesv
-        authsv
-        uploadsv
-        deliversv
-        usergrowthsv
-        riskcontrolsv
-        paysv"
+    mapping="
+    update-git-hook
+    jspp-k8s-port-forward
+    iip
+    help
+    "    
+    if [ "$1" = "" ]; then
+        return 1
+    fi
 
     my_function() {
         local arr=()
@@ -58,7 +50,74 @@ function service-log-pre() {
         fi
 
         if [ ${#arr[@]} -eq 1 ]; then
+            simple_command=${arr[0]}
+            echo "匹配成功 ---> $simple_command"
+        else
+            for i in "${arr[@]}"; do
+                echo "$i"
+            done
+        fi
+    }
+    my_function $mapping
+}
+
+function service-log-pre() {
+    if [ "$1" = "" ]; then
+        return 1
+    fi    
+    
+    local pattern="$1"
+    local mapping="
+usersv
+mongo
+mysql
+redis
+pusher
+messagesv
+squaresv 
+edgesv
+authsv
+uploadsv
+deliversv
+usergrowthsv
+riskcontrolsv
+paysv"
+
+    my_function() {
+        local arr=()
+        local index=0
+        while test $# -gt 0; do
+            if [ "$pattern" = "$1" ]; then
+                arr[index]=$1
+
+                break
+            fi
+            shift
+        done
+        if [ ${#arr[@]} -eq 0 ]; then
+            local len=${#pattern}
+            for ((i = 0; i < ${#pattern}; i++)); do
+                local current=$(echo "$pattern" | cut -c 1-"$len")
+                for2() {
+                    while test $# -gt 0; do
+                        local item=$(echo "$1" | cut -c 1-"$len")
+                        if [ "$current" = "$item" ]; then
+                            arr[index]=$1
+                            index=$((index + 1))
+                        fi
+                        shift
+                    done
+                }
+                for2 $mapping
+                if [ ${#arr[@]} -gt 0 ]; then
+                    break
+                fi
+            done
+        fi
+            echo "size: ${#arr[@]}"
+        if [ ${#arr[@]} -eq 1 ]; then
             service=${arr[0]}
+
         else
             for i in "${arr[@]}"; do
                 echo "$i"
@@ -154,10 +213,20 @@ function help() {
     echo
 }
 
+function sl() {
+    if [ "$1" != "" ]; then
+        if [ "$2" != "" ]; then
+            $shell_path --service-log "$1" --service-log-pipe "\\""$2""\\"
+        else
+            $shell_path --service-log "$1"
+        fi
+    fi
+}
+
 function main() {
     local args=$(getopt -o hs: -l "service-log:,service-log-pipe:,service-log-kubectl-logs-option:,help,update-git-hook,iip,jspp-k8s-port-forward" -n "$0" -- "$@" __)
     eval set -- "${args}"
-    echo "$args"
+    # echo "$args"
     local pos=0
     while true; do
         case "$1" in
@@ -191,8 +260,23 @@ function main() {
                     service-log-pre "$2"
                     service_option="$3"
                     service_pipe="$4"
+                    shift
+                    shift
+                    shift
+                    ;;
+                "ugh")
+                    update-git-hook
+                    ;;
+                "jkpf")
+                    jspp-k8s-port-forward
                     ;;
                 *)
+                    if [ "$1" != "" ]; then
+                        auto-match-cmd "$1"
+                    fi
+                    if [ "$simple_command" != "" ]; then
+                        $simple_command
+                    fi
                     echo
                     ;;
                 esac
@@ -217,4 +301,3 @@ function main() {
         echo
     fi
 }
-main "$@"
