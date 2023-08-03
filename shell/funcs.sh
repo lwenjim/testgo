@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2317
+# shellcheck disable=SC2086,SC2046,SC2317,SC2155,SC2154,SC1003
 
 # service=
 # service_pipe=
