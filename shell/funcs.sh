@@ -5,126 +5,77 @@
 # service_pipe=
 # service_option=
 # simple_command=
-
-function auto-match-cmd() {
-    local pattern="$1"
-    mapping="
-    update-git-hook
-    jspp-k8s-port-forward
-    iip
-    help
-    "    
-    if [ "$1" = "" ]; then
-        return 1
-    fi
-
-    my_function() {
-        local arr=()
-        local index=0
-        while test $# -gt 0; do
-            if [ "$pattern" = "$1" ]; then
-                arr[index]=$1
-                break
-            fi
-            shift
-        done
-        if [ ${#arr[@]} -eq 0 ]; then
-            local len=${#pattern}
-            for ((i = 0; i < ${#pattern}; i++)); do
-                local current=$(echo "$pattern" | cut -c 1-"$len")
-                for2() {
-                    while test $# -gt 0; do
-                        local item=$(echo "$1" | cut -c 1-"$len")
-                        if [ "$current" = "$item" ]; then
-                            arr[index]=$1
-                            index=$((index + 1))
-                        fi
-                        shift
-                    done
-                }
-                for2 $mapping
-                if [ ${#arr[@]} -gt 0 ]; then
-                    break
-                fi
-            done
-        fi
-
-        if [ ${#arr[@]} -eq 1 ]; then
-            simple_command=${arr[0]}
-            echo "匹配成功 ---> $simple_command"
-        else
-            for i in "${arr[@]}"; do
-                echo "$i"
-            done
-        fi
-    }
-    my_function $mapping
-}
+serviceServers="
+        mongo 27017
+        mysql 3306
+        redis 6379
+        pusher 64440
+        messagesv 64441
+        squaresv 64442
+        edgesv 64443
+        usersv 64444
+        authsv 64445
+        uploadsv 64446
+        deliversv 64447
+        usergrowthsv 64448
+        riskcontrolsv 64449
+        paysv 64450"
+cmdServers="
+        update-git-hook
+        jspp-k8s-port-forward
+        iip
+        help"
 
 function service-log-pre() {
     if [ "$1" = "" ]; then
         return 1
-    fi    
-    
-    local pattern="$1"
-    local mapping="
-usersv
-mongo
-mysql
-redis
-pusher
-messagesv
-squaresv 
-edgesv
-authsv
-uploadsv
-deliversv
-usergrowthsv
-riskcontrolsv
-paysv"
+    fi
+    if [ "$2" = "" ]; then
+        return 2
+    fi
+    local paramService="$1"
+    local patternLen="${#paramService}"
+    local servers="$2"
+    servers=$(echo $servers | tr -d "\n")
+    newServers=()
+    for server in $servers; do
+        if [ ${#server} -ge $patternLen ]; then
+            newServers[${#newServers[*]}]=$server
+        fi
+    done
 
-    my_function() {
-        local arr=()
-        local index=0
-        while test $# -gt 0; do
-            if [ "$pattern" = "$1" ]; then
-                arr[index]=$1
+    local arr=()
+    for server1 in ${newServers[@]}; do
+        if [ "$paramService" = "$server1" ]; then
+            arr[${#arr[*]}]=$server1
+            break
+        fi
+    done
 
-                break
-            fi
-            shift
-        done
-        if [ ${#arr[@]} -eq 0 ]; then
-            local len=${#pattern}
-            for ((i = 0; i < ${#pattern}; i++)); do
-                local current=$(echo "$pattern" | cut -c 1-"$len")
-                for2() {
-                    while test $# -gt 0; do
-                        local item=$(echo "$1" | cut -c 1-"$len")
-                        if [ "$current" = "$item" ]; then
-                            arr[index]=$1
-                            index=$((index + 1))
-                        fi
-                        shift
-                    done
-                }
-                for2 $mapping
-                if [ ${#arr[@]} -gt 0 ]; then
-                    break
+    if [ ${#arr[@]} -eq 0 ]; then
+        for ((strPos = ${#paramService}; strPos >= 1; strPos--)); do
+            local partService=$(echo "$paramService" | cut -c 1-$strPos)
+            for server2 in ${newServers[@]}; do
+                local forService=$(echo "$server2" | cut -c 1-$strPos)
+                if [ "$partService" = "$forService" ]; then
+                    arr[${#arr[*]}]=$server2
                 fi
             done
-        fi
-            echo "size: ${#arr[@]}"
+            if [ ${#arr[@]} -gt 0 ]; then
+                break
+            fi
+        done
+    fi
+
+    if [ ${#arr[@]} -gt 0 ]; then
         if [ ${#arr[@]} -eq 1 ]; then
             service=${arr[0]}
-
         else
-            for i in "${arr[@]}"; do
-                echo "$i"
+            for server in "${arr[@]}"; do
+                echo "$server"
             done
         fi
-    }
-    my_function $mapping
+    fi
 }
 
 function jspp-k8s-port-forward-simple() {
@@ -145,33 +96,17 @@ function jspp-k8s-port-forward-simple() {
 
 function jspp-k8s-port-forward() {
     ps aux | pgrep kube | awk '{print "kill -9 " $1}' | sudo bash
+    if [ "$1" = "" ]; then
+        return 1
+    fi
+    local servers="$1"
+    servers=$(echo $servers | tr -d "\n")
+    servers=($servers)
 
-    mapping="
-        mongo 27017
-        mysql 3306
-        redis 6379
-        pusher 64440
-        messagesv 64441
-        squaresv 64442
-        edgesv 64443
-        usersv 64444
-        authsv 64445
-        uploadsv 64446
-        deliversv 64447
-        usergrowthsv 64448
-        riskcontrolsv 64449
-        paysv 64450    
-            "
-    {
-        my_function() {
-            while test $# -gt 0; do
-                jspp-k8s-port-forward-simple "$1" "$2"
-                shift
-                shift
-            done
-        }
-        my_function $mapping
-    }
+    for ((i = 0; i < ${#servers[*]}; i++)); do
+        jspp-k8s-port-forward-simple ${servers[i]} ${servers[i + 1]}
+        ((i++))
+    done
 }
 
 function service-log() {
@@ -194,8 +129,8 @@ function service-log() {
 
 function update-git-hook() {
     cd /Users/jim/Workdata/goland/src/jspp/pushersv || exit 1
-    for item in usersv messagesv momentsv authsv deliversv edgesv groupsv pushersv uploadsv paysv; do
-        cp -rf .git/hooks/{commit-msg,pre-commit} "../$item/.git/hooks"
+    for forService in usersv messagesv momentsv authsv deliversv edgesv groupsv pushersv uploadsv paysv; do
+        cp -rf .git/hooks/{commit-msg,pre-commit} "../$forService/.git/hooks"
     done
 }
 
@@ -206,10 +141,10 @@ function iip() {
 function help() {
     echo "Automation Script"
     echo
-    echo "get log:               ./tool.sh [-s|--service-log cmd] [--service-log-pipe pipe] [--service-log-kubectl-logs-option option]"
-    echo "sync config:           ./tool.sh [--update-git-hook]"
-    echo "show ip:               ./tool.sh [--iip]"
-    echo "help:                  ./tool.sh [--help]"
+    echo "get log:               $0 [-s|--service-log cmd] [--service-log-pipe pipe] [--service-log-kubectl-logs-option option]"
+    echo "sync config:           $0 [--update-git-hook]"
+    echo "show ip:               $0 [--iip]"
+    echo "help:                  $0 [--help]"
     echo
 }
 
@@ -231,7 +166,7 @@ function main() {
     while true; do
         case "$1" in
         -s | --service-log)
-            service-log-pre "$2"
+            service-log-pre "$2" "$serviceServers"
             shift
             shift
             ;;
@@ -255,11 +190,15 @@ function main() {
             ;;
         *)
             if [ $pos -eq 1 ]; then
-                case "${1}" in
+                case "$1" in
                 "s")
-                    service-log-pre "$2"
-                    service_option="$3"
-                    service_pipe="$4"
+                    service-log-pre "$2" "$serviceServers"
+                    if [ "$3" != "" ] && [ "$3" != "__" ]; then
+                        service_option="$3"
+                    fi
+                    if [ "$4" != "" ] && [ "$4" != "__" ]; then
+                        service_pipe="$4"
+                    fi
                     shift
                     shift
                     shift
@@ -268,16 +207,17 @@ function main() {
                     update-git-hook
                     ;;
                 "jkpf")
-                    jspp-k8s-port-forward
+                    jspp-k8s-port-forward "$serviceServers"
                     ;;
                 *)
                     if [ "$1" != "" ]; then
-                        auto-match-cmd "$1"
+                        service-log-pre "$1" "$cmdServers"
+                        if [ "$service" != "" ]; then
+                            $service
+                        fi
+                    else
+                        break
                     fi
-                    if [ "$simple_command" != "" ]; then
-                        $simple_command
-                    fi
-                    echo
                     ;;
                 esac
                 shift
@@ -285,7 +225,7 @@ function main() {
                 cmd="${1//--/}"
                 type "$cmd" &>/dev/null
                 if [ $? ]; then
-                    $cmd
+                    $cmd "$@"
                     shift
                 else
                     exit
