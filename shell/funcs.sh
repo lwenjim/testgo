@@ -4,7 +4,6 @@
 # service=
 # service_pipe=
 # service_option=
-# simple_command=
 serviceServers="
         mongo 27017
         mysql 3306
@@ -44,34 +43,34 @@ function service-log-pre() {
         fi
     done
 
-    local arr=()
+    local resultServices=()
     for server1 in ${newServers[@]}; do
         if [ "$paramService" = "$server1" ]; then
-            arr[${#arr[*]}]=$server1
+            resultServices[${#resultServices[*]}]=$server1
             break
         fi
     done
 
-    if [ ${#arr[@]} -eq 0 ]; then
+    if [ ${#resultServices[@]} -eq 0 ]; then
         for ((strPos = ${#paramService}; strPos >= 1; strPos--)); do
             local partService=$(echo "$paramService" | cut -c 1-$strPos)
             for server2 in ${newServers[@]}; do
                 local forService=$(echo "$server2" | cut -c 1-$strPos)
                 if [ "$partService" = "$forService" ]; then
-                    arr[${#arr[*]}]=$server2
+                    resultServices[${#resultServices[*]}]=$server2
                 fi
             done
-            if [ ${#arr[@]} -gt 0 ]; then
+            if [ ${#resultServices[@]} -gt 0 ]; then
                 break
             fi
         done
     fi
 
-    if [ ${#arr[@]} -gt 0 ]; then
-        if [ ${#arr[@]} -eq 1 ]; then
-            service=${arr[0]}
+    if [ ${#resultServices[@]} -gt 0 ]; then
+        if [ ${#resultServices[@]} -eq 1 ]; then
+            service=${resultServices[0]}
         else
-            for server in "${arr[@]}"; do
+            for server in "${resultServices[@]}"; do
                 echo "$server"
             done
         fi
