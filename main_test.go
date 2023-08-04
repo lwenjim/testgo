@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha1"
 	"fmt"
 	"math/rand"
 	"net/url"
@@ -255,4 +257,13 @@ func TestPrivateField(t *testing.T) {
 	fmt.Printf("unsafe.Sizeof(int(0)): %v\n", unsafe.Sizeof(string("")))
 
 	fmt.Printf("unsafe.Alignof(p): %v\n", unsafe.Alignof(p))
+}
+
+func TestSh1(t *testing.T) {
+	hs := hmac.New(sha1.New, []byte("abc"))
+	if _, err := hs.Write([]byte("fasdfasdfasdfsfsdfasfdsdf")); err != nil {
+		fmt.Printf("err: %v\n", err)
+	}
+	data := fmt.Sprintf("%x\n", hs.Sum(nil))
+	fmt.Printf("data: %v\n", len(data))
 }
