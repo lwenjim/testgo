@@ -103,6 +103,10 @@ func TestPhoneEmail(t *testing.T) {
 	reg := regexp.MustCompile(pattern)
 	result := reg.MatchString(emailAddress)
 	fmt.Printf("result: %v\n", result)
+
+	str := " abc "
+	str = strings.TrimSpace(str)
+	fmt.Printf("str: 1111%v32222\n", str)
 }
 func TestValidate(t *testing.T) {
 	_ = validator.SetValidationFunc("in", func(v interface{}, param string) error {
