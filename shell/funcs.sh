@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2086,SC2046,SC2317,SC2155,SC2154,SC1003,2068,2206
+#shellcheck disable=SC2086,SC2046,SC2317,SC2155,SC2154,SC1003,2068,2206
 
 # service=
 # service_pipe=
@@ -158,23 +158,29 @@ function sl() {
 }
 
 function main() {
-    local args=$(getopt -o hs: -l "service-log:,service-log-pipe:,service-log-kubectl-logs-option:,help,update-git-hook,iip,jspp-k8s-port-forward" -n "$0" -- "$@" __)
+    param="
+    service-log:,service-log-pipe:,service-log-kubectl-logs-option:,
+    log:,log-pipe:,log-option:,
+    help,update-git-hook,iip,jspp-k8s-port-forward
+    "
+    param=$(echo $param | tr -d '\n')
+    local args=$(getopt -o hs: -l "$param" -n "$0" -- "$@" __)
     eval set -- "${args}"
-    # echo "$args"
+    echo "$args"
     local pos=0
     while true; do
         case "$1" in
-        -s | --service-log)
+        -s | --service-log | --log)
             service-log-pre "$2" "$serviceServers"
             shift
             shift
             ;;
-        --service-log-pipe)
+        --service-log-pipe | --log-pipe)
             service_pipe="$2"
             shift
             shift
             ;;
-        --service-log-kubectl-logs-option)
+        --service-log-kubectl-logs-option | --log-option)
             service_option="$2"
             shift
             shift
