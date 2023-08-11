@@ -4,12 +4,16 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha1"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"net/url"
 	"os"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -17,6 +21,7 @@ import (
 	"unsafe"
 
 	"github.com/bitly/go-simplejson"
+	"github.com/google/go-querystring/query"
 	"github.com/lwenjim/testgo/foo"
 	"gopkg.in/validator.v2"
 
@@ -26,6 +31,68 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 )
+
+func TestReplaceAll(t *testing.T) {
+	bodyBuffer := `
+	{
+		"ret": 0,
+		"msg": "",
+		"is_lost":0,
+		"nickname": "Liuli",
+		"gender": "男",
+		"gender_type": 2,
+		"province": "广东",
+		"city": "深圳",
+		"year": "1990",
+		"constellation": "",
+		"figureurl": "http:\/\/qzapp.qlogo.cn\/qzapp\/1111401546\/CF6A45A094764AC2FBEC5D7966A27EDA\/30",
+		"figureurl_1": "http:\/\/qzapp.qlogo.cn\/qzapp\/1111401546\/CF6A45A094764AC2FBEC5D7966A27EDA\/50",
+		"figureurl_2": "http:\/\/qzapp.qlogo.cn\/qzapp\/1111401546\/CF6A45A094764AC2FBEC5D7966A27EDA\/100",
+		"figureurl_qq_1": "http://thirdqq.qlogo.cn/g?b=oidb&k=dALcAodpne7ToSdfF91gdg&kti=ZNXUdAAAAAA&s=40&t=1448142454",
+		"figureurl_qq_2": "http://thirdqq.qlogo.cn/g?b=oidb&k=dALcAodpne7ToSdfF91gdg&kti=ZNXUdAAAAAA&s=100&t=1448142454",
+		"figureurl_qq": "http://thirdqq.qlogo.cn/g?b=oidb&k=dALcAodpne7ToSdfF91gdg&kti=ZNXUdAAAAAA&s=100&t=1448142454",
+		"figureurl_type": "0",
+		"is_yellow_vip": "0",
+		"vip": "0",
+		"yellow_vip_level": "0",
+		"level": "0",
+		"is_yellow_year_vip": "0"
+	}	
+	`
+	data := regexp.MustCompile(`[\n\t]`).ReplaceAllString(bodyBuffer, "")
+	fmt.Printf("data: %v\n", data)
+}
+
+func FancyHandleError(err error) (b bool) {
+	if err != nil {
+		// notice that we're using 1, so it will actually log the where
+		// the error happened, 0 = this function, we don't want that.
+		pc, fn, line, _ := runtime.Caller(1)
+
+		//log.Printf("[error] in %s[%s:%d] %v", runtime.FuncForPC(pc).Name(), fn, line, err)
+		fmt.Printf("[error] in %s[%s:%d] %v", runtime.FuncForPC(pc).Name(), fn, line, err)
+		b = true
+	}
+	return
+}
+
+func TestErrorFormat(t *testing.T) {
+	if FancyHandleError(fmt.Errorf("it's the end of the world\n")) {
+		log.Print("stuff")
+	}
+}
+
+func TestError(t *testing.T) {
+	var BaseErr = errors.New("base error")
+	err1 := fmt.Errorf("wrap base: %w", BaseErr)
+	err2 := fmt.Errorf("wrap err1: %w", err1)
+	println(err2 == BaseErr)
+
+	if !errors.Is(err2, err1) {
+		panic("err2 is not BaseErr")
+	}
+	println("err2 is BaseErr")
+}
 
 func TestGeneralSql(t *testing.T) {
 	lMap := map[string]uint8{
@@ -270,4 +337,60 @@ func TestSh1(t *testing.T) {
 	}
 	data := fmt.Sprintf("%x\n", hs.Sum(nil))
 	fmt.Printf("data: %v\n", len(data))
+}
+
+func TestStruct(t *testing.T) {
+	type Woman struct {
+		Name string
+	}
+	var w = Woman{"abc"}
+	fmt.Printf("w.Name: %v\n", w.Name)
+}
+
+func TestSpace(t *testing.T) {
+	data := `a
+	
+	b`
+	re := regexp.MustCompile(`[\s\n\t]`)
+	data = re.ReplaceAllString(data, "")
+	fmt.Printf("data: %v\n", data)
+}
+
+func TestQueryString(t *testing.T) {
+	type TokenRequest struct {
+		GrantType    string `json:"grant_type" url:"grant_type"`
+		ClientId     string `json:"client_id" url:"client_id"`
+		ClientSecret string `json:"client_secret" url:"client_secret"`
+		Code         string `json:"code" url:"code"`
+		RedirectUri  string `json:"redirect_uri" url:"redirect_uri"`
+		Fmt          string `json:"fmt" url:"fmt"`
+		NeedOpenid   string `json:"need_openid" url:"need_openid"`
+	}
+	param := TokenRequest{
+		GrantType:    "abc",
+		ClientId:     "123",
+		ClientSecret: "123",
+		Code:         "fasdf",
+		RedirectUri:  "fasdf",
+		Fmt:          "fsd",
+		NeedOpenid:   "fas  d",
+	}
+	values, err := query.Values(param)
+	assert.Nil(t, err)
+	fmt.Println(values.Encode())
+}
+
+func TestResult(t *testing.T) {
+	type GetUserInfoResponse struct {
+		Ret              int32  `json:"ret"`
+		Msg              string `json:"msg"`
+		NickName         string `json:"nickname"`
+		Code             uint64 `json:"code"`
+		Error            int    `json:"error"`
+		ErrorDescription string `json:"error_description"`
+	}
+	data := `{"ret":-1,"msg":"client request's parameters are invalid, invalid openid"}`
+	var v GetUserInfoResponse
+	_ = json.Unmarshal([]byte(data), &v)
+	fmt.Printf("v: %v\n", v)
 }

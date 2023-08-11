@@ -166,7 +166,7 @@ function main() {
     param=$(echo $param | tr -d '\n')
     local args=$(getopt -o hs: -l "$param" -n "$0" -- "$@" __)
     eval set -- "${args}"
-    echo "$args"
+    # echo "$args"
     local pos=0
     while true; do
         case "$1" in
