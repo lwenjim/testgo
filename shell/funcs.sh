@@ -115,8 +115,8 @@ function service-log() {
     fi
 
     if [[ "usersv messagesv momentsv pushersv paysv authsv" == *"$service"* ]]; then
-        local awkString=" awk -F'[ -]' "" '{print \"jspp-kubectl logs -c $service $logParam \"\$1\"-\"\$2\"-\"\$3}'"
-        result=$(jspp-kubectl get pods | grep $service)
+        local awkString=" awk -F'[ -]()' "" '{print \"jspp-kubectl logs -c $service $logParam \"\$1\"-\"\$2\"-\"\$3}'"
+        result=$(jspp-kubectl get pods | grep $service | sed 's/(//'|sed 's/)//')
         result2=$(eval "echo $result|$awkString")
         if [ "$service_pipe" != "" ]; then
             echo "$result2  | $service_pipe" | bash -i
