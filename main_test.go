@@ -299,7 +299,6 @@ func TestSwith(t *testing.T) {
 	println(i)
 }
 
-
 func TestSh1(t *testing.T) {
 	hs := hmac.New(sha1.New, []byte("abc"))
 	if _, err := hs.Write([]byte("fasdfasdfasdfsfsdfasfdsdf")); err != nil {
@@ -363,7 +362,15 @@ func TestResult(t *testing.T) {
 	var v GetUserInfoResponse
 	_ = json.Unmarshal([]byte(data), &v)
 	fmt.Printf("v: %v\n", v)
+}
 
+func TestHour(t *testing.T) {
+	// executeTime, err := time.Parse("2006-01-02 15:00:00", time.Now().Add(-time.Hour).Format("2006-01-02 15:00:00"))
+	// assert.Nil(t, err)
 
+	// fmt.Printf("executeTime.Unix(): %v\n", executeTime.Unix())
 
+	layout := "2006-01-02 15:00:00"
+	executeTime, _ := time.Parse(layout, time.Now().Format(layout))
+	fmt.Printf("executeTime.Format(\"2006-01-02 15:04:05\"): %v\n", executeTime.Format("2006-01-02 15:04:05"))
 }
