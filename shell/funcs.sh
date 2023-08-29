@@ -4,21 +4,24 @@
 # service=
 # service_pipe=
 # service_option=
-serviceServers="
-        mongo 27017
-        mysql 3306
-        redis 6379
-        pusher 64440
-        messagesv 64441
-        squaresv 64442
-        edgesv 64443
-        usersv 64444
-        authsv 64445
-        uploadsv 64446
-        deliversv 64447
-        usergrowthsv 64448
-        riskcontrolsv 64449
-        paysv 64450"
+declare -A serviceServers=(
+    ["mongo"]=27017
+    ["mysql"]=3306
+    ["redis"]=6379
+    ["pusher"]=64440
+    ["messagesv"]=64441
+    ["squaresv"]=64442
+    ["edgesv"]=64443
+    ["usersv"]=64444
+
+    ["authsv"]=64445
+    ["uploadsv"]=64446
+    ["deliversv"]=64447
+    ["usergrowthsv"]=64448
+    ["riskcontrolsv"]=64449
+    ["paysv"]=64450
+    ["connectorsv"]=64451
+)
 cmdServers="
         update-git-hook
         jspp-k8s-port-forward
@@ -29,15 +32,10 @@ function service-log-pre() {
     if [ "$1" = "" ]; then
         return 1
     fi
-    if [ "$2" = "" ]; then
-        return 2
-    fi
     local paramService="$1"
     local patternLen="${#paramService}"
-    local servers="$2"
-    servers=$(echo $servers | tr -d "\n")
     newServers=()
-    for server in $servers; do
+    for server in "${!serviceServers[@]}"; do
         if [ ${#server} -ge $patternLen ]; then
             newServers[${#newServers[*]}]=$server
         fi
@@ -95,16 +93,9 @@ function jspp-k8s-port-forward-simple() {
 
 function jspp-k8s-port-forward() {
     ps aux | pgrep kube | awk '{print "kill -9 " $1}' | sudo bash
-    if [ "$1" = "" ]; then
-        return 1
-    fi
-    local servers="$1"
-    servers=$(echo $servers | tr -d "\n")
-    servers=($servers)
 
-    for ((i = 0; i < ${#servers[*]}; i++)); do
-        jspp-k8s-port-forward-simple ${servers[i]} ${servers[i + 1]}
-        ((i++))
+    for server in "${!serviceServers[@]}"; do
+        jspp-k8s-port-forward-simple ${server} ${serviceServers[$server]}
     done
 }
 
@@ -114,7 +105,10 @@ function service-log() {
         logParam=$(echo "$service_option" | tr -d '\')
     fi
 
-    if [[ "usersv messagesv momentsv pushersv paysv authsv" == *"$service"* ]]; then
+    for server in "${!serviceServers[@]}"; do
+        if [ ${server} != $service ]; then
+            continue
+        fi
         local awkString=" awk -F'[ -]()' "" '{print \"jspp-kubectl logs -c $service $logParam \"\$1\"-\"\$2\"-\"\$3}'"
         result=$(jspp-kubectl get pods | grep $service | sed 's/(//'|sed 's/)//')
         result2=$(eval "echo $result|$awkString")
@@ -123,12 +117,14 @@ function service-log() {
         else
             echo "$result2 " | bash -i
         fi
-    fi
+    done
 }
 
 function update-git-hook() {
-    cd /Users/jim/Workdata/goland/src/jspp/pushersv || exit 1
-    for forService in usersv messagesv momentsv authsv deliversv edgesv groupsv pushersv uploadsv paysv; do
+    cd /Users/jim/Workdata/goland/src/jspp/pushersv >/dev/null 2>&1 || exit 1
+    for forService in "${!serviceServers[@]}"; do
+        cd "../$forService" >/dev/null 2>&1 || continue
+        cd "../pushersv" >/dev/null 2>&1|| exit 1
         cp -rf .git/hooks/{commit-msg,pre-commit} "../$forService/.git/hooks"
     done
 }
@@ -166,12 +162,11 @@ function main() {
     param=$(echo $param | tr -d '\n')
     local args=$(getopt -o hs: -l "$param" -n "$0" -- "$@" __)
     eval set -- "${args}"
-    # echo "$args"
     local pos=0
     while true; do
         case "$1" in
         -s | --service-log | --log)
-            service-log-pre "$2" "$serviceServers"
+            service-log-pre "$2"
             shift
             shift
             ;;
@@ -196,8 +191,8 @@ function main() {
         *)
             if [ $pos -eq 1 ]; then
                 case "$1" in
-                "s")
-                    service-log-pre "$2" "$serviceServers"
+                "service")
+                    service-log-pre "$2"
                     if [ "$3" != "" ] && [ "$3" != "__" ]; then
                         service_option="$3"
                     fi
@@ -208,11 +203,11 @@ function main() {
                     shift
                     shift
                     ;;
-                "ugh")
+                "update-git-hook")
                     update-git-hook
                     ;;
-                "jkpf")
-                    jspp-k8s-port-forward "$serviceServers"
+                "port-forward")
+                    jspp-k8s-port-forward
                     ;;
                 *)
                     if [ "$1" != "" ]; then
