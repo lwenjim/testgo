@@ -209,6 +209,9 @@ function main() {
                 "port-forward")
                     jspp-k8s-port-forward
                     ;;
+                "iip")
+                    iip
+                    ;;
                 *)
                     if [ "$1" != "" ]; then
                         service-log-pre "$1" "$cmdServers"
