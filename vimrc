@@ -51,7 +51,9 @@ set hlsearch
 set incsearch       
 set splitbelow      
 set splitright     
-
+set noundofile
+set nobackup
+set noswapfile
 vnoremap <c-y> "+y
 nnoremap <c-p> "+p
 
@@ -93,18 +95,15 @@ endif
 " ---------------------vim-go配置
 let g:go_imports_autosave=0
 
-" map <F2> :GoDebugStart<cr>
-" map <F5> :GoDebugContinue<cr>
-" map <C-r> :GoDebugRestart<cr>
-" map <F12> :GoDebugStop<cr>
-" map <F9> :GoDebugBreakpoint<cr>
-" map <F8> :GoDebugNext<cr>
-" map <F7> :GoDebugStep<cr>
-" map <S-F8> :GoDebugStepOut<cr>
-" map <C-t> :GoDebugTest<cr>
-" map <C-f> :GoDebugTestFunc<cr>
-"
-"
+map <F3> :GoAlternate<cr>
+map <F4> :GoTest<cr>
+map <F5> :GoDebugContinue<cr>
+map <F9> :GoDebugBreakpoint<cr>
+map <F8> :GoDebugNext<cr>
+map <F7> :GoDebugStep<cr>
+map <S-F8> :GoDebugStepOut<cr>
+
+
 let g:go_debug_windows = {
       \ 'vars':       'rightbelow 60vnew',
       \ 'stack':      'rightbelow 10new',
@@ -249,14 +248,14 @@ call plug#end()
 
 
 "-------------vim-go 推荐的配置结束----------------
-" colorscheme seoul256
-colorscheme onedark
+colorscheme seoul256
+" colorscheme onedark
 let g:airline_theme='onedark'
 let g:lightline = {'colorscheme': 'onedark'}
 let g:onedark_termcolors=256  
 let g:rehash256 = 1
 let g:go_auto_type_info = 1
-let g:go_auto_sameids = 0
+let g:go_auto_sameids = 1
 let g:go_auto_use_cmpfunc = 1
 let g:go_metalinter_enabled = ['vet', 'golangci-lint', 'errcheck']
 let g:go_metalinter_autosave = 1
@@ -304,7 +303,6 @@ command!  -bang -nargs=* RG   call fzf#vim#grep2("rg  --ignore-file /Users/jim/.
 "--------------
 " LeaderF start
 "--------------
-let Lf_GtagsAutoGenerate = 1
 let g:Lf_CommandMap = {'<C-K>': ['<Up>'], '<C-J>': ['<Down>']}
 let g:Lf_WindowPosition = 'popup'
 let g:Lf_WorkingDirectoryMode = 'a'
@@ -349,7 +347,7 @@ let g:Lf_PreviewResult = {
         \ 'Rg': 0,
         \ 'Gtags': 0
         \}
-let g:Lf_GtagsAutoGenerate = 0
+let g:Lf_GtagsAutoGenerate = 1
 let g:Lf_GtagsGutentags = 1
 let g:Lf_ShortcutF = '<s-space>'
 let g:Lf_ShortcutB = '<c-l>'
@@ -376,15 +374,15 @@ noremap <leader>fgo :<C-U><C-R>=printf("Leaderf! gtags --recall %s", "")<CR><CR>
 noremap <leader>fgn :<C-U><C-R>=printf("Leaderf gtags --next %s", "")<CR><CR>
 noremap <leader>fgp :<C-U><C-R>=printf("Leaderf gtags --previous %s", "")<CR><CR>
 
-nmap <unique> <a-space> <Plug>LeaderfRgPrompt
-nmap <unique> <leader>fra <Plug>LeaderfRgCwordLiteralNoBoundary
-nmap <unique> <leader>frb <Plug>LeaderfRgCwordLiteralBoundary
-nmap <unique> <leader>frc <Plug>LeaderfRgCwordRegexNoBoundary
-nmap <unique> <leader>frd <Plug>LeaderfRgCwordRegexBoundary
-nmap <unique> <leader>fgd <Plug>LeaderfGtagsDefinition
-nmap <unique> <leader>fgr <Plug>LeaderfGtagsReference
-nmap <unique> <leader>fgs <Plug>LeaderfGtagsSymbol
-nmap <unique> <leader>fgg <Plug>LeaderfGtagsGrep
+nmap <a-space> <Plug>LeaderfRgPrompt
+nmap <leader>fra <Plug>LeaderfRgCwordLiteralNoBoundary
+nmap <leader>frb <Plug>LeaderfRgCwordLiteralBoundary
+nmap <leader>frc <Plug>LeaderfRgCwordRegexNoBoundary
+nmap <leader>frd <Plug>LeaderfRgCwordRegexBoundary
+nmap <leader>fgd <Plug>LeaderfGtagsDefinition
+nmap <leader>fgr <Plug>LeaderfGtagsReference
+nmap <leader>fgs <Plug>LeaderfGtagsSymbol
+nmap <leader>fgg <Plug>LeaderfGtagsGrep
 
 
 
