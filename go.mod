@@ -17,6 +17,8 @@ require (
 )
 
 require (
+	code.jspp.com/jspp/akita-go v0.0.14-0.20230901061831-34b4b48b4ea8 // indirect
+	code.jspp.com/jspp/internal-tools v0.1.13-0.20230830080047-ce1b2f997b55 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

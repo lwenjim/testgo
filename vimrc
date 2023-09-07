@@ -1,4 +1,7 @@
-"------------------vim基本属性配置
+
+"--------------
+" vim基本属性配置
+"--------------
 set nu 
 set nowrap
 set cursorline
@@ -54,6 +57,12 @@ set splitright
 set noundofile
 set nobackup
 set noswapfile
+
+set encoding=utf-8
+set hidden
+set shortmess+=c
+set updatetime=100
+
 vnoremap <c-y> "+y
 nnoremap <c-p> "+p
 
@@ -70,10 +79,9 @@ nmap <S-Tab> :bnext<Return>
 
 
 
-
-
-
-"---------------------------gutentags配置
+"--------------
+" gutentags配置
+"--------------
 let g:gutentags_project_root = ['.root', '.svn', '.git', '.hg', '.project']
 let g:gutentags_ctags_tagfile = '.tags'
 let s:vim_tags = expand('~/.cache/tags')
@@ -92,9 +100,12 @@ endif
 
 
 
-" ---------------------vim-go配置
+"--------------
+" vim-go配置
+"--------------
 let g:go_imports_autosave=0
 
+map <F2> :GoFillStruct<cr>
 map <F3> :GoAlternate<cr>
 map <F4> :GoTest<cr>
 map <F5> :GoDebugContinue<cr>
@@ -124,7 +135,9 @@ let g:go_debug_windows = {
 
 
 
-" -------------------------tagbar配置
+"--------------
+" tagbar配置
+"--------------
 nnoremap <silent><nowait> <space>t :<C-u>TagbarToggle<CR> 
 let g:tagbar_width=25
 let g:tagbar_autofocus=1
@@ -136,7 +149,9 @@ let g:UltiSnipsExpandTrigger="<C-t>"
 
 
 
-"-------------coc.nvim推荐的配置--------------------
+"--------------
+" coc.nvim推荐的配置--------------------
+"--------------
 set hidden
 set nobackup
 set nowritebackup
@@ -156,9 +171,7 @@ function! s:check_back_space() abort
 endfunction
 
 inoremap <silent><expr> <c-@> coc#refresh()
-
-inoremap <silent><expr> <cr> pumvisible() ? coc#_select_confirm()
-                              \: "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"
+inoremap <silent><expr> <cr> pumvisible() ? coc#_select_confirm(): "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"
 
 nmap <silent> sn <Plug>(coc-diagnostic-prev)
 nmap <silent> sp <Plug>(coc-diagnostic-next)
@@ -220,14 +233,9 @@ nnoremap <silent><nowait> <space>a  :<C-u>CocList diagnostics<cr>
 
 
 
-
-
-
-
-
-
-
-"-------------coc.nvim推荐的配置结束----------------
+"--------------
+" coc.nvim推荐的配置结束----------------
+"--------------
 call plug#begin()
   Plug 'ludovicchabant/vim-gutentags'
   Plug 'neoclide/coc.nvim', {'branch': 'release'}
@@ -242,20 +250,22 @@ call plug#begin()
   Plug 'joshdick/onedark.vim'
   Plug 'Yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
   Plug 'airblade/vim-rooter'
+  Plug 'rakr/vim-one'
 call plug#end()
 
 
 
 
-"-------------vim-go 推荐的配置结束----------------
-colorscheme seoul256
-" colorscheme onedark
+"--------------
+" vim-go 推荐的配置结束
+"--------------
+
 let g:airline_theme='onedark'
 let g:lightline = {'colorscheme': 'onedark'}
 let g:onedark_termcolors=256  
 let g:rehash256 = 1
 let g:go_auto_type_info = 1
-let g:go_auto_sameids = 1
+let g:go_auto_sameids = 0
 let g:go_auto_use_cmpfunc = 1
 let g:go_metalinter_enabled = ['vet', 'golangci-lint', 'errcheck']
 let g:go_metalinter_autosave = 1
@@ -268,7 +278,9 @@ let g:go_fmt_command = "goimports"
 
 
 
-"-------------crip config
+"--------------
+" crip config
+"--------------
 let g:ctrlp_map = '<c-p>'
 let g:ctrlp_cmd = 'CtrlP /Users/jim/Workdata/goland/src/jspp'
 let g:ctrlp_working_path_mode = 'w'
@@ -288,7 +300,9 @@ let g:ctrlp_custom_ignore = {
 
 
 
-" -------------------------FZF配置
+"--------------
+" FZF配置
+"--------------
 nnoremap <silent><nowait> <space>o :<C-u>FZF --reverse --info=inline --border /Users/jim/Workdata/goland/src/jspp<CR> 
 nnoremap <silent><nowait> <space>a :<C-u>Ag<CR> 
 nnoremap <silent><nowait> <space>r :<C-u>Rg<CR> 
@@ -307,7 +321,7 @@ let g:Lf_CommandMap = {'<C-K>': ['<Up>'], '<C-J>': ['<Down>']}
 let g:Lf_WindowPosition = 'popup'
 let g:Lf_WorkingDirectoryMode = 'a'
 let g:Lf_RootMarkers = ['.workspace_root']
-let g:Lf_UseVersionControlTool=1 "default value, can ignore
+let g:Lf_UseVersionControlTool=1 
 let g:Lf_DefaultExternalTool='rg'
 let g:Lf_PreviewInPopup = 1
 let g:Lf_WindowHeight = 0.30
@@ -375,10 +389,10 @@ noremap <leader>fgn :<C-U><C-R>=printf("Leaderf gtags --next %s", "")<CR><CR>
 noremap <leader>fgp :<C-U><C-R>=printf("Leaderf gtags --previous %s", "")<CR><CR>
 
 nmap <a-space> <Plug>LeaderfRgPrompt
-nmap <leader>fra <Plug>LeaderfRgCwordLiteralNoBoundary
-nmap <leader>frb <Plug>LeaderfRgCwordLiteralBoundary
-nmap <leader>frc <Plug>LeaderfRgCwordRegexNoBoundary
-nmap <leader>frd <Plug>LeaderfRgCwordRegexBoundary
+nmap <leader>ra <Plug>LeaderfRgCwordLiteralNoBoundary
+nmap <leader>rb <Plug>LeaderfRgCwordLiteralBoundary
+nmap <leader>rc <Plug>LeaderfRgCwordRegexNoBoundary
+nmap <leader>rd <Plug>LeaderfRgCwordRegexBoundary
 nmap <leader>fgd <Plug>LeaderfGtagsDefinition
 nmap <leader>fgr <Plug>LeaderfGtagsReference
 nmap <leader>fgs <Plug>LeaderfGtagsSymbol
@@ -387,18 +401,36 @@ nmap <leader>fgg <Plug>LeaderfGtagsGrep
 
 
 "--------------
-" LeaderF end
-"--------------
-
-"--------------
 " Rooter start
 "--------------
-
-" Directories and YAML files
 let g:rooter_targets = '/,*.yml,*.yaml,*.go,*.proto'
 let g:rooter_patterns = ['.workspace_root']
-"--------------
-" Rooter end
-"--------------
-"
 let g:eleline_slim = 1
+
+
+
+
+"--------------
+" onedark
+"--------------
+let g:airline_theme='one'
+colorscheme seoul256
+
+
+
+
+"--------------
+" coc-snippets
+"--------------
+inoremap <silent><expr> <TAB>
+      \ coc#pum#visible() ? coc#_select_confirm() :
+      \ coc#expandableOrJumpable() ? "\<C-r>=coc#rpc#request('doKeymap', ['snippets-expand-jump',''])\<CR>" :
+      \ CheckBackspace() ? "\<TAB>" :
+      \ coc#refresh()
+
+function! CheckBackspace() abort
+  let col = col('.') - 1
+  return !col || getline('.')[col - 1]  =~# '\s'
+endfunction
+
+let g:coc_snippet_next = '<tab>'
