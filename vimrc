@@ -71,13 +71,14 @@ syntax on
 let g:netrw_winsize = 25
 let mapleader=";" 
 
-nmap <Tab> :bprev<Return>
-nmap <S-Tab> :bnext<Return>
+nmap <Tab> :bnext<Return>
+nmap <S-Tab> :bprev<Return>
 
 
 
 
-
+let g:auto_save = 1
+let g:auto_save_events = ["InsertLeave", "TextChanged", "TextChangedI", "CursorHoldI", "CompleteDone"]
 
 "--------------
 " gutentags配置
@@ -318,68 +319,36 @@ command!  -bang -nargs=* RG   call fzf#vim#grep2("rg  --ignore-file /Users/jim/.
 " LeaderF start
 "--------------
 let g:Lf_CommandMap = {'<C-K>': ['<Up>'], '<C-J>': ['<Down>']}
-let g:Lf_WindowPosition = 'popup'
+
 let g:Lf_WorkingDirectoryMode = 'a'
 let g:Lf_RootMarkers = ['.workspace_root']
-let g:Lf_UseVersionControlTool=1 
+let g:Lf_UseVersionControlTool=0 
 let g:Lf_DefaultExternalTool='rg'
-let g:Lf_PreviewInPopup = 1
-let g:Lf_WindowHeight = 0.30
+let g:Lf_ExternalCommand = 'fd --ignore-file  /Users/jim/.ignore.ag.rg "%s"'
+let g:Lf_PreviewInPopup = 0
+let g:Lf_WindowHeight = 0.3
+let g:Lf_PopupHeight = float2nr(&lines * 0.3)
 let g:Lf_CacheDirectory = "/tmp"
 let g:Lf_StlColorscheme = 'powerline'
-let g:Lf_PopupPalette = {
-    \  'light': {
-    \      'Lf_hl_match': {
-    \                'gui': 'NONE',
-    \                'font': 'NONE',
-    \                'guifg': 'NONE',
-    \                'guibg': '#303136',
-    \                'cterm': 'NONE',
-    \                'ctermfg': 'NONE',
-    \                'ctermbg': '236'
-    \              },
-    \      'Lf_hl_cursorline': {
-    \                'gui': 'NONE',
-    \                'font': 'NONE',
-    \                'guifg': 'NONE',
-    \                'guibg': '#303136',
-    \                'cterm': 'NONE',
-    \                'ctermfg': 'NONE',
-    \                'ctermbg': '236'
-    \              },
-    \      }
-    \  }
-let g:Lf_PreviewResult = {
-        \ 'File': 0,
-        \ 'Buffer': 0,
-        \ 'Mru': 0,
-        \ 'Tag': 0,
-        \ 'BufTag': 1,
-        \ 'Function': 1,
-        \ 'Line': 1,
-        \ 'Colorscheme': 0,
-        \ 'Rg': 0,
-        \ 'Gtags': 0
-        \}
+let g:Lf_PopupAutoAdjustHeight = 1
+
 let g:Lf_GtagsAutoGenerate = 1
 let g:Lf_GtagsGutentags = 1
 let g:Lf_ShortcutF = '<s-space>'
 let g:Lf_ShortcutB = '<c-l>'
 
-let g:Lf_WindowPosition = 'popup'
-let g:Lf_StlSeparator = { 'left': "\ue0b0", 'right': "\ue0b2", 'font': "DejaVu Sans Mono for Powerline" }
-let g:Lf_PreviewResult = {'Function': 0, 'BufTag': 0 }
-
+let g:Lf_PreviewResult = {'Function': 20, 'BufTag': 20 }
+let g:Lf_NumberOfCache = 10000
 let g:Lf_GtagsAutoGenerate = 1
 let g:Lf_GtagsSource = 1
 let g:Lf_Gtagsconf = '/usr/local/Cellar/global/6.6.10/share/gtags/gtags.conf'
 let g:Lf_Gtagslabel = 'native-pygments'
-
-
+let g:Lf_ReverseOrder = 1
+let g:Lf_DefaultMode = 'NameOnly'
 noremap <leader>f :LeaderfSelf<cr>
 noremap <leader>fm :LeaderfMru<cr>
 noremap <leader>ff :LeaderfFunction<cr>
-noremap <leader>fb :LeaderfBuffer<cr>
+noremap fb :LeaderfBuffer<cr>
 noremap <leader>ft :LeaderfBufTag<cr>
 noremap <leader>fl :LeaderfLine<cr>
 noremap <leader>fw :LeaderfWindow<cr>
@@ -388,7 +357,9 @@ noremap <leader>fgo :<C-U><C-R>=printf("Leaderf! gtags --recall %s", "")<CR><CR>
 noremap <leader>fgn :<C-U><C-R>=printf("Leaderf gtags --next %s", "")<CR><CR>
 noremap <leader>fgp :<C-U><C-R>=printf("Leaderf gtags --previous %s", "")<CR><CR>
 
-nmap <a-space> <Plug>LeaderfRgPrompt
+noremap <Plug>LeaderfRgPrompt2 :<C-U>Leaderf rg --ignore-file /Users/jim/.ignore.ag.rg -e<Space>
+
+nmap <a-space> <Plug>LeaderfRgPrompt2
 nmap <leader>ra <Plug>LeaderfRgCwordLiteralNoBoundary
 nmap <leader>rb <Plug>LeaderfRgCwordLiteralBoundary
 nmap <leader>rc <Plug>LeaderfRgCwordRegexNoBoundary
