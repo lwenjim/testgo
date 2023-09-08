@@ -50,7 +50,7 @@ func main() {
 		return
 	}
 	fmt.Printf("%#v", resp2)
-	for _, timingRemind := range resp2.TimingReminds {
-		fmt.Printf("timingRemind.Content: %v\n", timingRemind.MessageItem.Content)
+	for _, timingRemind := range resp2.Items {
+		fmt.Printf("timingRemind.Content: %v\n", timingRemind.Id)
 	}
 }
