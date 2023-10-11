@@ -430,3 +430,25 @@ func TestAirplaneGameSign(t *testing.T) {
 	}()
 	fmt.Printf("a: %v\n", a)
 }
+
+func TestSss(t *testing.T) {
+	m := map[int]int{1: 1, 2: 2, 3: 3, 4: 4, 5: 5}
+	fmt.Println(len(m)) // 5
+	clear(m)
+	fmt.Println(len(m)) // 0
+
+	// s := make([]int, 0, 100) // 故意给个大的cap便于观察
+	// s = append(s, []int{1, 2, 3, 4, 5}...)
+	// fmt.Println(s)              // [1 2 3 4 5]
+	// fmt.Println(len(s), cap(s)) // len: 5; cap: 100
+	// clear(s)
+	// fmt.Println(s)              // [0 0 0 0 0]
+	// fmt.Println(len(s), cap(s)) // len: 5; cap: 100
+
+	// fmt.Println(runtime.Version())
+	// defer func() {
+	// 	a := recover()
+	// 	fmt.Printf("a: %v\n", a)
+	// }()
+	// panic(nil)
+}
