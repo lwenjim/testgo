@@ -457,7 +457,7 @@ func TestSss(t *testing.T) {
 	// panic(nil)
 }
 
-func TestYes() {
+func TestGrpc() {
 	conn, err := grpc.Dial("127.0.0.1:39090", grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"LoadBalancingPolicy": "%s"}`, roundrobin.Name)), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		fmt.Println(err)
