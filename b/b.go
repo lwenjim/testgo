@@ -1,6 +1,10 @@
 package b
 
-import "fmt"
+import (
+	"fmt"
+
+	_ "github.com/lwenjim/testgo/a"
+)
 
 func init() {
 	fmt.Println("bbb")
