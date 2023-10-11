@@ -510,8 +510,8 @@ func TestLog(t *testing.T) {
 }
 
 func TestSlices(t *testing.T) {
-	i, _ := slices.BinarySearch([]string{"a", "c", "d"}, "c")
-	// assert.Nil(t, err)
+	i, err := slices.BinarySearch([]string{"a", "c", "d"}, "c")
+	assert.Nil(t, err)
 	fmt.Printf("i: %v\n", i)
 
 	type Person struct {
