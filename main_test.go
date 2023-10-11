@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"crypto/hmac"
 	"crypto/sha1"
@@ -25,6 +26,8 @@ import (
 	"code.jspp.com/jspp/internal-tools/rpc"
 	"github.com/bitly/go-simplejson"
 	"github.com/google/go-querystring/query"
+	"golang.org/x/exp/slices"
+	"golang.org/x/exp/slog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/credentials/insecure"
@@ -457,7 +460,7 @@ func TestClear(t *testing.T) {
 	panic(nil)
 }
 
-func TestGrpc() {
+func TestGrpc(t *testing.T) {
 	conn, err := grpc.Dial("127.0.0.1:39090", grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"LoadBalancingPolicy": "%s"}`, roundrobin.Name)), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		fmt.Println(err)
@@ -499,4 +502,51 @@ func TestGrpc() {
 	for _, timingRemind := range resp2.Items {
 		fmt.Printf("timingRemind.Content: %v\n", timingRemind.Id)
 	}
+}
+
+func TestLog(t *testing.T) {
+	_logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	_logger.Info("hello", "count", 3)
+}
+
+func TestSlices(t *testing.T) {
+	i, _ := slices.BinarySearch([]string{"a", "c", "d"}, "c")
+	// assert.Nil(t, err)
+	fmt.Printf("i: %v\n", i)
+
+	type Person struct {
+		Name string
+		Age  int
+	}
+	people := []Person{
+		{"Alice", 55},
+		{"Bob", 24},
+		{"Gopher", 13},
+	}
+	n, found := slices.BinarySearchFunc(people, Person{"Bob", 0}, func(a, b Person) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
+	fmt.Println("Bob:", n, found) // Bob: 1 true
+
+	names := make([]string, 2, 5)
+	names = slices.Clip(names)
+	fmt.Printf("长度：%d,容量：%d\n", len(names), cap(names))
+	// 长度：2,容量：2
+
+	names = []string{"路多辛的博客", "路多辛的所思所想"}
+	namesCopy := slices.Clone(names)
+
+	fmt.Println(namesCopy)
+
+	var a Animat[int]
+	a.name = 123
+	fmt.Println(a.Say())
+}
+
+type Animat[T int] struct {
+	name T
+}
+
+func (a Animat[T]) Say() T {
+	return a.name
 }

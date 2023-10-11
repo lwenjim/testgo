@@ -1,8 +1,7 @@
 package main
 
 import (
-	_ "github.com/lwenjim/testgo/a"
-	_ "github.com/lwenjim/testgo/b"
+	_ "github.com/lwenjim/testgo/b/c"
 )
 
 func main() {
