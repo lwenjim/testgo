@@ -4,16 +4,19 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"net/url"
 	"os"
 	"reflect"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -373,4 +376,57 @@ func TestHour(t *testing.T) {
 	layout := "2006-01-02 15:00:00"
 	executeTime, _ := time.Parse(layout, time.Now().Format(layout))
 	fmt.Printf("executeTime.Format(\"2006-01-02 15:04:05\"): %v\n", executeTime.Format("2006-01-02 15:04:05"))
+}
+
+func TestSortSlice(t *testing.T) {
+	people := []struct {
+		Name string
+		Age  int
+	}{
+		{"Gopher", 7},
+		{"Alice", 55},
+		{"Vera", 24},
+		{"Bob", 75},
+	}
+	sort.Slice(people, func(i, j int) bool { return people[i].Name < people[j].Name })
+	fmt.Println("By name:", people)
+
+	sort.Slice(people, func(i, j int) bool { return people[i].Age < people[j].Age })
+	fmt.Println("By age:", people)
+
+	fmt.Println(float64(time.Now().Unix()) * math.Pow10(-10))
+	fmt.Printf("rand.Float64(): %v\n", rand.Float64()*math.Pow10(5))
+
+	fmt.Println(uint64(rand.Intn(20)))
+}
+
+func TestAirplaneGameSign(t *testing.T) {
+	sha := sha256.New()
+	_, err := fmt.Fprintf(sha, "%s:%d:%d", "3I2oPTZSg", 123, 100)
+	assert.Nil(t, err)
+	fmt.Printf("%x\n", sha.Sum(nil))
+
+	data := float64(time.Now().Unix())*math.Pow10(-10) + 123
+	fmt.Printf("data: %v\n", data)
+
+	values := url.Values{}
+	values.Add("api_key", "key_from_environment_or_flag/?")
+	values.Add("another_thing", "foobar")
+	query := values.Encode()
+	fmt.Printf("query2: %v\n", query)
+
+	sha = sha256.New()
+	_, err = fmt.Fprintf(sha, "%v:%v:%v", "张三", "420704192001144673", "3I2oPTZSg")
+	assert.Nil(t, err)
+	fmt.Printf("%x\n", sha.Sum(nil))
+
+	fmt.Printf("time.Now().Hour(): %v\n", time.Now().Hour())
+
+	fmt.Printf("time.Now().Format(\"2006-01\"): %v\n", time.Now().Format("2006-01"))
+
+	var a = 123
+	func() {
+		a = 456
+	}()
+	fmt.Printf("a: %v\n", a)
 }
