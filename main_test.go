@@ -383,6 +383,9 @@ func TestHour(t *testing.T) {
 	layout := "2006-01-02 15:00:00"
 	executeTime, _ := time.Parse(layout, time.Now().Format(layout))
 	fmt.Printf("executeTime.Format(\"2006-01-02 15:04:05\"): %v\n", executeTime.Format("2006-01-02 15:04:05"))
+
+	a := time.Now().AddDate(0, 0, -1)
+	fmt.Printf("time.Now().After(a): %v\n", time.Now().After(a))
 }
 
 func TestSortSlice(t *testing.T) {
