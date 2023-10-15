@@ -23,14 +23,10 @@ import (
 	"testing"
 	"time"
 
-	"code.jspp.com/jspp/internal-tools/rpc"
 	"github.com/bitly/go-simplejson"
 	"github.com/google/go-querystring/query"
 	"golang.org/x/exp/slices"
 	"golang.org/x/exp/slog"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer/roundrobin"
-	"google.golang.org/grpc/credentials/insecure"
 	"gopkg.in/validator.v2"
 
 	"github.com/alicebob/miniredis/v2"
@@ -40,6 +36,13 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+type Animat[T int] struct {
+	name T
+}
+
+func (a Animat[T]) Say() T {
+	return a.name
+}
 func TestReplaceAll(t *testing.T) {
 	bodyBuffer := `
 	{
@@ -463,58 +466,14 @@ func TestClear(t *testing.T) {
 	panic(nil)
 }
 
-func TestGrpc(t *testing.T) {
-	conn, err := grpc.Dial("127.0.0.1:39090", grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"LoadBalancingPolicy": "%s"}`, roundrobin.Name)), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	messageClient := rpc.NewMessageClient(conn)
-	resp, err := messageClient.SetTimingRemind(context.Background(), &rpc.SetTimingRemindRequest{
-		ExecuteTime: time.Now().Unix() + 30*int64(time.Minute),
-		MessageItem: &rpc.MessageItem{
-			Content: &rpc.MessageContent{
-				Text: &rpc.TextMessage{
-					Text:            "123",
-					Markdown:        false,
-					IsTimingMessage: false,
-				},
-			},
-		},
-	})
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Printf("%#v", resp.Response.Result)
-
-	resp2, err := messageClient.GetTimingReminds(context.TODO(), &rpc.GetTimingRemindsRequest{
-		Auth: &rpc.BaseRequest{
-			TokenRaw: []byte{},
-			Token: &rpc.Token{
-				UserId: 110,
-			},
-			RequestId: "",
-		},
-	})
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Printf("%#v", resp2)
-	for _, timingRemind := range resp2.Items {
-		fmt.Printf("timingRemind.Content: %v\n", timingRemind.Id)
-	}
-}
-
 func TestLog(t *testing.T) {
 	_logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	_logger.Info("hello", "count", 3)
 }
 
 func TestSlices(t *testing.T) {
-	i, err := slices.BinarySearch([]string{"a", "c", "d"}, "c")
-	assert.Nil(t, err)
+	i, ok := slices.BinarySearch([]string{"a", "c", "d"}, "c")
+	assert.True(t, ok)
 	fmt.Printf("i: %v\n", i)
 
 	type Person struct {
@@ -544,12 +503,36 @@ func TestSlices(t *testing.T) {
 	var a Animat[int]
 	a.name = 123
 	fmt.Println(a.Say())
+
+	// slices.Compact
+	seq := []int{0, 1, 1, 2, 5, 5, 5, 8}
+	seq = slices.Compact(seq)
+	fmt.Println(seq) // [0 1 2 5 8]
+
+	// 冒泡排序 它重复地走访要排序的数列，一次比较两个数据元素，如果顺序不对则进行交换，并一直重复这样的走访操作，直到没有要交换的数据元素为止。
+	//arr := []int{6, 5, 4, 3, 2, 1}
+	arr := []int{1, 6, 5, 4, 3, 2}
+	count := len(arr)
+	cnt := 0
+	for i := 0; i < count; i++ {
+		for j := i + 1; j < count; j++ {
+			if arr[i] > arr[j] {
+				arr[i], arr[j] = arr[j], arr[i]
+				cnt++
+			}
+		}
+	}
+	fmt.Printf("排序后的数组 arr: %v\n", arr)
+	fmt.Printf("交换次数: %+v\n", cnt)
+
 }
 
-type Animat[T int] struct {
-	name T
-}
+func TestEscapes(t *testing.T) {
+	a := []int{}
+	b := []int{1}
+	c := 1
 
-func (a Animat[T]) Say() T {
-	return a.name
+	fmt.Printf("a: %v\n", a)
+	fmt.Printf("b: %v\n", b)
+	fmt.Printf("c: %v\n", c)
 }
