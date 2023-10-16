@@ -6,3 +6,4 @@ coverage.out
 main.coverprofile
 testgo.code-workspace
 .DS_Store
+testgo
