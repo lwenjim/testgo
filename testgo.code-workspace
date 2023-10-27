@@ -2,12 +2,6 @@
 	"folders": [
 		{
 			"path": "."
-		},
-		{
-			"path": "../echox"
-		},
-		{
-			"path": "../aliyun-go-translate"
 		}
 	],
 	"settings": {}
