@@ -28,6 +28,7 @@ import (
 	"golang.org/x/exp/slices"
 	"golang.org/x/exp/slog"
 	"gopkg.in/validator.v2"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -535,4 +536,13 @@ func TestEscapes(t *testing.T) {
 	fmt.Printf("a: %v\n", a)
 	fmt.Printf("b: %v\n", b)
 	fmt.Printf("c: %v\n", c)
+}
+
+func TestEnv(t *testing.T) {
+	testEnv := &envtest.Environment{
+		CRDDirectoryPaths: []string{"/Users/jim/Workdata/goland/src/testkubebuilder/config/crd/bases"},
+	}
+	cfg, err := testEnv.Start()
+	assert.Nil(t, err)
+	fmt.Println(cfg)
 }
