@@ -9,11 +9,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -28,6 +31,7 @@ import (
 	"golang.org/x/exp/slices"
 	"golang.org/x/exp/slog"
 	"gopkg.in/validator.v2"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -535,4 +539,52 @@ func TestEscapes(t *testing.T) {
 	fmt.Printf("a: %v\n", a)
 	fmt.Printf("b: %v\n", b)
 	fmt.Printf("c: %v\n", c)
+
+	//	420704 19900113 467X
+	data := "42070419900113467X"
+	birth := data[6:10]
+	year, _ := strconv.Atoi(birth)
+	fmt.Printf("birth: %#v\n", time.Now().Year()-year)
+}
+
+func TestStreamer(t *testing.T) {
+	resp, err := http.Get("https://www.baidu.com/")
+	assert.Nil(t, err)
+	defer resp.Body.Close()
+	buffer, err := io.ReadAll(resp.Body)
+	assert.Nil(t, err)
+	fmt.Println(string(buffer))
+
+	file, err := os.Create("a.log")
+	assert.Nil(t, err)
+	i, err := file.WriteString("hello world")
+	assert.Nil(t, err)
+	fmt.Printf("i: %v\n", i)
+
+	err = os.Mkdir("abc", os.ModeDir)
+	assert.Nil(t, err)
+	if err == nil {
+		os.Remove("abc")
+	}
+
+	err = os.MkdirAll("acd/abc", os.ModeDir)
+	assert.Nil(t, err)
+}
+
+func TestEnv(t *testing.T) {
+	// 指定 testEnv 配置
+	testEnv := &envtest.Environment{
+		CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
+	}
+
+	// 启动 testEnv
+	cfg, err := testEnv.Start()
+	assert.Nil(t, err)
+	fmt.Printf("cfg: %v\n", cfg)
+
+	//编写测试逻辑
+
+	// 停止 testEnv
+	err = testEnv.Stop()
+	assert.Nil(t, err)
 }
