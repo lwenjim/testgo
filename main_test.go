@@ -589,7 +589,7 @@ func TestEnv(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func TestEnv(t *testing.T) {
+func TestEnv2(t *testing.T) {
 	testEnv := &envtest.Environment{
 		CRDDirectoryPaths: []string{"/Users/jim/Workdata/goland/src/testkubebuilder/config/crd/bases"},
 	}
