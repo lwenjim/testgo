@@ -28,6 +28,7 @@ import (
 
 	"github.com/bitly/go-simplejson"
 	"github.com/google/go-querystring/query"
+	"github.com/google/uuid"
 	"golang.org/x/exp/slices"
 	"golang.org/x/exp/slog"
 	"gopkg.in/validator.v2"
@@ -596,4 +597,117 @@ func TestEnv2(t *testing.T) {
 	cfg, err := testEnv.Start()
 	assert.Nil(t, err)
 	fmt.Println(cfg)
+}
+
+type TypicalErr struct {
+	e string
+}
+
+func (t TypicalErr) Error() string {
+	return t.e
+}
+func TestErrorIs(t *testing.T) {
+	// 判断被包装过的error是否包含指定错误
+	var BaseErr = errors.New("base error")
+	err1 := fmt.Errorf("wrap base: %w", BaseErr)
+	err2 := fmt.Errorf("wrap err1: %w", err1)
+	println(err2 == BaseErr)
+	if !errors.Is(err2, BaseErr) {
+		panic("err2 is not BaseErr")
+	}
+	println("err2 is BaseErr")
+
+	// 判断被包装过的error是否为指定类型
+	err := TypicalErr{"typical error"}
+	err1 = fmt.Errorf("wrap err: %w", err)
+	err2 = fmt.Errorf("wrap err1: %w", err1)
+	var e TypicalErr
+	if !errors.As(err2, &e) {
+		panic("TypicalErr is not on the chain of err2")
+	}
+	println("TypicalErr is on the chain of err2")
+	println(err == e)
+
+}
+
+// 测试上下文
+const (
+	KEY = "trace_id"
+)
+
+func NewRequestID() string {
+	return strings.Replace(uuid.New().String(), "-", "", -1)
+}
+
+func NewContextWithTraceID() context.Context {
+	ctx := context.WithValue(context.Background(), KEY, NewRequestID())
+	return ctx
+}
+
+func PrintLog(ctx context.Context, message string) {
+	fmt.Printf("%s|info|trace_id=%s|%s", time.Now().Format("2006-01-02 15:04:05"), GetContextValue(ctx, KEY), message)
+}
+
+func GetContextValue(ctx context.Context, k string) string {
+	v, ok := ctx.Value(k).(string)
+	if !ok {
+		return ""
+	}
+	return v
+}
+
+func ProcessEnter(ctx context.Context) {
+	PrintLog(ctx, "Golang梦工厂")
+}
+func TestContext(t *testing.T) {
+	// context可以用来在goroutine之间传递上下文信息
+	// 作用就是在不同的goroutine之间同步请求特定的数据、取消信号以及处理请求的截止日期
+	ProcessEnter(NewContextWithTraceID())
+}
+
+func NewContextWithTimeout() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 3*time.Second)
+}
+
+func HttpHandler() {
+	ctx, cancel := NewContextWithTimeout()
+	defer cancel()
+	deal(ctx)
+}
+
+func deal(ctx context.Context) {
+	for i := 0; i < 10; i++ {
+		time.Sleep(1 * time.Second)
+		select {
+		case <-ctx.Done():
+			fmt.Println(ctx.Err())
+			return
+		default:
+			fmt.Printf("deal time is %d\n", i)
+		}
+	}
+}
+
+func TestContextTimeout(t *testing.T) {
+	// 在多个 Goroutine 组成的树中同步取消信号以减少对资源的消耗和占用
+
+	HttpHandler()
+}
+
+func TestChannel(t *testing.T) {
+	ch := make(chan struct{}, 1)
+	go func() {
+		fmt.Println("start working")
+		time.Sleep(time.Second * 1)
+		ch <- struct{}{}
+	}()
+	<-ch
+	fmt.Println("finished")
+}
+
+func TestSlice(t *testing.T) {
+	s := new([]int)
+	fmt.Printf("s: %v\n", s)
+	s2 := make([]int, 1)
+	fmt.Println(s2)
 }
