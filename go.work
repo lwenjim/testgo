@@ -4,5 +4,4 @@ use (
 	.
     ../akita-go
     ../internal-tools
-    ../favoritesv
 )
