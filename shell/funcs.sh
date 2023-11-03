@@ -21,6 +21,7 @@ declare -A serviceServers=(
     ["riskcontrolsv"]=64449
     ["paysv"]=64450
     ["connectorsv"]=64451
+    ["favoritesv"]=64452
 )
 cmdServers="
         update-git-hook

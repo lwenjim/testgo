@@ -14,9 +14,9 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -31,7 +31,6 @@ import (
 	"golang.org/x/exp/slices"
 	"golang.org/x/exp/slog"
 	"gopkg.in/validator.v2"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -138,7 +137,6 @@ func TestString(t *testing.T) {
 }
 
 func TestRedis(t *testing.T) {
-	fmt.Println(123)
 	s, err := miniredis.Run()
 	assert.Nil(t, err)
 
@@ -548,7 +546,11 @@ func TestEscapes(t *testing.T) {
 }
 
 func TestStreamer(t *testing.T) {
-	resp, err := http.Get("https://www.baidu.com/")
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := w.Write([]byte(`123`))
+		assert.Nil(t, err)
+	}))
+	resp, err := http.Get(ts.URL)
 	assert.Nil(t, err)
 	defer resp.Body.Close()
 	buffer, err := io.ReadAll(resp.Body)
@@ -566,34 +568,9 @@ func TestStreamer(t *testing.T) {
 	if err == nil {
 		os.Remove("abc")
 	}
-
-	err = os.MkdirAll("acd/abc", os.ModeDir)
-	assert.Nil(t, err)
 }
 
-func TestEnv(t *testing.T) {
-	// 指定 testEnv 配置
-	testEnv := &envtest.Environment{
-		CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
-	}
-
-	// 启动 testEnv
-	cfg, err := testEnv.Start()
-	assert.Nil(t, err)
-	fmt.Printf("cfg: %v\n", cfg)
-
-	//编写测试逻辑
-
-	// 停止 testEnv
-	err = testEnv.Stop()
-	assert.Nil(t, err)
-}
-
-func TestEnv2(t *testing.T) {
-	testEnv := &envtest.Environment{
-		CRDDirectoryPaths: []string{"/Users/jim/Workdata/goland/src/testkubebuilder/config/crd/bases"},
-	}
-	cfg, err := testEnv.Start()
-	assert.Nil(t, err)
-	fmt.Println(cfg)
+func TestRegexp(t *testing.T) {
+	rest := regexp.MustCompile("^[0-9]{6}$").MatchString("123123")
+	fmt.Printf("rest: %v\n", rest)
 }
