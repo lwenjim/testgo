@@ -688,3 +688,25 @@ func TestSlice(t *testing.T) {
 	s2 := make([]int, 1)
 	fmt.Println(s2)
 }
+
+func TestT1(t *testing.T) {
+	a := firstMissingPositive([]int{1, 5, 1, 90, 40})
+	fmt.Printf("a: %v\n", a)
+}
+
+func firstMissingPositive(A []int) int {
+	length := len(A)
+	for i := 0; i < length; {
+		if A[i] > 0 && A[i] <= length && A[i] != A[A[i]-1] {
+			A[i], A[A[i]-1] = A[A[i]-1], A[i]
+		} else {
+			i++
+		}
+	}
+	for i := 0; i < length; i++ {
+		if A[i] != i+1 {
+			return i + 1
+		}
+	}
+	return length + 1
+}
