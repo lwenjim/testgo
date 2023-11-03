@@ -70,35 +70,35 @@ func WithContext(ctx context.Context) Options {
 	}
 }
 
-func (this *Locker) Lock() (*Locker, bool) {
-	boolcmd := this.option.redisClient.SetNX(context.Background(), this.key, "1", this.option.expire)
+func (l *Locker) Lock() (*Locker, bool) {
+	boolcmd := l.option.redisClient.SetNX(context.Background(), l.key, "1", l.option.expire)
 	if ok, err := boolcmd.Result(); err != nil || !ok {
-		return this, false
+		return l, false
 	}
-	this.expandLockTime()
-	return this, true
+	l.expandLockTime()
+	return l, true
 }
 
-func (this *Locker) expandLockTime() {
-	sleepTime := this.option.expire * 2 / 3
+func (l *Locker) expandLockTime() {
+	sleepTime := l.option.expire * 2 / 3
 	go func() {
 		for {
 			time.Sleep(sleepTime)
-			if this.unlock {
+			if l.unlock {
 				break
 			}
-			this.resetExpire()
+			l.resetExpire()
 		}
 	}()
 }
 
-func (this *Locker) resetExpire() {
-	cmd := this.incrScript.Run(this.option.ctx, this.option.redisClient, []string{this.key}, 1, this.option.expire.Seconds())
+func (l *Locker) resetExpire() {
+	cmd := l.incrScript.Run(l.option.ctx, l.option.redisClient, []string{l.key}, 1, l.option.expire.Seconds())
 	v, err := cmd.Result()
-	log.Printf("key=%s ,续期结果:%v,%v\n", this.key, err, v)
+	log.Printf("key=%s ,续期结果:%v,%v\n", l.key, err, v)
 }
 
-func (this *Locker) Unlock() {
-	this.unlock = true
-	this.option.redisClient.Del(this.option.ctx, this.key)
+func (l *Locker) Unlock() {
+	l.unlock = true
+	l.option.redisClient.Del(l.option.ctx, l.key)
 }
