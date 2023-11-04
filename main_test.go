@@ -710,3 +710,176 @@ func firstMissingPositive(A []int) int {
 	}
 	return length + 1
 }
+
+type Node struct {
+	Val   int   `json:"val,omitempty"`
+	Left  *Node `json:"left,omitempty"`
+	Right *Node `json:"right,omitempty"`
+	Next  *Node `json:"next,omitempty"`
+}
+
+func TestBinarySearchForNode(t *testing.T) {
+	node7 := Node{
+		Val:   7,
+		Left:  nil,
+		Right: nil,
+		Next:  nil,
+	}
+	node5 := Node{
+		Val:   5,
+		Left:  nil,
+		Right: nil,
+		Next:  nil,
+	}
+	node4 := Node{
+		Val:   4,
+		Left:  nil,
+		Right: nil,
+		Next:  nil,
+	}
+	node3 := Node{
+		Val:   3,
+		Left:  nil,
+		Right: nil,
+		Next:  nil,
+	}
+	node2 := Node{
+		Val:   2,
+		Left:  nil,
+		Right: nil,
+		Next:  nil,
+	}
+	node1 := Node{
+		Val:   1,
+		Left:  nil,
+		Right: nil,
+		Next:  nil,
+	}
+	node1.Left = &node2
+	node1.Right = &node3
+
+	node2.Left = &node4
+	node2.Right = &node5
+
+	node3.Right = &node7
+
+	nodeFormat(&node1)
+	buffer, err := json.Marshal(node1)
+	assert.Nil(t, err)
+	fmt.Printf("data: %s\n", string(buffer))
+}
+
+func nodeFormat(root *Node) {
+	var handle func(*Node, int)
+	list := make(map[int][]*Node)
+	handle = func(node *Node, depth int) {
+		if node == nil {
+			return
+		}
+		list[depth] = append(list[depth], node)
+		handle(node.Left, depth+1)
+		handle(node.Right, depth+1)
+	}
+	handle(root, 0)
+	for i := 0; i < len(list); i++ {
+		if len(list[i]) > 1 {
+			for j := 0; j < len(list[i])-1; j++ {
+				list[i][j].Next = list[i][j+1]
+			}
+		}
+	}
+}
+
+func TestBinarySearchForArr(t *testing.T) {
+	arr := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	res := arrFormat(arr)
+	fmt.Printf("res: %v\n", res)
+}
+
+/**
+* [1] len=1
+* 1:2, 2:
+* [1, 2] len=2
+* 1:len=2, :
+* [1, 2, 3] len=3
+* 1:len-1=2, len-1:
+* [1, 2, 3, 4] len=4
+* 1:len-1=3, len-1:
+* [1, 2, 3, 4, 5] len=5
+* 1:len-2=3, len-2:
+* [1, 2, 3, 4, 5, 6] len=6
+* 1:len-2=4, len-2:
+* [1, 2, 3, 4, 5, 6, 7] len=7
+* 1:len-3=4, len-3:
+* 1=2^0
+* 2=2^1
+* 4=2^2
+* 8=2^3
+ */
+func arrFormat(arr []int) []string {
+	for i := 0; i < len(arr)-1; i++ {
+		for j := i + 1; j < len(arr); j++ {
+			if arr[j] < arr[i] {
+				arr[j], arr[i] = arr[i], arr[j]
+			}
+		}
+	}
+	var handle func([]int, int)
+	list := make(map[int][]int)
+	handle = func(arr []int, depth int) {
+		if len(arr) == 0 {
+			return
+		}
+		middle := arr[0]
+		var left, right []int
+		length := len(arr)
+		left = arr[1 : length/2+1]
+		right = arr[length/2+1:]
+		list[depth] = append(list[depth], middle)
+		handle(left, depth+1)
+		handle(right, depth+1)
+	}
+	handle(arr, 0)
+	var res []string
+	for i := 0; i < len(list); i++ {
+		for j := 0; j < len(list[i]); j++ {
+			res = append(res, fmt.Sprintf("%d", list[i][j]))
+		}
+		res = append(res, "#")
+	}
+	return res
+}
+
+/*
+*
+
+// 3 ^ 1
+// 00000011
+// 00000001
+// 00000010
+
+// 2 ^ 1
+// 00000010
+// 00000001
+// 00000011
+
+// 2 ^ 3
+// 00000010
+// 00000011
+// 00000001
+*/
+func TestXOR(t *testing.T) {
+	var arr = []int{3, 10, 5, 25, 2, 8}
+	var x, y int
+	x = 0
+	y = 1
+	for i := 0; i < len(arr)-1; i++ {
+		for j := i; j < len(arr); j++ {
+			if arr[x]^arr[y] < arr[i]^arr[j] {
+				x = i
+				y = j
+			}
+		}
+	}
+	fmt.Printf("x: %d, y: %d\n", arr[x], arr[y])
+}
