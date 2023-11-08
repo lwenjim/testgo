@@ -189,6 +189,7 @@ func TestPhoneEmail(t *testing.T) {
 	str = strings.TrimSpace(str)
 	fmt.Printf("str: 1111%v32222\n", str)
 }
+
 func TestValidate(t *testing.T) {
 	_ = validator.SetValidationFunc("in", func(v interface{}, param string) error {
 		st := reflect.ValueOf(v)
@@ -882,4 +883,54 @@ func TestXOR(t *testing.T) {
 		}
 	}
 	fmt.Printf("x: %d, y: %d\n", arr[x], arr[y])
+}
+
+func TestNil(t *testing.T) {
+	m := make(map[int]int)
+	fmt.Printf("m: %v\n", m)
+}
+
+func TestMap(t *testing.T) {
+	fmt.Printf("time.Now().UnixMicro(): %v\n", time.Now().UnixMicro())
+	m := make(map[int]int)
+	fmt.Printf("m: %p\n", m)
+	fmt.Printf("&m: %p\n", &m)
+
+	s := make([]int, 0)
+	fmt.Printf("s: %p\n", s)
+	fmt.Printf("&s: %p\n", &s)
+
+	c := make(chan int)
+	fmt.Printf("c: %p\n", c)
+	fmt.Printf("&c: %p\n", &c)
+}
+
+func TestOperator(t *testing.T) {
+	a := 2
+	b := 10
+	// 00000010
+	// 00001010
+	// 00001010
+	fmt.Printf("a=%b, b=%b, a&b=%b\n", a, b, a&b)
+
+	// 00000010
+	// 00001010
+	// 00001010
+	fmt.Printf("a=%b, b=%b, a|b=%b\n", a, b, a|b)
+
+	// 00000010
+	// 00001010
+	// 00001000
+	fmt.Printf("a=%b, b=%b, a^b=%b\n", a, b, a^b)
+
+	// 00000010 00000010
+	// 00001010 11110101
+	// 00001000 00000000
+	fmt.Printf("a=%b, b=%b, a&^b=%b\n", a, b, a&^b)
+
+	// 00000010 00000100 <<1
+	fmt.Printf("a=%b, (a<<1)=%b\n", a, a<<1)
+
+	// 00000010 00000100 >1
+	fmt.Printf("a=%b, (a>>1)=%b\n", a, a>>1)
 }
