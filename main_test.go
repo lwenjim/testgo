@@ -609,12 +609,14 @@ func TestErrorIs(t *testing.T) {
 }
 
 // 测试上下文
+type WithValueType string
+
 const (
-	KEY = "trace_id"
+	KEY WithValueType = "trace_id"
 )
 
-func NewRequestID() string {
-	return strings.Replace(uuid.New().String(), "-", "", -1)
+func NewRequestID() WithValueType {
+	return WithValueType(strings.Replace(uuid.New().String(), "-", "", -1))
 }
 
 func NewContextWithTraceID() context.Context {
@@ -623,7 +625,7 @@ func NewContextWithTraceID() context.Context {
 }
 
 func PrintLog(ctx context.Context, message string) {
-	fmt.Printf("%s|info|trace_id=%s|%s", time.Now().Format("2006-01-02 15:04:05"), GetContextValue(ctx, KEY), message)
+	fmt.Printf("%s|info|trace_id=%s|%s", time.Now().Format("2006-01-02 15:04:05"), GetContextValue(ctx, string(KEY)), message)
 }
 
 func GetContextValue(ctx context.Context, k string) string {
