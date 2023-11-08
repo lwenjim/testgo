@@ -936,3 +936,11 @@ func TestOperator(t *testing.T) {
 	// 00000010 00000100 >1
 	fmt.Printf("a=%b, (a>>1)=%b\n", a, a>>1)
 }
+
+func TestStruct2(t *testing.T) {
+	a := &struct{}{}
+	fmt.Printf("%p\n", a)
+
+	b := &struct{}{}
+	fmt.Printf("%p\n", b)
+}
