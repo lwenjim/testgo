@@ -943,3 +943,11 @@ func TestOperator(t *testing.T) {
 	fmt.Printf("%v\n", reflect.TypeOf('b'-'a'))
 	// 64+8+2/8 => 74/8=>1001 => 74/8 = 9_2
 }
+
+func TestStruct2(t *testing.T) {
+	a := &struct{}{}
+	fmt.Printf("%p\n", a)
+
+	b := &struct{}{}
+	fmt.Printf("%p\n", b)
+}
