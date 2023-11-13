@@ -951,3 +951,394 @@ func TestStruct2(t *testing.T) {
 	b := &struct{}{}
 	fmt.Printf("%p\n", b)
 }
+
+func TestRepeatDNA(t *testing.T) {
+	// 第一块循环
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 65 65 65 65 65 67 67 67 67 67
+
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 	  65 65 65 65 65 67 67 67 67 67
+
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 	     65 65 65 65 65 67 67 67 67 67
+
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 	        65 65 65 65 65 67 67 67 67 67
+
+	// ...
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 	        														 65 65 65 65 65 67 67 67 67 67
+
+	// 第二块循环
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 65 65 65 65 67 67 67 67 67 65
+
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 	  65 65 65 65 67 67 67 67 67 65
+
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 	     65 65 65 65 67 67 67 67 67 65
+
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 	        65 65 65 65 67 67 67 67 67 65
+
+	// ...
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 	        														 65 65 65 65 67 67 67 67 67 65
+
+	// 最后一块循环
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 65 65 65 65 71 71 71 84 84 84
+
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 	  65 65 65 65 71 71 71 84 84 84
+
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 	     65 65 65 65 71 71 71 84 84 84
+
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 	        65 65 65 65 71 71 71 84 84 84
+
+	// ...
+
+	//																	 start=len(arr)-1-9			end=len(arr)-1
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 	        														 65 65 65 65 71 71 71 84 84 84
+
+	// 第二种方案
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 65 65 65 65 65 67 67 67 67 67
+
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 	  65 65 65 65 65 67 67 67 67 67
+
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 	  	 65 65 65 65 65 67 67 67 67 67
+
+	// ...
+
+	// 65 65 65 65 65 67 67 67 67 67 65 65 65 65 65 67 67 67 67 67 67 65 65 65 65 65 71 71 71 84 84 84
+	// 	  	 															 65 65 65 65 65 67 67 67 67 67
+
+	// s := "AAAAACCCCCAAAAACCCCCCAAAAAGGGTTT"
+	// box := make(map[string]int)
+	// var ret []string
+	// for i := 0; i < len(s)-1-9+1; i++ {
+	// 	for j := 0; j < len(s)-1-9+1; j++ {
+	// 		if i == j {
+	// 			continue
+	// 		}
+	// 		equal := true
+	// 		for x := 0; x < 10; x++ {
+	// 			if s[i+x] != s[j+x] {
+	// 				equal = false
+	// 				break
+	// 			}
+	// 		}
+	// 		if equal {
+	// 			key := s[i : i+10]
+	// 			if _, ok := box[key]; !ok {
+	// 				box[key] = 1
+	// 			} else {
+	// 				if box[key] == 2 {
+	// 					ret = append(ret, key)
+	// 				}
+	// 				box[key] += 1
+	// 			}
+	// 		}
+	// 	}
+	// }
+
+	// s := "AAAAACCCCCAAAAACCCCCCAAAAAGGGTTT"
+	// box := make(map[string]int)
+	// var ret []string
+	// for i := 0; i < len(s)-1-9+1; i++ {
+	// 	for j := 0; j < len(s)-1-9+1; j++ {
+	// 		if i == j {
+	// 			continue
+	// 		}
+	// 		if s[i:i+10] == s[j:j+10] {
+	// 			key := s[i : i+10]
+	// 			if _, ok := box[key]; !ok {
+	// 				box[key] = 1
+	// 			} else {
+	// 				if box[key] == 1 {
+	// 					ret = append(ret, key)
+	// 				}
+	// 				box[key] += 1
+	// 			}
+	// 		}
+	// 	}
+	// }
+	// fmt.Printf("ret: %+v\n", ret)
+
+	s := "AAAAACCCCCAAAAACCCCCCAAAAAGGGTTT"
+	box := make(map[string]int)
+	var ret []string
+	for i := 0; i < len(s)-1-9+1; i++ {
+		key := s[i : i+10]
+		if _, ok := box[key]; !ok {
+			box[key] = 1
+		} else {
+			if box[key] == 1 {
+				ret = append(ret, key)
+			}
+			box[key] += 1
+		}
+	}
+	fmt.Printf("ret: %+v\n", ret)
+}
+
+func TestMaxWordLengthMulti(t *testing.T) {
+	// 给你一个字符串数组 words ，找出并返回 length(words[i]) * length(words[j]) 的最大值，并且这两个单词不含有公共字母。如果不存在这样的两个单词，返回 0
+	// words := []string{"a", "ab", "abc", "d", "cd", "bcd", "abcd"}
+	// words := []string{"cdbbfebebafbefc", "ecbeaeddcce", "aefeeddafccaedafddd", "cbe", "ececca", "adcfdbdffcebfedadcb", "edbfadcecbebfee", "eabcb", "bdfedaedbaeacf", "faabafbbbefdea", "deccfdffacbebdefbfa", "ffdf", "fdbeabbec", "cbcfeedaf", "ecdbfdebbebffbbbb", "ebee", "cfcdcbcfdacbdaaebfef", "dafabedfa", "babbdfcc", "eadeafdbcdbbaefbbbbdc", "faabad", "eeeaecdbbacbedbaeabd", "acfa", "eaaafeb", "acef", "dccaccfffedaabefccead", "bacdbfe", "fdfdafaa", "bacecdff", "cfadccadfdabbdcdaec", "acbdfffdbcdfffbdbec", "afbcfefc", "facaacffccecfff", "af", "aedcddabdddfdeafabfd", "fafbfeacffbbbceebaedc", "aabbbabddcadadda", "eccca", "fcafbdfb", "ffdadaeaebedec", "ccfc", "efaed", "eebbb", "dcafccfbbdfbddcfbefb", "aaeeb", "fcdd", "ccccb", "ddebebfdcdbaaf", "beeeb", "edbfdabdcfb", "cacfbf", "bceacbdababbfca", "ffb", "fcba", "bdfedbaafebbffcefece", "bf", "dbfbeabcecffdbcc", "dccebefccbecf", "aaebfacdaaabfbcfacd", "cb", "edbbbfcdbefeabcfd", "daabdcbadccfeffafa", "cfafbcdfbdabfadddddff", "cbfd", "bcaa", "dffbfebffedc", "ebcbfbaeadbbdfcaa", "dcedebbcdfffabbac", "dbedacddcec", "badedda", "beeeaaffcdadbdecaddc", "dcdbcdbffeddcfea", "dedbdecbca", "cbecacdcfcdcfbfeebdda", "bebbacebbfacfbbbed", "dc", "cdddaedbfeaeebdbef", "accbbd", "bbafead", "dcfba", "efac", "ffce", "cfa", "bac", "bdfdfecccfeadeafedee", "eedddbefdaefbcbf", "acedbeadaedfcdffebea", "cc", "cffbeebdedfdbf", "fdeacddefadbdecbe", "ccccedafdbedaeeb", "cfafddadadcfdbdfb", "aadbbedecd", "cadeffaaffdcaeeefdfbf", "adcaaefbffdfaadedbbb", "cbeebfeeddcfd", "abfaaecdffbdfafe", "fccbbae", "cefdee", "cfdbfbabacafecc"}
+	var maxProduct func(words []string) int
+	tmp, _ := os.ReadFile("a.log")
+	var words []string
+	_ = json.Unmarshal(tmp, &words)
+	// keys := make([]string, 0)
+	// values := make([]int, 0)
+	// for i := 0; i < len(words); i++ {
+	// 	for j := 0; j < len(words); j++ {
+	// 		if i == j {
+	// 			continue
+	// 		}
+	// 		key := fmt.Sprintf("%s|%s", words[i], words[j])
+	// 		mul := len(words[i]) * len(words[j])
+	// 		keys = append(keys, key)
+	// 		values = append(values, mul)
+	// 	}
+	// }
+	// partition := func(values []int, keys []string, left int, right int) int {
+	// 	pivot := left
+	// 	index := pivot + 1
+	// 	for i := index; i <= right; i++ {
+	// 		if values[i] < values[pivot] {
+	// 			values[index], values[i] = values[i], values[index]
+	// 			keys[index], keys[i] = keys[i], keys[index]
+	// 			index++
+	// 		}
+	// 	}
+	// 	if pivot != index-1 {
+	// 		values[pivot], values[index-1] = values[index-1], values[pivot]
+	// 		keys[pivot], keys[index-1] = keys[index-1], keys[pivot]
+	// 	}
+	// 	return index - 1
+	// }
+	// partitionIndex := 0
+	// var quickSort func(arr []int, slave []string, left int, right int)
+	// quickSort = func(values []int, keys []string, left int, right int) {
+	// 	if left < right {
+	// 		partitionIndex = partition(values, keys, left, right)
+	// 		quickSort(values, keys, left, partitionIndex-1)
+	// 		quickSort(values, keys, partitionIndex+1, right)
+	// 	}
+	// }
+	// quickSort(values, keys, 0, len(keys)-1)
+	// for x := len(values) - 1; x >= 0; x-- {
+	// 	key := keys[x]
+	// 	m := make(map[byte]int, 0)
+	// 	isSame := false
+	// 	isMiddlePassed := false
+	// 	for i := 0; i < len(key); i++ {
+	// 		if key[i] == '|' {
+	// 			isMiddlePassed = true
+	// 		}
+	// 		if isMiddlePassed {
+	// 			if _, ok := m[key[i]]; ok {
+	// 				isSame = true
+	// 				break
+	// 			}
+	// 		} else {
+	// 			m[key[i]] = 1
+	// 		}
+	// 	}
+	// 	if !isSame {
+	// 		fmt.Printf("values[index]: %v\n", values[x])
+	// 		fmt.Printf("key: %v\n", key)
+	// 		break
+	// 	}
+	// }
+
+	maxProduct = func(words []string) int {
+		boxLen := len(words)
+		ans := 0
+		m := make(map[string]int)
+		for i := 0; i < boxLen; i++ {
+			l := 0
+			for j := 0; j < len(words[i]); j++ {
+				l |= 1 << (words[i][j] - 'a')
+			}
+			m[words[i]] = l
+		}
+		for i := 0; i < boxLen; i++ {
+			for j := i + 1; j < boxLen; j++ {
+				if m[words[i]]&m[words[j]] == 0 {
+					ans = max(ans, len(words[i])*len(words[j]))
+				}
+			}
+		}
+		return ans
+	}
+
+	// func maxProduct(words []string) int {
+	// 	x := 0
+	// 	y := 0
+	// 	boxLen := len(words)
+	// 	for i := 0; i < boxLen-1; i++ {
+	// 		m := make(map[byte]int)
+	// 		for j := 0; j < len(words[i]); j++ {
+	// 			if len(m) >= 26 {
+	// 				break
+	// 			}
+	// 			if _, ok := m[words[i][j]]; ok {
+	// 				continue
+	// 			}
+	// 			m[words[i][j]] = 1
+	// 		}
+	// 		for j := i + 1; j < boxLen; j++ {
+	// 			if i == j {
+	// 				continue
+	// 			}
+	// 			if x == i && y == j {
+	// 				continue
+	// 			}
+
+	// 			isExists := false
+	// 			n := make(map[byte]int)
+	// 			for z := 0; z < len(words[j]); z++ {
+	// 				if len(n) >= 26 {
+	// 					break
+	// 				}
+	// 				if _, ok := m[words[j][z]]; ok {
+	// 					isExists = true
+	// 					break
+	// 				}
+	// 				n[words[j][z]] = 1
+	// 			}
+
+	//				if isExists {
+	//					continue
+	//				}
+	//				if x == 0 && y == 0 {
+	//					x = i
+	//					y = j
+	//				}
+	//				if len(words[i])*len(words[j]) <= len(words[x])*len(words[y]) {
+	//					continue
+	//				}
+	//				x = i
+	//				y = j
+	//			}
+	//		}
+	//		fmt.Printf("x: %d\n", x)
+	//		fmt.Printf("y: %d\n", y)
+	//		fmt.Printf("max: %d, len: %d\n", len(words[x])*len(words[y]), len(words))
+	//		if x == y {
+	//			return 0
+	//		}
+	//		return len(words[x]) * len(words[y])
+	//	}
+
+	ant := maxProduct(words)
+	fmt.Printf("ant: %v\n", ant)
+}
+
+func TestCountYuanyinSub(t *testing.T) {
+	vowelStrings := func(words []string, left int, right int) int {
+		keys := 1
+		keys |= 1 << ('e' - 'a')
+		keys |= 1 << ('i' - 'a')
+		keys |= 1 << ('o' - 'a')
+		keys |= 1 << ('u' - 'a')
+		cnt := 0
+		for i := left; i <= right; i++ {
+			last := len(words[i]) - 1
+			if 1<<(words[i][0]-'a')&keys != 0 && 1<<(words[i][last]-'a')&keys != 0 {
+				cnt++
+			}
+		}
+		return cnt
+	}
+	var words = []string{"are", "amy", "u"}
+	cnt := vowelStrings(words, 0, 2)
+	fmt.Printf("cnt: %v\n", cnt)
+}
+
+func TestFindTheLongestBalancedSubstring(t *testing.T) {
+	findTheLongestBalancedSubstring := func(s string) int {
+		// n := len(s)
+		// zero := 0
+		// one := 0
+		// ans := 0
+		// for i := 0; i < n; i++ {
+		// 	if s[i] == '0' {
+		// 		if i > 0 && s[i-1] == '1' {
+		// 			// nolint
+		// 			ans = max(min(zero, one), ans)
+		// 			one = 0
+		// 			ans = 0
+		// 		}
+		// 		zero++
+		// 	} else {
+		// 		one++
+		// 	}
+		// }
+		// ans = max(min(zero, one), ans)
+		// return ans * 2
+
+		// ans := 0
+		// n := len(s)
+		// for i := 0; i < n; {
+		// 	zero := 0
+		// 	one := 0
+		// 	for i < n && s[i] == '0' {
+		// 		i++
+		// 		zero++
+		// 	}
+		// 	for i < n && s[i] == '1' {
+		// 		i++
+		// 		one++
+		// 	}
+		// 	ans = max(ans, min(zero, one))
+		// }
+		// return ans * 2
+
+		// ans := 0
+		// n := len(s)
+		// expand := func(s string, x int, y int) int {
+		// 	for x >= 0 && y <= n-1 && s[x] == '0' && s[y] == '1' {
+		// 		x = x - 1
+		// 		y = y + 1
+		// 	}
+		// 	return y - x - 1
+		// }
+		// for i := 0; i < n-1; i++ {
+		// 	if s[i] == '0' && s[i+1] == '1' {
+		// 		ans = max(ans, expand(s, i, i+1))
+		// 	}
+		// }
+		// return ans
+
+		ans := 0
+		pre := 0
+		cur := 0
+		n := len(s)
+		for i := 0; i < n; i++ {
+			cur++
+			if i == n-1 || s[i] != s[i+1] {
+				if s[i] == '1' {
+					ans = max(ans, min(pre, cur)*2)
+				}
+				pre = cur
+				cur = 0
+			}
+		}
+		return ans
+	}
+	s := "01000111"
+	ret := findTheLongestBalancedSubstring(s)
+	fmt.Printf("ret: %v\n", ret)
+}
