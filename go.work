@@ -1,7 +1,20 @@
 go 1.21
 
 use (
-	.
-    ../akita-go
-    ../internal-tools
+	../pushersv
+	../adminsv
+	../authsv
+	../edgesv
+	../messagesv
+	../squaresv
+	../uploadsv
+	../akita-go
+	../deliversv
+	../favoritesv
+	../groupsv
+	../momentsv
+	../paysv
+	../smssv
+	../usersv
+	../testgo
 )

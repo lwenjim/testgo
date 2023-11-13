@@ -935,4 +935,11 @@ func TestOperator(t *testing.T) {
 
 	// 00000010 00000100 >1
 	fmt.Printf("a=%b, (a>>1)=%b\n", a, a>>1)
+
+	fmt.Printf("time.Now().Format(\"20060102\"): %v\n", time.Now().Format("20060102"))
+
+	fmt.Printf("%T\n", 'b'-'a')
+
+	fmt.Printf("%v\n", reflect.TypeOf('b'-'a'))
+	// 64+8+2/8 => 74/8=>1001 => 74/8 = 9_2
 }
