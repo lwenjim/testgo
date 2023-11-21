@@ -79,7 +79,7 @@ function service-log-pre() {
 function jspp-k8s-port-forward-simple() {
     if [[ "mongo mysql redis" == *"${1}"* ]]; then
         name="${1}-0"
-        jspp-kubectl port-forward "${name}" "${2}:${2}" >"/tmp/$1.log" 2>&1 &
+        jspp-kubectl port-forward --address 0.0.0.0 "${name}" "${2}:${2}" >"/tmp/$1.log" 2>&1 &
     else
         name=$(jspp-kubectl get pods | grep "$1" | awk '{if(NR==1){print $1}}')
         jspp-kubectl port-forward "${name}" "${2}:9090" >"/tmp/$1.log" 2>&1 &
