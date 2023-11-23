@@ -29,6 +29,7 @@ import (
 	"github.com/bitly/go-simplejson"
 	"github.com/google/go-querystring/query"
 	"github.com/google/uuid"
+	"github.com/lianggaoqiang/progress"
 	"golang.org/x/exp/slices"
 	"golang.org/x/exp/slog"
 	"gopkg.in/validator.v2"
@@ -529,6 +530,22 @@ func TestSlices(t *testing.T) {
 	fmt.Printf("排序后的数组 arr: %v\n", arr)
 	fmt.Printf("交换次数: %+v\n", cnt)
 
+	fmt.Printf("%s\n", strings.Repeat("=", 100))
+	sli := []int{}
+	fmt.Printf("%p, %d\n", sli, cap(sli))
+	sli = append(sli, 1)
+	fmt.Printf("%p, %d\n", sli, cap(sli))
+	sli = append(sli, 1)
+	fmt.Printf("%p, %d\n", sli, cap(sli))
+
+	sli2 := make([]int, 100)
+	fmt.Printf("%p, %d\n", sli2, cap(sli2))
+	sli2 = append(sli2, 1)
+	fmt.Printf("%p, %d\n", sli2, cap(sli2))
+
+	sli3 := []int{1}
+	sli4 := append([]int{}, sli3...)
+	fmt.Printf("%p, %d, %v\n", sli4, cap(sli4), sli4)
 }
 
 func TestEscapes(t *testing.T) {
@@ -1341,4 +1358,71 @@ func TestFindTheLongestBalancedSubstring(t *testing.T) {
 	s := "01000111"
 	ret := findTheLongestBalancedSubstring(s)
 	fmt.Printf("ret: %v\n", ret)
+}
+
+func TestBar(t *testing.T) {
+	b := NewBar(0, 1000)
+	for i := 0; i < 1000; i++ {
+		b.Add(1)
+		time.Sleep(time.Millisecond * 10)
+	}
+	p := progress.Start()
+
+	// create a custom bar
+	b1 := progress.NewBar().Custom(progress.BarSetting{
+		Total:           50,
+		StartText:       "[",
+		EndText:         "]",
+		PassedText:      "-",
+		FirstPassedText: ">",
+		NotPassedText:   "=",
+	})
+
+	// create a custom inline bar
+	b2 := progress.NewBar().Custom(progress.BarSetting{
+		UseFloat:        true,
+		Inline:          true,
+		StartText:       "|",
+		EndText:         "|",
+		FirstPassedText: ">",
+		PassedText:      "=",
+		NotPassedText:   " ",
+	})
+
+	// create a custom bar with emoji character
+	b3 := progress.NewBar().Custom(progress.BarSetting{
+		LeftSpace:     10,
+		Total:         10,
+		StartText:     "|",
+		EndText:       "|",
+		PassedText:    "⚡",
+		NotPassedText: "  ",
+	})
+
+	// add bars in progress
+	p.AddBar(b2)
+	p.AddBar(b3)
+	p.AddBar(b1)
+
+	for i := 0; i <= 100; i++ {
+		_ = b1.Inc()
+		_ = b2.Add(1.4)
+		_ = b3.Percent(float64(i))
+		time.Sleep(time.Millisecond * 40)
+	}
+}
+
+func TestEmpty(t *testing.T) {
+	var m map[int]int
+	fmt.Printf("m: %p\n", m)
+	var s []int
+	fmt.Printf("s: %p\n", s)
+	var c chan int
+	fmt.Printf("c: %p\n", c)
+	var i int
+	fmt.Printf("i: %p\n", &i)
+	var str string
+	fmt.Printf("str: %p\n", &str)
+	var arr = make([][]bool, 0)
+	fmt.Printf("arr: %v\n", arr)
 }

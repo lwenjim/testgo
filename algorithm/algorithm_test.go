@@ -97,3 +97,40 @@ func TestAlgorithm_Combine(t *testing.T) {
 	fmt.Printf("res: %v\n", res)
 
 }
+
+func TestAlgorithm_CombinationSum(t *testing.T) {
+	a := new(Algorithm)
+	arr := []int{1, 4, 8, 2}
+	res := a.CombinationSum(arr, 6)
+	fmt.Printf("res: %v\n", res)
+}
+func TestAlgorithm_CombinationSum3(t *testing.T) {
+	a := new(Algorithm)
+	res := a.CombinationSum3(9, 3)
+	fmt.Printf("res: %v\n", res)
+}
+func TestAlgorithm_LetterCombinations(t *testing.T) {
+	a := new(Algorithm)
+	res := a.LetterCombinations("23")
+	fmt.Printf("res: %v\n", res)
+}
+func TestAlgorithm_LWaysToSteps(t *testing.T) {
+	a := new(Algorithm)
+	res := a.WaysToStep2(10)
+	fmt.Printf("res: %v\n", res)
+}
+func TestAlgorithm_CombinationSum2(t *testing.T) {
+	a := new(Algorithm)
+	res := a.CombinationSum2([]int{2, 5, 2, 1, 2}, 8)
+	fmt.Printf("res: %v\n", res)
+}
+func TestAlgorithm_PermuteUnique(t *testing.T) {
+	a := new(Algorithm)
+	res := a.PermuteUnique([]int{2, 5, 2, 1, 2})
+	fmt.Printf("res: %v\n", res)
+}
+func TestAlgorithm_GetMaximumGold(t *testing.T) {
+	a := new(Algorithm)
+	res := a.GetMaximumGold([][]int{{0, 6, 0}, {5, 8, 7}, {0, 9, 0}})
+	fmt.Printf("res: %v\n", res)
+}
