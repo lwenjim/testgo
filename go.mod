@@ -16,6 +16,11 @@ require (
 )
 
 require (
+	github.com/lianggaoqiang/single-line-print v1.1.1 // indirect
+	golang.org/x/text v0.13.0 // indirect
+)
+
+require (
 	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -23,6 +28,7 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
+	github.com/lianggaoqiang/progress v0.0.1
 	github.com/onsi/gomega v1.27.10 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
