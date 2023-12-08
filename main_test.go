@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/bitly/go-simplejson"
+	"github.com/golang-jwt/jwt"
 	"github.com/google/go-querystring/query"
 	"github.com/google/uuid"
 	"github.com/lianggaoqiang/progress"
@@ -1412,17 +1413,69 @@ func TestBar(t *testing.T) {
 	}
 }
 
+type MyClaims struct {
+	Name string
+}
+
+func (*MyClaims) Valid() error {
+	return nil
+}
 func TestEmpty(t *testing.T) {
-	var m map[int]int
-	fmt.Printf("m: %p\n", m)
-	var s []int
-	fmt.Printf("s: %p\n", s)
-	var c chan int
-	fmt.Printf("c: %p\n", c)
-	var i int
-	fmt.Printf("i: %p\n", &i)
-	var str string
-	fmt.Printf("str: %p\n", &str)
-	var arr = make([][]bool, 0)
-	fmt.Printf("arr: %v\n", arr)
+	// num, err := phonenumbers.Parse("6502530000", "US")
+	// assert.Nil(t, err)
+	// fmt.Printf("num: %v\n", num)
+
+	// formattedNum := phonenumbers.Format(num, phonenumbers.NATIONAL)
+	// fmt.Printf("formattedNum: %v\n", formattedNum)
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"foo": "bar",
+		"nbf": time.Date(2015, 10, 10, 12, 0, 0, 0, time.UTC).Unix(),
+	})
+	hmacSampleSecret := []byte("abc")
+
+	tokenString, err := token.SignedString(hmacSampleSecret)
+	assert.Nil(t, err)
+
+	token, err = jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+		}
+		return hmacSampleSecret, nil
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok {
+		fmt.Println(claims["foo"], claims["nbf"])
+	} else {
+		fmt.Println(err)
+	}
+
+	m := map[int]string{
+		1: "abc",
+	}
+	fmt.Printf("m[1]: %v\n", m[1])
+
+	// var a interface{}
+	// a = 123
+	// if b, ok := a.(int32); ok {
+	// 	fmt.Println("ok")
+	// } else {
+	// 	fmt.Printf("b: %v\n", b)
+	// }
+
+	// var m map[int]int
+	// fmt.Printf("m: %p\n", m)
+	// var s []int
+	// fmt.Printf("s: %p\n", s)
+	// var c chan int
+	// fmt.Printf("c: %p\n", c)
+	// var i int
+	// fmt.Printf("i: %p\n", &i)
+	// var str string
+	// fmt.Printf("str: %p\n", &str)
+	// var arr = make([][]bool, 0)
+	// fmt.Printf("arr: %v\n", arr)
 }
