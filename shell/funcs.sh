@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2206 disable=SC2068 disable=SC2086 disable=SC1091 disable=SC2317 disable=SC1090 disable=SC2090 disable=SC2089
 
 declare -A ServiceServers=(
     ["mongo"]=27017
@@ -20,60 +21,98 @@ declare -A ServiceServers=(
     ["favoritesv"]=64452
     ["openapi"]=64453
 )
-CmdServers="
-        update-git-hook
-        jspp-k8s-port-forward
-        iip
-        help"
 debug=false
-function service-log-pre() {
-    if [ "$1" = "" ]; then
-        return 1
-    fi
-    local paramService="$1"
-    local patternLen="${#paramService}"
-    newServers=()
-    for server in "${!ServiceServers[@]}"; do
-        if [ ${#server} -ge "$patternLen" ]; then
-            newServers[${#newServers[*]}]=$server
-        fi
-    done
 
-    local resultServices=()
-    for server1 in "${newServers[@]}"; do
-        if [ "$paramService" = "$server1" ]; then
-            resultServices[${#resultServices[*]}]=$server1
-            break
-        fi
-    done
-
-    if [ ${#resultServices[@]} -eq 0 ]; then
-        for ((strPos = ${#paramService}; strPos >= 1; strPos--)); do
-            partService=$(echo "$paramService" | cut -c 1-$strPos)
-            for server2 in "${newServers[@]}"; do
-                forService=$(echo "$server2" | cut -c 1-$strPos)
-                if [ "$partService" = "$forService" ]; then
-                    resultServices[${#resultServices[*]}]=$server2
-                fi
-            done
-            if [ ${#resultServices[@]} -gt 0 ]; then
-                break
-            fi
-        done
-    fi
-
-    if [ ${#resultServices[@]} -gt 0 ]; then
-        if [ ${#resultServices[@]} -eq 1 ]; then
-            service=${resultServices[0]}
-        else
-            for server in "${resultServices[@]}"; do
-                echo "$server"
-            done
-        fi
+function main() {
+    cmd="${1//--/}"
+    if $cmd "$@"; then
+        $cmd "$@"
+    else
+        echo no exists for $cmd
     fi
 }
 
-function jspp-k8s-port-forward-simple() {
+function log() {
+    option=
+    service=$2
+    pipe=
+    param="
+    o:,option:,
+    p:,pipe:
+    "
+    param=$(echo "$param" | tr -d '\n')
+    args=$(getopt -o ho:p: -l "$param" -n "$0" -- "$@" __)
+    eval set -- "${args}"
+    while true; do
+        case "$1" in
+        -o | --option)
+            option=$2
+            shift
+            shift
+            ;;
+        -p | --pipe)
+            pipe=$2
+            shift
+            shift
+            ;;
+        --)
+            shift
+            ;;
+        __ | *)
+            shift
+            break
+            ;;
+        esac
+    done
+    lprint $option
+    lprint $pipe
+    logOption='--tail 20'
+    if [ "$option" != "" ]; then
+        logOption=$(echo "$option" | tr -d "\\")
+    fi
+
+    for server in "${!ServiceServers[@]}"; do
+        if [ "$server" != "$service" ]; then
+            continue
+        fi
+        awkString=" awk -F'[ -]()' "" '{print \"jspp-kubectl logs -c $service $logOption \"\$1\"-\"\$2\"-\"\$3}'"
+        lprint $awkString
+        for i in $(jspp-kubectl get pods | grep "$service"); do
+            result=$(echo "$i" | sed 's/(//' | sed 's/)//' | sed 's/\n\r//g')
+            break
+        done
+        if [ "$result" = "" ]; then
+            echo no launch for $service
+            break
+        fi
+        lprint $result
+        result2=$(eval "echo $result|$awkString")
+        lprint $result2
+        filename=/tmp/a.exe
+        if [ "$pipe" != "" ]; then
+            echo "$result2 | $pipe" >/tmp/a.exe
+        else
+            echo "$result2" >$filename
+        fi
+        source $filename
+        break
+    done
+}
+
+function lprint() {
+    echo "$1" >/dev/null 
+}
+
+function port-forward() {
+    ps aux | pgrep kube | awk '{print "kill -9 " $1}' | sudo bash
+    for server in "${!ServiceServers[@]}"; do
+        port-forward-simple "$server" "${ServiceServers[$server]}"
+    done
+    general-conf-for-nginx
+    brew services reload openresty
+}
+
+function port-forward-simple() {
     if [[ "mongo mysql redis" == *"${1}"* ]]; then
         name="${1}-0"
         jspp-kubectl port-forward --address 0.0.0.0 "${name}" "${2}:${2}" >"/tmp/$1.log" 2>&1 &
@@ -89,45 +128,11 @@ function jspp-k8s-port-forward-simple() {
     fi
 }
 
-function jspp-k8s-port-forward() {
-    ps aux | pgrep kube | awk '{print "kill -9 " $1}' | sudo bash
-
-    for server in "${!ServiceServers[@]}"; do
-        jspp-k8s-port-forward-simple "$server" "${ServiceServers[$server]}"
-    done
-}
-
-function service-log() {
-    local logParam='--tail 10 -f'
-    if [ "$service_option" != "" ] && [ "$service_option" != "__" ]; then
-        logParam=$(echo "$service_option" | tr -d "\\")
-    fi
-
-    for server in "${!ServiceServers[@]}"; do
-        if [ "$server" != "$service" ]; then
-            continue
-        fi
-        local awkString=" awk -F'[ -]()' "" '{print \"jspp-kubectl logs -c $service $logParam \"\$1\"-\"\$2\"-\"\$3}'"
-        result=$(jspp-kubectl get pods | grep "$service" | sed 's/(//' | sed 's/)//' | sed 's/\n\r//g')
-        for i in $(jspp-kubectl get pods | grep "$service"); do
-            result=$(echo "$i" | sed 's/(//' | sed 's/)//' | sed 's/\n\r//g')
-            break
-        done
-        result2=$(eval "echo $result|$awkString")
-        if [ "$service_pipe" != "" ]; then
-            echo "$result2  | $service_pipe" | bash -i
-        else
-            echo "$result2 " | bash -i
-        fi
-    done
-}
-
 function update-git-hook() {
     cd /Users/jim/Workdata/goland/src/jspp/pushersv >/dev/null 2>&1 || exit 1
     for forService in "${!ServiceServers[@]}"; do
         cd "../$forService" >/dev/null 2>&1 || continue
-        cd "../pushersv" >/dev/null 2>&1 || exit 1
-        cp -rf .git/hooks/{commit-msg,pre-commit} "../$forService/.git/hooks"
+        cp -rf .git/hooks/{commit-msg,pre-commit} ".git/hooks" >/dev/null
     done
 }
 
@@ -143,100 +148,6 @@ function help() {
     echo "show ip:               $0 [--iip]"
     echo "help:                  $0 [--help]"
     echo
-}
-
-function main() {
-    param="
-    service-log:,service-log-pipe:,service-log-kubectl-logs-option:,
-    log:,log-pipe:,log-option:,
-    help,update-git-hook,iip,jspp-k8s-port-forward
-    "
-    param=$(echo "$param" | tr -d '\n')
-    args=$(getopt -o hs: -l "$param" -n "$0" -- "$@" __)
-    eval set -- "${args}"
-    local pos=0
-    while true; do
-        case "$1" in
-        -s | --service-log | --log)
-            service-log-pre "$2"
-            shift
-            shift
-            ;;
-        --service-log-pipe | --log-pipe)
-            service_pipe="$2"
-            shift
-            shift
-            ;;
-        --service-log-kubectl-logs-option | --log-option)
-            service_option="$2"
-            shift
-            shift
-            ;;
-        --)
-            shift
-            pos=$((pos + 1))
-            ;;
-        __)
-            shift
-            break
-            ;;
-        *)
-            if [ $pos -eq 1 ]; then
-                case "$1" in
-                "service")
-                    service-log-pre "$2"
-                    if [ "$3" != "" ] && [ "$3" != "__" ]; then
-                        service_option="$3"
-                    fi
-                    if [ "$4" != "" ] && [ "$4" != "__" ]; then
-                        service_pipe="$4"
-                    fi
-                    shift
-                    shift
-                    shift
-                    ;;
-                "update-git-hook")
-                    update-git-hook
-                    ;;
-                "port-forward")
-                    jspp-k8s-port-forward
-                    general-conf-for-nginx
-                    brew services reload openresty
-                    ;;
-                "iip")
-                    iip
-                    ;;
-                *)
-                    if [ "$1" != "" ]; then
-                        Cervice-log-pre "$1" "$CmdServers"
-                        if [ "$service" != "" ]; then
-                            $service
-                        fi
-                    else
-                        break
-                    fi
-                    ;;
-                esac
-                shift
-            else
-                cmd="${1//--/}"
-                type "$cmd" &>/dev/null
-                if [ $? ]; then
-                    $cmd "$@"
-                    shift
-                else
-                    exit
-                fi
-            fi
-            ;;
-        esac
-    done
-
-    if [ "$service" != "" ]; then
-        service-log
-    else
-        echo
-    fi
 }
 
 function general-conf-for-nginx() {
@@ -280,5 +191,27 @@ EOF
         else
             echo "$template"
         fi
+    done
+}
+
+function print-env-path() {
+    IFS=":"
+    paths=(${PATH})
+    noExists=()
+    for i in "${paths[@]}"; do
+        if [ "$i" = "" ]; then
+            continue
+        fi
+        i=${i//\\/}
+        if [ -d "$i" ]; then
+            echo $i
+        else
+            noExists[${#noExists[@]}]=$i
+        fi
+    done
+    echo
+    echo
+    for i in "${noExists[@]}"; do
+        echo $i
     done
 }
