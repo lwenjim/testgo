@@ -1,9 +1,5 @@
 #!/bin/bash
-#shellcheck disable=SC2086,SC2046,SC2317,SC2155,SC2154,SC1003,2068,2206
 
-# service=
-# service_pipe=
-# service_option=
 declare -A ServiceServers=(
     ["mongo"]=27017
     ["mysql"]=3306
@@ -24,7 +20,7 @@ declare -A ServiceServers=(
     ["favoritesv"]=64452
     ["openapi"]=64453
 )
-cmdServers="
+CmdServers="
         update-git-hook
         jspp-k8s-port-forward
         iip
@@ -38,13 +34,13 @@ function service-log-pre() {
     local patternLen="${#paramService}"
     newServers=()
     for server in "${!ServiceServers[@]}"; do
-        if [ ${#server} -ge $patternLen ]; then
+        if [ ${#server} -ge "$patternLen" ]; then
             newServers[${#newServers[*]}]=$server
         fi
     done
 
     local resultServices=()
-    for server1 in ${newServers[@]}; do
+    for server1 in "${newServers[@]}"; do
         if [ "$paramService" = "$server1" ]; then
             resultServices[${#resultServices[*]}]=$server1
             break
@@ -53,9 +49,9 @@ function service-log-pre() {
 
     if [ ${#resultServices[@]} -eq 0 ]; then
         for ((strPos = ${#paramService}; strPos >= 1; strPos--)); do
-            local partService=$(echo "$paramService" | cut -c 1-$strPos)
-            for server2 in ${newServers[@]}; do
-                local forService=$(echo "$server2" | cut -c 1-$strPos)
+            partService=$(echo "$paramService" | cut -c 1-$strPos)
+            for server2 in "${newServers[@]}"; do
+                forService=$(echo "$server2" | cut -c 1-$strPos)
                 if [ "$partService" = "$forService" ]; then
                     resultServices[${#resultServices[*]}]=$server2
                 fi
@@ -97,24 +93,24 @@ function jspp-k8s-port-forward() {
     ps aux | pgrep kube | awk '{print "kill -9 " $1}' | sudo bash
 
     for server in "${!ServiceServers[@]}"; do
-        jspp-k8s-port-forward-simple ${server} ${ServiceServers[$server]}
+        jspp-k8s-port-forward-simple "$server" "${ServiceServers[$server]}"
     done
 }
 
 function service-log() {
     local logParam='--tail 10 -f'
     if [ "$service_option" != "" ] && [ "$service_option" != "__" ]; then
-        logParam=$(echo "$service_option" | tr -d '\')
+        logParam=$(echo "$service_option" | tr -d "\\")
     fi
 
     for server in "${!ServiceServers[@]}"; do
-        if [ ${server} != $service ]; then
+        if [ "$server" != "$service" ]; then
             continue
         fi
         local awkString=" awk -F'[ -]()' "" '{print \"jspp-kubectl logs -c $service $logParam \"\$1\"-\"\$2\"-\"\$3}'"
-        result=$(jspp-kubectl get pods | grep $service | sed 's/(//' | sed 's/)//' | sed 's/\n\r//g')
-        for i in $(jspp-kubectl get pods | grep $service); do
-            result=$(echo $i | sed 's/(//' | sed 's/)//' | sed 's/\n\r//g')
+        result=$(jspp-kubectl get pods | grep "$service" | sed 's/(//' | sed 's/)//' | sed 's/\n\r//g')
+        for i in $(jspp-kubectl get pods | grep "$service"); do
+            result=$(echo "$i" | sed 's/(//' | sed 's/)//' | sed 's/\n\r//g')
             break
         done
         result2=$(eval "echo $result|$awkString")
@@ -149,24 +145,14 @@ function help() {
     echo
 }
 
-function sl() {
-    if [ "$1" != "" ]; then
-        if [ "$2" != "" ]; then
-            $shell_path --service-log "$1" --service-log-pipe "\\""$2""\\"
-        else
-            $shell_path --service-log "$1"
-        fi
-    fi
-}
-
 function main() {
     param="
     service-log:,service-log-pipe:,service-log-kubectl-logs-option:,
     log:,log-pipe:,log-option:,
     help,update-git-hook,iip,jspp-k8s-port-forward
     "
-    param=$(echo $param | tr -d '\n')
-    local args=$(getopt -o hs: -l "$param" -n "$0" -- "$@" __)
+    param=$(echo "$param" | tr -d '\n')
+    args=$(getopt -o hs: -l "$param" -n "$0" -- "$@" __)
     eval set -- "${args}"
     local pos=0
     while true; do
@@ -222,7 +208,7 @@ function main() {
                     ;;
                 *)
                     if [ "$1" != "" ]; then
-                        service-log-pre "$1" "$cmdServers"
+                        Cervice-log-pre "$1" "$CmdServers"
                         if [ "$service" != "" ]; then
                             $service
                         fi
@@ -255,32 +241,16 @@ function main() {
 
 function general-conf-for-nginx() {
     declare -A DebugServers=(
-        # ["edgesv"]=19093
+        # ["authsv"]=19090
         # ["usersv"]=19091
         # ["paysv"]=19092
-        # ["authsv"]=19090
-    )
-    arr=(
-        "pushersv"
-        "messagesv"
-        "squaresv"
-        "edgesv"
-        "usersv"
-        "authsv"
-        "uploadsv"
-        "deliversv"
-        "usergrowthsv"
-        "riskcontrolsv"
-        "paysv"
-        "connectorsv"
-        "favoritesv"
-        "openapi"
+        # ["edgesv"]=19093
     )
     filename=~/servers/rpc.conf
     if [[ "$debug" = "false" ]]; then
         echo >$filename
     fi
-    for server in "${arr[@]}"; do
+    for server in "${!ServiceServers[@]}"; do
         if [ "$server" = 'mysql' ] || [ "$server" = "mongo" ] || [ "$server" = "redis" ]; then
             continue
         fi
