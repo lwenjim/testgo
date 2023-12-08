@@ -25,10 +25,14 @@ debug=false
 
 function main() {
     cmd="${1//--/}"
-    if $cmd "$@"; then
-        $cmd "$@"
+    if [ "$cmd" = "" ]; then
+        help
     else
-        echo no exists for $cmd
+        if $cmd "$@"; then
+            echo
+        else
+            echo no exists for $cmd
+        fi
     fi
 }
 
@@ -40,6 +44,10 @@ function log() {
     o:,option:,
     p:,pipe:
     "
+    if [ "$service" = "" ];then
+        help
+        return
+    fi
     param=$(echo "$param" | tr -d '\n')
     args=$(getopt -o ho:p: -l "$param" -n "$0" -- "$@" __)
     eval set -- "${args}"
@@ -100,7 +108,7 @@ function log() {
 }
 
 function lprint() {
-    echo "$1" >/dev/null 
+    echo "$1" >/dev/null
 }
 
 function port-forward() {
@@ -136,17 +144,17 @@ function update-git-hook() {
     done
 }
 
-function iip() {
+function ip() {
     ifconfig | grep "inet " | grep -v '127.0.0.1' | awk -F "inet" '{print $2}' | awk -F "netmask" '{print $1}' | tr -d " "
 }
 
 function help() {
     echo "Automation Script"
     echo
-    echo "get log:               $0 [-s|--service-log cmd] [--service-log-pipe pipe] [--service-log-kubectl-logs-option option]"
-    echo "sync config:           $0 [--update-git-hook]"
-    echo "show ip:               $0 [--iip]"
-    echo "help:                  $0 [--help]"
+    echo "get log:               a log usersv [-p | --pipe pipe] [-o | --option option]"
+    echo "sync config:           a update-git-hook"
+    echo "show env:              a print-env-path"
+    echo "show ip:               a ip"
     echo
 }
 
