@@ -17,7 +17,9 @@ require (
 
 require (
 	github.com/lianggaoqiang/single-line-print v1.1.1 // indirect
-	golang.org/x/text v0.13.0 // indirect
+	github.com/nyaruka/phonenumbers v1.2.2 // indirect
+	golang.org/x/text v0.14.0 // indirect
+	google.golang.org/protobuf v1.31.0 // indirect
 )
 
 require (

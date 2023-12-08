@@ -90,7 +90,7 @@ EOF
         targetPort=${DebugServers[$server]}
     fi
     template="${template//77777/$targetPort}"
-    if [[ "$debug" = "false" ]]; then
+    if [[ ! $debug ]]; then
         echo "$template" >>$filename
     else
         echo "$template"

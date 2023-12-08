@@ -4,11 +4,11 @@
 # service=
 # service_pipe=
 # service_option=
-declare -A serviceServers=(
+declare -A ServiceServers=(
     ["mongo"]=27017
     ["mysql"]=3306
     ["redis"]=6379
-    ["pusher"]=64440
+    ["pushersv"]=64440
     ["messagesv"]=64441
     ["squaresv"]=64442
     ["edgesv"]=64443
@@ -22,13 +22,14 @@ declare -A serviceServers=(
     ["paysv"]=64450
     ["connectorsv"]=64451
     ["favoritesv"]=64452
+    ["openapi"]=64453
 )
 cmdServers="
         update-git-hook
         jspp-k8s-port-forward
         iip
         help"
-
+debug=false
 function service-log-pre() {
     if [ "$1" = "" ]; then
         return 1
@@ -36,7 +37,7 @@ function service-log-pre() {
     local paramService="$1"
     local patternLen="${#paramService}"
     newServers=()
-    for server in "${!serviceServers[@]}"; do
+    for server in "${!ServiceServers[@]}"; do
         if [ ${#server} -ge $patternLen ]; then
             newServers[${#newServers[*]}]=$server
         fi
@@ -95,8 +96,8 @@ function jspp-k8s-port-forward-simple() {
 function jspp-k8s-port-forward() {
     ps aux | pgrep kube | awk '{print "kill -9 " $1}' | sudo bash
 
-    for server in "${!serviceServers[@]}"; do
-        jspp-k8s-port-forward-simple ${server} ${serviceServers[$server]}
+    for server in "${!ServiceServers[@]}"; do
+        jspp-k8s-port-forward-simple ${server} ${ServiceServers[$server]}
     done
 }
 
@@ -106,12 +107,16 @@ function service-log() {
         logParam=$(echo "$service_option" | tr -d '\')
     fi
 
-    for server in "${!serviceServers[@]}"; do
+    for server in "${!ServiceServers[@]}"; do
         if [ ${server} != $service ]; then
             continue
         fi
         local awkString=" awk -F'[ -]()' "" '{print \"jspp-kubectl logs -c $service $logParam \"\$1\"-\"\$2\"-\"\$3}'"
-        result=$(jspp-kubectl get pods | grep $service | sed 's/(//'|sed 's/)//')
+        result=$(jspp-kubectl get pods | grep $service | sed 's/(//' | sed 's/)//' | sed 's/\n\r//g')
+        for i in $(jspp-kubectl get pods | grep $service); do
+            result=$(echo $i | sed 's/(//' | sed 's/)//' | sed 's/\n\r//g')
+            break
+        done
         result2=$(eval "echo $result|$awkString")
         if [ "$service_pipe" != "" ]; then
             echo "$result2  | $service_pipe" | bash -i
@@ -123,9 +128,9 @@ function service-log() {
 
 function update-git-hook() {
     cd /Users/jim/Workdata/goland/src/jspp/pushersv >/dev/null 2>&1 || exit 1
-    for forService in "${!serviceServers[@]}"; do
+    for forService in "${!ServiceServers[@]}"; do
         cd "../$forService" >/dev/null 2>&1 || continue
-        cd "../pushersv" >/dev/null 2>&1|| exit 1
+        cd "../pushersv" >/dev/null 2>&1 || exit 1
         cp -rf .git/hooks/{commit-msg,pre-commit} "../$forService/.git/hooks"
     done
 }
@@ -209,6 +214,8 @@ function main() {
                     ;;
                 "port-forward")
                     jspp-k8s-port-forward
+                    general-conf-for-nginx
+                    brew services reload openresty
                     ;;
                 "iip")
                     iip
@@ -244,4 +251,64 @@ function main() {
     else
         echo
     fi
+}
+
+function general-conf-for-nginx() {
+    declare -A DebugServers=(
+        # ["edgesv"]=19093
+        # ["usersv"]=19091
+        # ["paysv"]=19092
+        # ["authsv"]=19090
+    )
+    arr=(
+        "pushersv"
+        "messagesv"
+        "squaresv"
+        "edgesv"
+        "usersv"
+        "authsv"
+        "uploadsv"
+        "deliversv"
+        "usergrowthsv"
+        "riskcontrolsv"
+        "paysv"
+        "connectorsv"
+        "favoritesv"
+        "openapi"
+    )
+    filename=~/servers/rpc.conf
+    if [[ "$debug" = "false" ]]; then
+        echo >$filename
+    fi
+    for server in "${arr[@]}"; do
+        if [ "$server" = 'mysql' ] || [ "$server" = "mongo" ] || [ "$server" = "redis" ]; then
+            continue
+        fi
+        read -r -d '' template <<-'EOF'
+    server {
+        server_name aaaaaa-svc;
+        listen 9090 http2;
+        access_log /Users/jim/Workdata/wwwlogs/aaaaaa-svc_nginx.log combined;
+
+        location / {
+            grpc_pass grpc://127.0.0.1:77777;
+        }
+    }
+EOF
+        finded=false
+        if [[ " ${!DebugServers[*]} " =~ $server ]]; then
+            finded=true
+        fi
+        template="${template//aaaaaa/$server}"
+        targetPort=${ServiceServers[$server]}
+        if $finded; then
+            targetPort=${DebugServers[$server]}
+        fi
+        template="${template//77777/$targetPort}"
+        if [[ "$debug" = "false" ]]; then
+            echo "$template" >>$filename
+        else
+            echo "$template"
+        fi
+    done
 }
