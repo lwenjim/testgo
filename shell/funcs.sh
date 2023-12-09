@@ -259,17 +259,3 @@ function print-env-go () {
         printf ${template} "${item[0]}" "${item[1]}"
     done
 }
-
-: '
-fsafasdfasdfasf
-fasdfasdf
-
-'
-
-: << 'a'
-fadsfafafasdf
-a
-
-: << b
-fadsfafafasdf
-b
