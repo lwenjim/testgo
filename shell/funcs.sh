@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2206 disable=SC2068 disable=SC2086 disable=SC1091 disable=SC2317 disable=SC1090 disable=SC2090 disable=SC2089
+# shellcheck disable=SC2206 disable=SC2068 disable=SC2086 disable=SC1091 disable=SC2317 disable=SC1090 disable=SC2090 disable=SC2089 disable=SC2059
 
 declare -A ServiceServers=(
     ["mongo"]=27017
@@ -153,8 +153,12 @@ function help() {
     echo
     echo "get log:               a log usersv [-p | --pipe pipe] [-o | --option option]"
     echo "sync config:           a update-git-hook"
-    echo "show env:              a print-env-path"
+    echo "show env path:         a print-env-path"
+    echo "show env go:           a print-env-go"
+    echo "show env:              a print-env"
+    echo "forward port to local: a port-forward"
     echo "show ip:               a ip"
+    echo "show help:             a help"
     echo
 }
 
@@ -223,3 +227,49 @@ function print-env-path() {
         echo $i
     done
 }
+
+function print-env () {
+    IFS=$'\n'
+    data=$(env)
+    arr=($data)
+    template="%-40s %-10s\n"
+    printf ${template} "环境变量" "    变量值"
+    for variable in ${arr[@]}; do
+        IFS="="
+        item=($variable)
+        if [ "${item[0]}" = "PATH" ] || [ "${item[1]}" = "" ]; then
+            continue
+        fi
+        printf ${template} "${item[0]}" "${item[1]}"
+    done
+}
+
+function print-env-go () {
+    IFS=$'\n'
+    data=$(go env)
+    arr=($data)
+    template="%-40s %-10s\n"
+    printf ${template} "环境变量" "    变量值"
+    for variable in ${arr[@]}; do
+        IFS="="
+        item=($variable)
+        if [ "${item[0]}" = "PATH" ] || [ "${item[1]}" = "" ]; then
+            continue
+        fi
+        printf ${template} "${item[0]}" "${item[1]}"
+    done
+}
+
+: '
+fsafasdfasdfasf
+fasdfasdf
+
+'
+
+: << 'a'
+fadsfafafasdf
+a
+
+: << b
+fadsfafafasdf
+b
