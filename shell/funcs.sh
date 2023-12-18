@@ -113,6 +113,8 @@ function lprint() {
 
 function port-forward() {
     ps aux | pgrep kube | awk '{print "kill -9 " $1}' | sudo bash
+    template="%-19s %-30s %-10s\n"
+    printf "${template}" "服务名称"   "环境变量" "    变量值"
     for server in "${!ServiceServers[@]}"; do
         port-forward-simple "$server" "${ServiceServers[$server]}"
     done
@@ -128,11 +130,11 @@ function port-forward-simple() {
         name=$(jspp-kubectl get pods | grep "$1" | awk '{if(NR==1){print $1}}')
         jspp-kubectl port-forward "${name}" "${2}:9090" >"/tmp/$1.log" 2>&1 &
     fi
-
+    template="%-15s %-30s %-10s\n"
     if [ ! $? ]; then
-        echo "$1 $name 启动失败"
+        printf "${template}" "$1" "$name" "启动失败"
     else
-        echo "$1 $name 启动成功"
+        printf "${template}" "$1" "$name" "启动成功"
     fi
 }
 
