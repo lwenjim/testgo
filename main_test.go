@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/bitly/go-simplejson"
-	"github.com/golang-jwt/jwt"
 	"github.com/google/go-querystring/query"
 	"github.com/google/uuid"
 	"github.com/lianggaoqiang/progress"
@@ -1428,35 +1427,35 @@ func TestEmpty(t *testing.T) {
 	// formattedNum := phonenumbers.Format(num, phonenumbers.NATIONAL)
 	// fmt.Printf("formattedNum: %v\n", formattedNum)
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"foo": "bar",
-		"nbf": time.Date(2015, 10, 10, 12, 0, 0, 0, time.UTC).Unix(),
-	})
-	hmacSampleSecret := []byte("abc")
+	// token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	// 	"foo": "bar",
+	// 	"nbf": time.Date(2015, 10, 10, 12, 0, 0, 0, time.UTC).Unix(),
+	// })
+	// hmacSampleSecret := []byte("abc")
 
-	tokenString, err := token.SignedString(hmacSampleSecret)
-	assert.Nil(t, err)
+	// tokenString, err := token.SignedString(hmacSampleSecret)
+	// assert.Nil(t, err)
 
-	token, err = jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-		}
-		return hmacSampleSecret, nil
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
+	// token, err = jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+	// 	if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+	// 		return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+	// 	}
+	// 	return hmacSampleSecret, nil
+	// })
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	if claims, ok := token.Claims.(jwt.MapClaims); ok {
-		fmt.Println(claims["foo"], claims["nbf"])
-	} else {
-		fmt.Println(err)
-	}
+	// if claims, ok := token.Claims.(jwt.MapClaims); ok {
+	// 	fmt.Println(claims["foo"], claims["nbf"])
+	// } else {
+	// 	fmt.Println(err)
+	// }
 
-	m := map[int]string{
-		1: "abc",
-	}
-	fmt.Printf("m[1]: %v\n", m[1])
+	// m := map[int]string{
+	// 	1: "abc",
+	// }
+	// fmt.Printf("m[1]: %v\n", m[1])
 
 	// var a interface{}
 	// a = 123

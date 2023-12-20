@@ -21,6 +21,7 @@ declare -A ServiceServers=(
     ["favoritesv"]=64452
     ["openapi"]=64453
 )
+
 debug=false
 
 function main() {
