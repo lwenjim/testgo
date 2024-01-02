@@ -1,0 +1,12 @@
+{
+    "name": "abc",
+    "user_qrcode": "abc",
+    "group_qrcode": "abc",
+    "end_time": 1704762951,
+    "is_multi_select": true,
+    "is_anonymous": true,
+    "option": [
+        "中国队",
+        "美国队"
+    ]
+}
