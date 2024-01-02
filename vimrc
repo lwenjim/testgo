@@ -4,7 +4,7 @@
 "--------------
 set nu 
 set nowrap
-set cursorline
+"set cursorline
 set showmatch 
 set number
 set cul
@@ -62,7 +62,9 @@ set encoding=utf-8
 set hidden
 set shortmess+=c
 set updatetime=100
+set laststatus=2
 
+    
 vnoremap <c-y> "+y
 nnoremap <c-p> "+p
 
@@ -166,10 +168,6 @@ else
   set signcolumn=yes
 endif
 
-function! s:check_back_space() abort
-  let col = col('.') - 1
-  return !col || getline('.')[col - 1]  =~# '\s'
-endfunction
 
 inoremap <silent><expr> <c-@> coc#refresh()
 inoremap <silent><expr> <cr> pumvisible() ? coc#_select_confirm(): "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"
@@ -252,6 +250,9 @@ call plug#begin()
   Plug 'Yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
   Plug 'airblade/vim-rooter'
   Plug 'rakr/vim-one'
+  Plug 'NLKNguyen/papercolor-theme'
+  Plug 'navarasu/onedark.nvim'
+  Plug 'voldikss/vim-floaterm'
 call plug#end()
 
 
@@ -266,17 +267,24 @@ let g:lightline = {'colorscheme': 'onedark'}
 let g:onedark_termcolors=256  
 let g:rehash256 = 1
 let g:go_auto_type_info = 1
-let g:go_auto_sameids = 0
+"let g:go_auto_sameids = 1
 let g:go_auto_use_cmpfunc = 1
-let g:go_metalinter_enabled = ['vet', 'golangci-lint', 'errcheck']
-let g:go_metalinter_autosave = 1
-let g:go_metalinter_autosave_enabled = ['vet', 'golangci-lint']
+let g:go_list_type = "quickfix"
+
+" let g:go_metalinter_enabled = ["vet", "errcheck", "golangci-lint"]
+" let g:go_metalinter_autosave = 1
+" let g:go_metalinter_autosave_enabled = ["vet", "errcheck", "golangci-lint"]
+" let g:go_metalinter_deadline = "10s"
+" let g:go_metalinter_fast = 1
+" let g:go_metalinter_linters = ["vet", "errcheck", "golangci-lint"]
+
+let g:go_fmt_fail_silently = 1
 let g:go_def_mode = 'godef'
 let g:go_gopls_enabled = 1
 let g:go_autodetect_gopath = 1
 let g:go_fmt_command = "goimports"
-
-
+let g:go_decls_includes = "func,type"
+" let g:go_debug=['shell-commands']
 
 
 "--------------
@@ -319,7 +327,7 @@ command!  -bang -nargs=* RG   call fzf#vim#grep2("rg  --ignore-file /Users/jim/.
 " LeaderF start
 "--------------
 let g:Lf_CommandMap = {'<C-K>': ['<Up>'], '<C-J>': ['<Down>']}
-
+let g:Lf_ShowDevIcons = 0
 let g:Lf_WorkingDirectoryMode = 'a'
 let g:Lf_RootMarkers = ['.workspace_root']
 let g:Lf_UseVersionControlTool=0 
@@ -343,7 +351,7 @@ let g:Lf_GtagsAutoGenerate = 1
 let g:Lf_GtagsSource = 1
 let g:Lf_Gtagsconf = '/usr/local/Cellar/global/6.6.10/share/gtags/gtags.conf'
 let g:Lf_Gtagslabel = 'native-pygments'
-let g:Lf_ReverseOrder = 1
+let g:Lf_ReverseOrder = 0
 let g:Lf_DefaultMode = 'NameOnly'
 noremap <leader>f :LeaderfSelf<cr>
 noremap <leader>fm :LeaderfMru<cr>
@@ -370,7 +378,6 @@ nmap <leader>fgs <Plug>LeaderfGtagsSymbol
 nmap <leader>fgg <Plug>LeaderfGtagsGrep
 
 
-
 "--------------
 " Rooter start
 "--------------
@@ -380,12 +387,22 @@ let g:eleline_slim = 1
 
 
 
-
+let g:onedark_config = {
+  \ 'style': 'deep',
+  \ 'toggle_style_key': '<leader>ts',
+  \ 'ending_tildes': v:true,
+  \ 'diagnostics': {
+    \ 'darker': v:false,
+    \ 'background': v:false,
+  \ },
+\ } 
 "--------------
 " onedark
 "--------------
 let g:airline_theme='one'
-colorscheme seoul256
+"colorscheme onedark
+"colorscheme papercolor
+colorscheme onedark
 
 
 
@@ -393,15 +410,37 @@ colorscheme seoul256
 "--------------
 " coc-snippets
 "--------------
-inoremap <silent><expr> <TAB>
-      \ coc#pum#visible() ? coc#_select_confirm() :
-      \ coc#expandableOrJumpable() ? "\<C-r>=coc#rpc#request('doKeymap', ['snippets-expand-jump',''])\<CR>" :
-      \ CheckBackspace() ? "\<TAB>" :
-      \ coc#refresh()
 
-function! CheckBackspace() abort
-  let col = col('.') - 1
-  return !col || getline('.')[col - 1]  =~# '\s'
-endfunction
+let g:UltiSnipsExpandTrigger="<tab>"
+let g:UltiSnipsJumpForwardTrigger="<c-b>"
+let g:UltiSnipsJumpBackwardTrigger="<c-z>"
 
+let g:UltiSnipsEditSplit="vertical"
 let g:coc_snippet_next = '<tab>'
+
+
+set cursorline
+hi CursorLine   cterm=NONE ctermbg=NONE ctermfg=NONE guibg=white guifg=white
+"set cursorcolumn
+"hi CursorColumn cterm=NONE ctermbg=NONE ctermfg=white
+
+hi Comment ctermfg=green guifg=green
+hi Search guifg=red guibg=white
+hi Identifier ctermfg =blue cterm =none
+
+" ============= vim-floaterm配置=========================
+nnoremap   <silent>   <F7>    :FloatermNew --height=0.9 --position=bottomright<CR>
+tnoremap   <silent>   <F7>    <C-\><C-n>:FloatermNew --height=0.9 --position=bottomright<CR>
+nnoremap   <silent>   <F8>    :FloatermPrev<CR>
+tnoremap   <silent>   <F8>    <C-\><C-n>:FloatermPrev<CR>
+nnoremap   <silent>   <F9>    :FloatermNext<CR>
+tnoremap   <silent>   <F9>    <C-\><C-n>:FloatermNext<CR>
+nnoremap   <silent>   <F2>   :FloatermToggle<CR>
+tnoremap   <silent>   <F2>   <C-\><C-n>:FloatermToggle<CR>
+
+hi Floaterm guibg=black
+hi FloatermBorder guibg=orange guifg=cyan
+hi FloatermNC guifg=gray
+command! Rg FloatermNew --width=0.8 --height=0.8 rg
+nmap <leader>rg :Rg<CR>
+" ============ vim-floaterm配置=========================
