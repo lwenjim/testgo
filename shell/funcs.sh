@@ -20,6 +20,7 @@ declare -A ServiceServers=(
     ["connectorsv"]=64451
     ["favoritesv"]=64452
     ["openapi"]=64453
+    ["groupsv"]=64454
 )
 
 debug=false
@@ -109,7 +110,7 @@ function log() {
 }
 
 function lprint() {
-    echo "$1" >/dev/null
+    echo "$1" 
 }
 
 function port-forward() {
