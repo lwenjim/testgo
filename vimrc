@@ -1,4 +1,3 @@
-
 call plug#begin()
   Plug 'ludovicchabant/vim-gutentags'
   Plug 'neoclide/coc.nvim', {'branch': 'release'}
@@ -96,7 +95,6 @@ set splitright
 set noundofile
 set nobackup
 set noswapfile
-
 set encoding=utf-8
 set hidden
 set shortmess+=c
@@ -108,10 +106,7 @@ set fileencoding=utf-8
 set fileencodings=utf-8,gb2312,gb18030,latin1                      
 set termencoding=utf-8                                             
 set encoding=utf-8       
-syntax on                                                                                                            
-filetype on
 set nocompatible
-filetype plugin on                                                 
 set number                                                      
 set tabstop=4                                                      
 set softtabstop=4                                                  
@@ -121,25 +116,20 @@ set smartindent
 set cindent                                                        
 set expandtab
 set nocompatible
-filetype plugin indent on 
-syntax on
-colorscheme onedark
-filetype indent on
-set smartindent
-set expandtab
-set shiftwidth=4
 set paste
 set termguicolors
+
+syntax on                                                                                                            
+filetype plugin indent on 
 vnoremap <c-y> "+y
 nnoremap <c-p> "+p
-filetype off
-syntax on 
 let g:netrw_winsize = 25
 let mapleader=";" 
-nmap <Tab> :bnext<Return>
-nmap <S-Tab> :bprev<Return>
 let g:auto_save = 1
 let g:auto_save_events = ["InsertLeave", "TextChanged", "TextChangedI", "CursorHoldI", "CompleteDone"]
+
+nmap <Tab> :bnext<Return>
+nmap <S-Tab> :bprev<Return>
 
 "--------------
 " gutentags配置
@@ -362,7 +352,6 @@ let g:onedark_config = {
 " onedark
 "--------------
 let g:airline_theme='one'
-colorscheme onedark
 
 "--------------
 " vim-floaterm配置
@@ -375,9 +364,9 @@ nnoremap   <silent>   <F9>    :FloatermNext<CR>
 tnoremap   <silent>   <F9>    <C-\><C-n>:FloatermNext<CR>
 nnoremap   <silent>   <F2>   :FloatermToggle<CR>
 tnoremap   <silent>   <F2>   <C-\><C-n>:FloatermToggle<CR>
-hi Floaterm guibg=black
-hi FloatermBorder guibg=orange guifg=cyan
-hi FloatermNC guifg=gray
+" hi Floaterm guibg=black
+" hi FloatermBorder guibg=orange guifg=cyan
+" hi FloatermNC guifg=gray
 command! Rg FloatermNew --width=0.8 --height=0.8 rg
 nmap <leader>rg :Rg<CR>
 
