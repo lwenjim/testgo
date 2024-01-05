@@ -4,7 +4,6 @@ type TypicalErr2 struct {
 	e string
 }
 
-// Person struct  
 type Person struct {
 	Id   uint64 `json:"id,omitempty"`
 	Name string `json:"name,omitempty"`
