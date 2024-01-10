@@ -1,41 +1,45 @@
 call plug#begin()
-  Plug 'ludovicchabant/vim-gutentags'
-  Plug 'neoclide/coc.nvim', {'branch': 'release'}
-  Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
-  Plug 'jlanzarotta/bufexplorer'
-  Plug 'scrooloose/nerdtree'
-  Plug 'preservim/tagbar'
-  Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
-  Plug 'junegunn/fzf.vim'
-  Plug 'SirVer/ultisnips'
-  Plug 'honza/vim-snippets'
-  Plug 'junegunn/seoul256.vim'
-  Plug 'joshdick/onedark.vim'
-  Plug 'Yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
-  Plug 'airblade/vim-rooter'
-  Plug 'rakr/vim-one'
-  Plug 'voldikss/vim-floaterm'
-  Plug 'junegunn/vim-easy-align'
-  Plug 'NLKNguyen/papercolor-theme'
-  Plug 'junegunn/vim-easy-align'
-  Plug 'skywind3000/quickmenu.vim'  
-  Plug 'tpope/vim-fireplace', { 'for': 'clojure' }  
-  Plug 'rdnetto/YCM-Generator', { 'branch': 'stable' }
-  Plug 'nsf/gocode', { 'tag': 'v.20150303', 'rtp': 'vim' }
-  Plug 'kana/vim-textobj-user'
-  Plug 'kana/vim-textobj-indent'
-  Plug 'kana/vim-textobj-syntax'
-  Plug 'kana/vim-textobj-function', { 'for':['c', 'cpp', 'vim', 'java'] }
-  Plug 'sgur/vim-textobj-parameter'
-  Plug 'voldikss/vim-floaterm'
-  Plug 'nvim-treesitter/nvim-treesitter'
-
-  Plug 'neovim/nvim-lspconfig'
-  Plug 'ray-x/go.nvim'
-  Plug 'ray-x/guihua.lua' 
-  Plug 'ray-x/aurora'
-  Plug 'navarasu/onedark.nvim'
-  Plug 'olimorris/onedarkpro.nvim'  
+ Plug 'neoclide/coc.nvim', {'branch': 'release'}
+ Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
+ Plug 'ludovicchabant/vim-gutentags'
+ Plug 'AndrewRadev/splitjoin.vim'
+ Plug 'SirVer/ultisnips'
+ Plug 'fatih/molokai'
+ Plug 'ctrlpvim/ctrlp.vim'
+ Plug 'Yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
+ Plug 'airblade/vim-rooter'
+ Plug 'rakr/vim-one'
+ Plug 'jlanzarotta/bufexplorer'
+ Plug 'scrooloose/nerdtree'
+ Plug 'preservim/tagbar'
+ Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
+ Plug 'junegunn/fzf.vim'
+ Plug 'SirVer/ultisnips'
+ Plug 'honza/vim-snippets'
+ Plug 'junegunn/seoul256.vim'
+ Plug 'joshdick/onedark.vim'
+ Plug 'voldikss/vim-floaterm'
+ Plug 'junegunn/vim-easy-align'
+ Plug 'NLKNguyen/papercolor-theme'
+ Plug 'junegunn/vim-easy-align'
+ Plug 'skywind3000/quickmenu.vim'  
+ Plug 'tpope/vim-fireplace', { 'for': 'clojure' }  
+ Plug 'rdnetto/YCM-Generator', { 'branch': 'stable' }
+ Plug 'nsf/gocode', { 'tag': 'v.20150303', 'rtp': 'vim' }
+ Plug 'kana/vim-textobj-user'
+ Plug 'kana/vim-textobj-indent'
+ Plug 'kana/vim-textobj-syntax'
+ Plug 'kana/vim-textobj-function', { 'for':['c', 'cpp', 'vim', 'java'] }
+ Plug 'sgur/vim-textobj-parameter'
+ Plug 'voldikss/vim-floaterm'
+ Plug 'nvim-treesitter/nvim-treesitter'
+ Plug 'neovim/nvim-lspconfig' "nvim
+ Plug 'ray-x/go.nvim'
+ Plug 'ray-x/guihua.lua' 
+ Plug 'ray-x/aurora'
+ Plug 'navarasu/onedark.nvim'
+ Plug 'olimorris/onedarkpro.nvim'  
+ Plug 'autozimu/LanguageClient-neovim', { 'branch': 'next', 'do': 'bash install.sh'}
 call plug#end()
 
 "--------------
@@ -78,58 +82,42 @@ set wildmenu
 set wildmode=longest:list,full
 set backspace=2
 set exrc
-set number       
 set confirm      
-set mouse=a
-set encoding=utf-8 
 set fileencodings=utf-8,ucs-bom,shift-jis,gb18030,gbk,gb2312,cp936,utf-16,big5,euc-jp,latin1      
-set tabstop=4          	
-set shiftwidth=4      	
-set expandtab         	
-set autoindent        
-set showmatch         
-set hlsearch          
-set incsearch       
 set splitbelow      
 set splitright     
 set noundofile
-set nobackup
-set noswapfile
-set encoding=utf-8
 set hidden
 set shortmess+=c
 set updatetime=100
 set laststatus=2
 set tags=./.tags;,.tags
-set foldmethod=indent  
 set fileencoding=utf-8                                             
-set fileencodings=utf-8,gb2312,gb18030,latin1                      
 set termencoding=utf-8                                             
-set encoding=utf-8       
 set nocompatible
-set number                                                      
-set tabstop=4                                                      
-set softtabstop=4                                                  
-set shiftwidth=4                                                   
-set autoindent                                                     
 set smartindent                                                    
 set cindent                                                        
-set expandtab
-set nocompatible
-set paste
 set termguicolors
+set autowrite
+
+"highlight Folded guibg=NONE guifg=NONE
+"highlight FoldColumn guibg=NONE guifg=NONE
+"set paste
+set foldmethod=manual
 
 syntax on                                                                                                            
 filetype plugin indent on 
-vnoremap <c-y> "+y
-nnoremap <c-p> "+p
+
 let g:netrw_winsize = 25
-let mapleader=";" 
 let g:auto_save = 1
 let g:auto_save_events = ["InsertLeave", "TextChanged", "TextChangedI", "CursorHoldI", "CompleteDone"]
 
 nmap <Tab> :bnext<Return>
 nmap <S-Tab> :bprev<Return>
+nnoremap <space> za
+vnoremap <c-y> "+y
+nnoremap <c-p> "+p
+
 
 "--------------
 " gutentags配置
@@ -157,10 +145,7 @@ map <F5> :GoDebugContinue<cr>
 "map <F8> :GoDebugNext<cr>
 "map <F7> :GoDebugStep<cr>
 "map <S-F8> :GoDebugStepOut<cr>
-let g:go_debug_windows = {
-      \ 'vars':       'rightbelow 60vnew',
-      \ 'stack':      'rightbelow 10new',
-\ }
+let g:go_debug_windows = {'vars':'rightbelow 60vnew','stack':'rightbelow 10new'}
 let g:airline_theme='onedark'
 let g:lightline = {'colorscheme': 'onedark'}
 let g:onedark_termcolors=256  
@@ -169,29 +154,61 @@ let g:go_auto_type_info = 1
 "let g:go_auto_sameids = 1
 let g:go_auto_use_cmpfunc = 1
 let g:go_list_type = "quickfix"
-" let g:go_metalinter_enabled = ["vet", "errcheck", "golangci-lint"]
-" let g:go_metalinter_autosave = 1
-" let g:go_metalinter_autosave_enabled = ["vet", "errcheck", "golangci-lint"]
-" let g:go_metalinter_deadline = "10s"
-" let g:go_metalinter_fast = 1
-" let g:go_metalinter_linters = ["vet", "errcheck", "golangci-lint"]
+let g:go_metalinter_enabled = ["vet", "errcheck", "golangci-lint"]
+let g:go_metalinter_autosave = 1
+let g:go_metalinter_autosave_enabled = ["vet", "errcheck", "golangci-lint"]
+let g:go_metalinter_deadline = "10s"
+let g:go_metalinter_fast = 1
+let g:go_metalinter_linters = ["vet", "errcheck", "golangci-lint"]
+let g:go_metalinter_deadline = "5s"
 let g:go_fmt_fail_silently = 1
 let g:go_def_mode = 'godef'
 let g:go_gopls_enabled = 1
+let g:go_def_mode='gopls'
+let g:go_info_mode='gopls'
 let g:go_autodetect_gopath = 1
 let g:go_fmt_command = "goimports"
 let g:go_decls_includes = "func,type"
-" let g:go_debug=['shell-commands']
+let g:LanguageClient_serverCommands = {'go': ['gopls']}
+let g:go_list_type = "quickfix"
+let g:go_test_timeout = '10s'
+"let g:go_fmt_fail_silently = 1 "关闭quickfix
+"let g:go_addtags_transform = "camelcase"
+let g:go_highlight_types = 1
+let g:go_highlight_fields = 1
+let g:go_highlight_functions = 1
+let g:go_highlight_function_calls = 1
+let g:go_highlight_operators = 1
+let g:go_highlight_extra_types = 1
+let g:go_highlight_build_constraints = 1
+let g:go_highlight_generate_tags = 1
 
+let g:rehash256 = 1
+let g:molokai_original = 1
+colorscheme molokai
+set updatetime=100
 
-"--------------
-" tagbar配置
-"--------------
-nnoremap <silent><nowait> <space>t :<C-u>TagbarToggle<CR> 
-let g:tagbar_width=25
-let g:tagbar_autofocus=1
-let g:UltiSnipsExpandTrigger="<C-t>"
+function! s:build_go_files()
+  let l:file = expand('%')
+  if l:file =~# '^\f\+_test\.go$'
+    call go#test#Test(0, 1)
+  elseif l:file =~# '^\f\+\.go$'
+    call go#cmd#Build(0)
+  endif
+endfunction
 
+autocmd FileType go nmap <leader>b :<C-u>call <SID>build_go_files()<CR>
+
+map <C-n> :cnext<CR>
+map <C-m> :cprevious<CR>
+autocmd BufWritePre *.go :call LanguageClient#textDocument_formatting_sync()
+autocmd BufNewFile,BufRead *.go setlocal noexpandtab tabstop=4 shiftwidth=4 
+nnoremap <leader>a :cclose<CR>
+autocmd FileType go nmap <leader>b  <Plug>(go-build)
+autocmd FileType go nmap <leader>r  <Plug>(go-run)
+autocmd FileType go nmap <leader>t  <Plug>(go-test)
+autocmd FileType go nmap <Leader>c <Plug>(go-coverage-toggle)
+autocmd FileType go nmap <Leader>i <Plug>(go-info)
 "--------------
 " coc.nvim推荐的配置--------------------
 "--------------
@@ -252,9 +269,9 @@ command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organize
 nnoremap <silent><nowait> <space>a  :<C-u>CocList diagnostics<cr>
 
 
-"--------------
-" crip config
-"--------------
+" "--------------
+" " crip config
+" "--------------
 let g:ctrlp_map = '<c-p>'
 let g:ctrlp_cmd = 'CtrlP /Users/jim/Workdata/goland/src/jspp'
 let g:ctrlp_working_path_mode = 'w'
@@ -285,6 +302,7 @@ command!  -bang -nargs=* RG   call fzf#vim#grep2("rg  --ignore-file /Users/jim/.
 "--------------
 " LeaderF start
 "--------------
+let mapleader=";" 
 let g:Lf_CommandMap = {'<C-K>': ['<Up>'], '<C-J>': ['<Down>']}
 let g:Lf_ShowDevIcons = 0
 let g:Lf_WorkingDirectoryMode = 'a'
@@ -406,3 +424,4 @@ if (empty($TMUX))
     set termguicolors
   endif
 endif
+
