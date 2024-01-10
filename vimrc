@@ -99,11 +99,11 @@ set smartindent
 set cindent                                                        
 set termguicolors
 set autowrite
+set nospell
+set foldmethod=indent
 
-"highlight Folded guibg=NONE guifg=NONE
-"highlight FoldColumn guibg=NONE guifg=NONE
-"set paste
-set foldmethod=manual
+highlight Folded guibg=NONE guifg=NONE
+highlight FoldColumn guibg=NONE guifg=NONE
 
 syntax on                                                                                                            
 filetype plugin indent on 
@@ -111,6 +111,11 @@ filetype plugin indent on
 let g:netrw_winsize = 25
 let g:auto_save = 1
 let g:auto_save_events = ["InsertLeave", "TextChanged", "TextChangedI", "CursorHoldI", "CompleteDone"]
+
+let g:rehash256 = 1
+let g:molokai_original = 1
+colorscheme molokai
+set updatetime=100
 
 nmap <Tab> :bnext<Return>
 nmap <S-Tab> :bprev<Return>
@@ -182,12 +187,6 @@ let g:go_highlight_operators = 1
 let g:go_highlight_extra_types = 1
 let g:go_highlight_build_constraints = 1
 let g:go_highlight_generate_tags = 1
-
-let g:rehash256 = 1
-let g:molokai_original = 1
-colorscheme molokai
-set updatetime=100
-
 function! s:build_go_files()
   let l:file = expand('%')
   if l:file =~# '^\f\+_test\.go$'
@@ -196,9 +195,7 @@ function! s:build_go_files()
     call go#cmd#Build(0)
   endif
 endfunction
-
 autocmd FileType go nmap <leader>b :<C-u>call <SID>build_go_files()<CR>
-
 map <C-n> :cnext<CR>
 map <C-m> :cprevious<CR>
 autocmd BufWritePre *.go :call LanguageClient#textDocument_formatting_sync()
@@ -209,6 +206,7 @@ autocmd FileType go nmap <leader>r  <Plug>(go-run)
 autocmd FileType go nmap <leader>t  <Plug>(go-test)
 autocmd FileType go nmap <Leader>c <Plug>(go-coverage-toggle)
 autocmd FileType go nmap <Leader>i <Plug>(go-info)
+
 "--------------
 " coc.nvim推荐的配置--------------------
 "--------------
