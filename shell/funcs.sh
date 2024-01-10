@@ -155,14 +155,14 @@ function ip() {
 function help() {
     echo "Automation Script"
     echo
-    echo "get log:               a log usersv [-p | --pipe pipe] [-o | --option option]"
-    echo "sync config:           a update-git-hook"
-    echo "show env path:         a print-env-path"
-    echo "show env go:           a print-env-go"
-    echo "show env:              a print-env"
-    echo "forward port to local: a port-forward"
-    echo "show ip:               a ip"
-    echo "show help:             a help"
+    echo -e "    get log:               a log usersv [-p | --pipe pipe] [-o | --option option]"
+    echo -e "    sync config:           a update-git-hook"
+    echo -e "    show env path:         a print-env-path"
+    echo -e "    show env go:           a print-env-go"
+    echo -e "    show env:              a print-env"
+    echo -e "    forward port to local: a port-forward"
+    echo -e "    show ip:               a ip"
+    echo -e "    show help:             a help"
     echo
 }
 
