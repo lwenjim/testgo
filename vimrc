@@ -1,44 +1,48 @@
+" Plug 'junegunn/seoul256.vim'
+" Plug 'joshdick/onedark.vim'
+" Plug 'fatih/molokai'
+" Plug 'navarasu/onedark.nvim'
+" Plug 'olimorris/onedarkpro.nvim'  
+" Plug 'NLKNguyen/papercolor-theme'
+" Plug 'dense-analysis/ale'
+" Plug 'vim-airline/vim-airline'
+" Plug 'vim-airline/vim-airline-themes'
+" Plug 'josa42/coc-sh'
+" Plug 'kana/vim-textobj-user'
+" Plug 'kana/vim-textobj-indent'
+" Plug 'kana/vim-textobj-syntax'
+" Plug 'kana/vim-textobj-function', { 'for':['c', 'cpp', 'vim', 'java'] }
+" Plug 'sgur/vim-textobj-parameter'
+" Plug 'voldikss/vim-floaterm'
+" Plug 'scrooloose/nerdtree'
+" Plug 'preservim/tagbar'
+" Plug 'skywind3000/quickmenu.vim'  
+" Plug 'voldikss/vim-floaterm' "浮窗
+" Plug 'junegunn/vim-easy-align' "轻松对齐
+" Plug 'tpope/vim-fireplace', { 'for': 'clojure' }  
+" Plug 'rdnetto/YCM-Generator', { 'branch': 'stable' }
+" Plug 'nsf/gocode', { 'tag': 'v.20150303', 'rtp': 'vim' }
+" Plug 'rakr/vim-one'
+" Plug 'nvim-treesitter/nvim-treesitter'
+" Plug 'neovim/nvim-lspconfig' "nvim
+" Plug 'ray-x/go.nvim'
+" Plug 'ray-x/guihua.lua' 
+" Plug 'ray-x/aurora'
+
 call plug#begin()
  Plug 'neoclide/coc.nvim', {'branch': 'release'}
  Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
  Plug 'ludovicchabant/vim-gutentags'
  Plug 'AndrewRadev/splitjoin.vim'
- Plug 'SirVer/ultisnips'
- Plug 'fatih/molokai'
+ Plug 'tomasr/molokai'
  Plug 'ctrlpvim/ctrlp.vim'
  Plug 'Yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
  Plug 'airblade/vim-rooter'
- Plug 'rakr/vim-one'
  Plug 'jlanzarotta/bufexplorer'
- Plug 'scrooloose/nerdtree'
- Plug 'preservim/tagbar'
  Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
  Plug 'junegunn/fzf.vim'
  Plug 'SirVer/ultisnips'
  Plug 'honza/vim-snippets'
- Plug 'junegunn/seoul256.vim'
- Plug 'joshdick/onedark.vim'
- Plug 'voldikss/vim-floaterm'
- Plug 'junegunn/vim-easy-align'
- Plug 'NLKNguyen/papercolor-theme'
- Plug 'junegunn/vim-easy-align'
- Plug 'skywind3000/quickmenu.vim'  
- Plug 'tpope/vim-fireplace', { 'for': 'clojure' }  
- Plug 'rdnetto/YCM-Generator', { 'branch': 'stable' }
- Plug 'nsf/gocode', { 'tag': 'v.20150303', 'rtp': 'vim' }
- Plug 'kana/vim-textobj-user'
- Plug 'kana/vim-textobj-indent'
- Plug 'kana/vim-textobj-syntax'
- Plug 'kana/vim-textobj-function', { 'for':['c', 'cpp', 'vim', 'java'] }
- Plug 'sgur/vim-textobj-parameter'
- Plug 'voldikss/vim-floaterm'
- Plug 'nvim-treesitter/nvim-treesitter'
- Plug 'neovim/nvim-lspconfig' "nvim
- Plug 'ray-x/go.nvim'
- Plug 'ray-x/guihua.lua' 
- Plug 'ray-x/aurora'
- Plug 'navarasu/onedark.nvim'
- Plug 'olimorris/onedarkpro.nvim'  
  Plug 'autozimu/LanguageClient-neovim', { 'branch': 'next', 'do': 'bash install.sh'}
 call plug#end()
 
@@ -101,7 +105,17 @@ set termguicolors
 set autowrite
 set nospell
 set foldmethod=indent
+set foldlevelstart=99
+set foldenable              " 开始折叠
+set foldmethod=syntax       " 设置语法折叠
+set foldcolumn=0            " 设置折叠区域的宽度
+setlocal foldlevel=1        " 设置折叠层数为
+set foldlevelstart=99       " 打开文件是默认不折叠代码
 
+"set foldclose=all          " 设置为自动关闭折叠                
+nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zo')<CR>
+                            " 用空格键来开关折叠
+                            
 highlight Folded guibg=NONE guifg=NONE
 highlight FoldColumn guibg=NONE guifg=NONE
 
@@ -365,11 +379,6 @@ let g:onedark_config = {
 \ } 
 
 "--------------
-" onedark
-"--------------
-let g:airline_theme='one'
-
-"--------------
 " vim-floaterm配置
 "-------------- 
 nnoremap   <silent>   <F7>    :FloatermNew --height=0.9 --position=bottomright<CR>
@@ -380,32 +389,8 @@ nnoremap   <silent>   <F9>    :FloatermNext<CR>
 tnoremap   <silent>   <F9>    <C-\><C-n>:FloatermNext<CR>
 nnoremap   <silent>   <F2>   :FloatermToggle<CR>
 tnoremap   <silent>   <F2>   <C-\><C-n>:FloatermToggle<CR>
-" hi Floaterm guibg=black
-" hi FloatermBorder guibg=orange guifg=cyan
-" hi FloatermNC guifg=gray
 command! Rg FloatermNew --width=0.8 --height=0.8 rg
 nmap <leader>rg :Rg<CR>
-
-"--------------
-" NERDTree配置
-"-------------- 
-" 打开/关闭 快捷键配置，通过快捷键ctr + n，进行项目树的切换
-nmap ,q :NERDTreeToggle<CR>
-" 进入选中的目录中
-nmap ,d cdCD
-" 当打开vim无指定文件时，自动打开项目树
-autocmd StdinReadPre * let s:std_in=1
-autocmd VimEnter * if argc() == 0 && !exists("s:std_in") | NERDTree | endif
-" 当所有文件都关闭时，自动关闭项目树窗格
-autocmd bufenter * if (winnr("$") == 1 && exists("b:NERDTree") && b:NERDTree.isTabTree()) | q | endif
-" 不显示下述文件
-let NERDTreeIgnore=['\.pyc$', '\~$', 'node_modules'] "ignore files in NERDTree
-" 不显示项目树上额外的信息，例如帮助、提示什么的
-let NERDTreeMinimalUI=1
-" 更改默认箭头
-let g:NERDTreeDirArrowExpandable = '+'
-let g:NERDTreeDirArrowCollapsible = '-'
-let NERDTreeWinSize=20
 
 "--------------
 " TagBar配置
@@ -422,4 +407,3 @@ if (empty($TMUX))
     set termguicolors
   endif
 endif
-
