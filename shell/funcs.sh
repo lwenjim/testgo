@@ -263,3 +263,41 @@ function print-env-go () {
         printf ${template} "${item[0]}" "${item[1]}"
     done
 }
+
+function workspace-gowork-sync () {
+    filename=/tmp/go.work
+    rm -f $filename
+    data=(
+        openapi 
+        internal-tools 
+        pushersv 
+        adminsv 
+        authsv 
+        edgesv 
+        messagesv 
+        squaresv 
+        uploadsv 
+        akita-go 
+        deliversv 
+        favoritesv 
+        groupsv 
+        momentsv 
+        paysv 
+        smssv 
+        usersv 
+        testgo
+    )
+    {
+        echo -e  "go 1.21\n\nuse " 
+        echo  "(" 
+        for i in "${data[@]}"; do 
+            echo -e "\t../$i"
+        done 
+        echo  ")" 
+    } >> $filename
+
+    cat -p $filename
+    for i in "${data[@]}"; do 
+        echo cp -f /tmp/go.work "$GOPATH/src/jspp/$i/go.work"
+    done
+}
