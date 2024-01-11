@@ -295,7 +295,6 @@ function workspace-gowork-sync () {
         done 
         echo  ")" 
     } >> $filename
-
     cat -p $filename
     for i in "${data[@]}"; do 
         echo cp -f /tmp/go.work "$GOPATH/src/jspp/$i/go.work"
