@@ -105,38 +105,29 @@ set termguicolors
 set autowrite
 set nospell
 set foldmethod=indent
-set foldlevelstart=99
 set foldenable              " 开始折叠
 set foldmethod=syntax       " 设置语法折叠
 set foldcolumn=0            " 设置折叠区域的宽度
 setlocal foldlevel=1        " 设置折叠层数为
 set foldlevelstart=99       " 打开文件是默认不折叠代码
+set updatetime=100
 
-"set foldclose=all          " 设置为自动关闭折叠                
-nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zo')<CR>
-                            " 用空格键来开关折叠
-                            
 highlight Folded guibg=NONE guifg=NONE
 highlight FoldColumn guibg=NONE guifg=NONE
-
 syntax on                                                                                                            
 filetype plugin indent on 
-
 let g:netrw_winsize = 25
 let g:auto_save = 1
 let g:auto_save_events = ["InsertLeave", "TextChanged", "TextChangedI", "CursorHoldI", "CompleteDone"]
-
 let g:rehash256 = 1
 let g:molokai_original = 1
 colorscheme molokai
-set updatetime=100
-
 nmap <Tab> :bnext<Return>
 nmap <S-Tab> :bprev<Return>
 nnoremap <space> za
 vnoremap <c-y> "+y
 nnoremap <c-p> "+p
-
+nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zo')<CR>
 
 "--------------
 " gutentags配置
@@ -152,9 +143,9 @@ if !isdirectory(s:vim_tags)
    silent! call mkdir(s:vim_tags, 'p')
 endif
 
-"--------------
-" vim-go配置
-"--------------
+""--------------
+"" vim-go配置
+""--------------
 let g:go_imports_autosave=0
 map <F2> :GoFillStruct<cr>
 map <F3> :GoAlternate<cr>
@@ -378,32 +369,17 @@ let g:onedark_config = {
   \ },
 \ } 
 
-"--------------
-" vim-floaterm配置
-"-------------- 
-nnoremap   <silent>   <F7>    :FloatermNew --height=0.9 --position=bottomright<CR>
-tnoremap   <silent>   <F7>    <C-\><C-n>:FloatermNew --height=0.9 --position=bottomright<CR>
-nnoremap   <silent>   <F8>    :FloatermPrev<CR>
-tnoremap   <silent>   <F8>    <C-\><C-n>:FloatermPrev<CR>
-nnoremap   <silent>   <F9>    :FloatermNext<CR>
-tnoremap   <silent>   <F9>    <C-\><C-n>:FloatermNext<CR>
-nnoremap   <silent>   <F2>   :FloatermToggle<CR>
-tnoremap   <silent>   <F2>   <C-\><C-n>:FloatermToggle<CR>
-command! Rg FloatermNew --width=0.8 --height=0.8 rg
-nmap <leader>rg :Rg<CR>
+""--------------
+"" vim-floaterm配置
+""-------------- 
+"nnoremap   <silent>   <F7>    :FloatermNew --height=0.9 --position=bottomright<CR>
+"tnoremap   <silent>   <F7>    <C-\><C-n>:FloatermNew --height=0.9 --position=bottomright<CR>
+"nnoremap   <silent>   <F8>    :FloatermPrev<CR>
+"tnoremap   <silent>   <F8>    <C-\><C-n>:FloatermPrev<CR>
+"nnoremap   <silent>   <F9>    :FloatermNext<CR>
+"tnoremap   <silent>   <F9>    <C-\><C-n>:FloatermNext<CR>
+"nnoremap   <silent>   <F2>   :FloatermToggle<CR>
+"tnoremap   <silent>   <F2>   <C-\><C-n>:FloatermToggle<CR>
+"command! Rg FloatermNew --width=0.8 --height=0.8 rg
+"nmap <leader>rg :Rg<CR>
 
-"--------------
-" TagBar配置
-"-------------- 
-map ,t :TagbarToggle<CR>
-let g:tagbar_width=20
-let g:tagbar_iconchars = ['+', '-']
-autocmd BufReadPost *.cpp,*.c,*.h,*.hpp,*.cc,*.cxx call tagbar#autoopen()
-if (empty($TMUX))
-  if (has("nvim"))
-    let $NVIM_TUI_ENABLE_TRUE_COLOR=1
-  endif
-  if (has("termguicolors"))
-    set termguicolors
-  endif
-endif
