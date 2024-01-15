@@ -1,45 +1,49 @@
+" Plug 'junegunn/seoul256.vim'
+" Plug 'joshdick/onedark.vim'
+" Plug 'fatih/molokai'
+" Plug 'navarasu/onedark.nvim'
+" Plug 'olimorris/onedarkpro.nvim'  
+" Plug 'NLKNguyen/papercolor-theme'
+" Plug 'dense-analysis/ale'
+" Plug 'vim-airline/vim-airline'
+" Plug 'vim-airline/vim-airline-themes'
+" Plug 'josa42/coc-sh'
+" Plug 'kana/vim-textobj-user'
+" Plug 'kana/vim-textobj-indent'
+" Plug 'kana/vim-textobj-syntax'
+" Plug 'kana/vim-textobj-function', { 'for':['c', 'cpp', 'vim', 'java'] }
+" Plug 'sgur/vim-textobj-parameter'
+" Plug 'voldikss/vim-floaterm'
+" Plug 'scrooloose/nerdtree'
+" Plug 'preservim/tagbar'
+" Plug 'skywind3000/quickmenu.vim'  
+" Plug 'voldikss/vim-floaterm' "浮窗
+" Plug 'junegunn/vim-easy-align' "轻松对齐
+" Plug 'tpope/vim-fireplace', { 'for': 'clojure' }  
+" Plug 'rdnetto/YCM-Generator', { 'branch': 'stable' }
+" Plug 'nsf/gocode', { 'tag': 'v.20150303', 'rtp': 'vim' }
+" Plug 'rakr/vim-one'
+" Plug 'nvim-treesitter/nvim-treesitter'
+" Plug 'neovim/nvim-lspconfig' "nvim
+" Plug 'ray-x/go.nvim'
+" Plug 'ray-x/guihua.lua' 
+" Plug 'ray-x/aurora'
+" Plug 'autozimu/LanguageClient-neovim', { 'branch': 'next', 'do': 'bash install.sh'}
+
 call plug#begin()
  Plug 'neoclide/coc.nvim', {'branch': 'release'}
  Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
  Plug 'ludovicchabant/vim-gutentags'
  Plug 'AndrewRadev/splitjoin.vim'
- Plug 'SirVer/ultisnips'
- Plug 'fatih/molokai'
+ Plug 'tomasr/molokai'
  Plug 'ctrlpvim/ctrlp.vim'
  Plug 'Yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
  Plug 'airblade/vim-rooter'
- Plug 'rakr/vim-one'
  Plug 'jlanzarotta/bufexplorer'
- Plug 'scrooloose/nerdtree'
- Plug 'preservim/tagbar'
  Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
  Plug 'junegunn/fzf.vim'
  Plug 'SirVer/ultisnips'
  Plug 'honza/vim-snippets'
- Plug 'junegunn/seoul256.vim'
- Plug 'joshdick/onedark.vim'
- Plug 'voldikss/vim-floaterm'
- Plug 'junegunn/vim-easy-align'
- Plug 'NLKNguyen/papercolor-theme'
- Plug 'junegunn/vim-easy-align'
- Plug 'skywind3000/quickmenu.vim'  
- Plug 'tpope/vim-fireplace', { 'for': 'clojure' }  
- Plug 'rdnetto/YCM-Generator', { 'branch': 'stable' }
- Plug 'nsf/gocode', { 'tag': 'v.20150303', 'rtp': 'vim' }
- Plug 'kana/vim-textobj-user'
- Plug 'kana/vim-textobj-indent'
- Plug 'kana/vim-textobj-syntax'
- Plug 'kana/vim-textobj-function', { 'for':['c', 'cpp', 'vim', 'java'] }
- Plug 'sgur/vim-textobj-parameter'
- Plug 'voldikss/vim-floaterm'
- Plug 'nvim-treesitter/nvim-treesitter'
- Plug 'neovim/nvim-lspconfig' "nvim
- Plug 'ray-x/go.nvim'
- Plug 'ray-x/guihua.lua' 
- Plug 'ray-x/aurora'
- Plug 'navarasu/onedark.nvim'
- Plug 'olimorris/onedarkpro.nvim'  
- Plug 'autozimu/LanguageClient-neovim', { 'branch': 'next', 'do': 'bash install.sh'}
 call plug#end()
 
 "--------------
@@ -101,28 +105,29 @@ set termguicolors
 set autowrite
 set nospell
 set foldmethod=indent
+set foldenable              " 开始折叠
+set foldmethod=syntax       " 设置语法折叠
+set foldcolumn=0            " 设置折叠区域的宽度
+setlocal foldlevel=1        " 设置折叠层数为
+set foldlevelstart=99       " 打开文件是默认不折叠代码
+set updatetime=100
 
 highlight Folded guibg=NONE guifg=NONE
 highlight FoldColumn guibg=NONE guifg=NONE
-
 syntax on                                                                                                            
 filetype plugin indent on 
-
 let g:netrw_winsize = 25
 let g:auto_save = 1
 let g:auto_save_events = ["InsertLeave", "TextChanged", "TextChangedI", "CursorHoldI", "CompleteDone"]
-
 let g:rehash256 = 1
 let g:molokai_original = 1
 colorscheme molokai
-set updatetime=100
-
 nmap <Tab> :bnext<Return>
 nmap <S-Tab> :bprev<Return>
 nnoremap <space> za
 vnoremap <c-y> "+y
 nnoremap <c-p> "+p
-
+nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zo')<CR>
 
 "--------------
 " gutentags配置
@@ -138,9 +143,9 @@ if !isdirectory(s:vim_tags)
    silent! call mkdir(s:vim_tags, 'p')
 endif
 
-"--------------
-" vim-go配置
-"--------------
+""--------------
+"" vim-go配置
+""--------------
 let g:go_imports_autosave=0
 map <F2> :GoFillStruct<cr>
 map <F3> :GoAlternate<cr>
@@ -198,7 +203,7 @@ endfunction
 autocmd FileType go nmap <leader>b :<C-u>call <SID>build_go_files()<CR>
 map <C-n> :cnext<CR>
 map <C-m> :cprevious<CR>
-autocmd BufWritePre *.go :call LanguageClient#textDocument_formatting_sync()
+"autocmd BufWritePre *.go :call LanguageClient#textDocument_formatting_sync()
 autocmd BufNewFile,BufRead *.go setlocal noexpandtab tabstop=4 shiftwidth=4 
 nnoremap <leader>a :cclose<CR>
 autocmd FileType go nmap <leader>b  <Plug>(go-build)
@@ -364,62 +369,17 @@ let g:onedark_config = {
   \ },
 \ } 
 
-"--------------
-" onedark
-"--------------
-let g:airline_theme='one'
-
-"--------------
-" vim-floaterm配置
-"-------------- 
-nnoremap   <silent>   <F7>    :FloatermNew --height=0.9 --position=bottomright<CR>
-tnoremap   <silent>   <F7>    <C-\><C-n>:FloatermNew --height=0.9 --position=bottomright<CR>
-nnoremap   <silent>   <F8>    :FloatermPrev<CR>
-tnoremap   <silent>   <F8>    <C-\><C-n>:FloatermPrev<CR>
-nnoremap   <silent>   <F9>    :FloatermNext<CR>
-tnoremap   <silent>   <F9>    <C-\><C-n>:FloatermNext<CR>
-nnoremap   <silent>   <F2>   :FloatermToggle<CR>
-tnoremap   <silent>   <F2>   <C-\><C-n>:FloatermToggle<CR>
-" hi Floaterm guibg=black
-" hi FloatermBorder guibg=orange guifg=cyan
-" hi FloatermNC guifg=gray
-command! Rg FloatermNew --width=0.8 --height=0.8 rg
-nmap <leader>rg :Rg<CR>
-
-"--------------
-" NERDTree配置
-"-------------- 
-" 打开/关闭 快捷键配置，通过快捷键ctr + n，进行项目树的切换
-nmap ,q :NERDTreeToggle<CR>
-" 进入选中的目录中
-nmap ,d cdCD
-" 当打开vim无指定文件时，自动打开项目树
-autocmd StdinReadPre * let s:std_in=1
-autocmd VimEnter * if argc() == 0 && !exists("s:std_in") | NERDTree | endif
-" 当所有文件都关闭时，自动关闭项目树窗格
-autocmd bufenter * if (winnr("$") == 1 && exists("b:NERDTree") && b:NERDTree.isTabTree()) | q | endif
-" 不显示下述文件
-let NERDTreeIgnore=['\.pyc$', '\~$', 'node_modules'] "ignore files in NERDTree
-" 不显示项目树上额外的信息，例如帮助、提示什么的
-let NERDTreeMinimalUI=1
-" 更改默认箭头
-let g:NERDTreeDirArrowExpandable = '+'
-let g:NERDTreeDirArrowCollapsible = '-'
-let NERDTreeWinSize=20
-
-"--------------
-" TagBar配置
-"-------------- 
-map ,t :TagbarToggle<CR>
-let g:tagbar_width=20
-let g:tagbar_iconchars = ['+', '-']
-autocmd BufReadPost *.cpp,*.c,*.h,*.hpp,*.cc,*.cxx call tagbar#autoopen()
-if (empty($TMUX))
-  if (has("nvim"))
-    let $NVIM_TUI_ENABLE_TRUE_COLOR=1
-  endif
-  if (has("termguicolors"))
-    set termguicolors
-  endif
-endif
+""--------------
+"" vim-floaterm配置
+""-------------- 
+"nnoremap   <silent>   <F7>    :FloatermNew --height=0.9 --position=bottomright<CR>
+"tnoremap   <silent>   <F7>    <C-\><C-n>:FloatermNew --height=0.9 --position=bottomright<CR>
+"nnoremap   <silent>   <F8>    :FloatermPrev<CR>
+"tnoremap   <silent>   <F8>    <C-\><C-n>:FloatermPrev<CR>
+"nnoremap   <silent>   <F9>    :FloatermNext<CR>
+"tnoremap   <silent>   <F9>    <C-\><C-n>:FloatermNext<CR>
+"nnoremap   <silent>   <F2>   :FloatermToggle<CR>
+"tnoremap   <silent>   <F2>   <C-\><C-n>:FloatermToggle<CR>
+"command! Rg FloatermNew --width=0.8 --height=0.8 rg
+"nmap <leader>rg :Rg<CR>
 
