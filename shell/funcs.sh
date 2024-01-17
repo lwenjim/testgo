@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2206 disable=SC2068 disable=SC2086 disable=SC1091 disable=SC2317 disable=SC1090 disable=SC2090 disable=SC2089 disable=SC2059
+# shellcheck disable=SC2206 disable=SC2068 disable=SC2086 disable=SC1091 disable=SC2317 disable=SC1090 disable=SC2090 disable=SC2089 disable=SC2059  disable=SC2046
 
 declare -A ServiceServers=(
     ["mongo"]=27017
@@ -46,7 +46,7 @@ function log() {
     o:,option:,
     p:,pipe:
     "
-    if [ "$service" = "" ];then
+    if [ "$service" = "" ]; then
         help
         return
     fi
@@ -110,13 +110,13 @@ function log() {
 }
 
 function lprint() {
-    echo "$1" 
+    echo "$1"
 }
 
 function port-forward() {
     ps aux | pgrep kube | awk '{print "kill -9 " $1}' | sudo bash
     template="%-19s %-30s %-10s\n"
-    printf "${template}" "服务名称"   "环境变量" "    变量值"
+    printf "${template}" "服务名称" "环境变量" "    变量值"
     for server in "${!ServiceServers[@]}"; do
         port-forward-simple "$server" "${ServiceServers[$server]}"
     done
@@ -232,7 +232,7 @@ function print-env-path() {
     done
 }
 
-function print-env () {
+function print-env() {
     IFS=$'\n'
     data=$(env)
     arr=($data)
@@ -248,7 +248,7 @@ function print-env () {
     done
 }
 
-function print-env-go () {
+function print-env-go() {
     IFS=$'\n'
     data=$(go env)
     arr=($data)
@@ -264,40 +264,166 @@ function print-env-go () {
     done
 }
 
-function workspace-gowork-sync () {
+function workspace-gowork-sync() {
     filename=/tmp/go.work
     rm -f $filename
     data=(
-        openapi 
-        internal-tools 
-        pushersv 
-        adminsv 
-        authsv 
-        edgesv 
-        messagesv 
-        squaresv 
-        uploadsv 
-        akita-go 
-        deliversv 
-        favoritesv 
-        groupsv 
-        momentsv 
-        paysv 
-        smssv 
-        usersv 
+        openapi
+        internal-tools
+        pushersv
+        adminsv
+        authsv
+        edgesv
+        messagesv
+        squaresv
+        uploadsv
+        akita-go
+        deliversv
+        favoritesv
+        groupsv
+        momentsv
+        paysv
+        smssv
+        usersv
         testgo
     )
     {
-        echo -e  "go 1.21\n\nuse " 
-        echo  "(" 
-        for i in "${data[@]}"; do 
+        echo -e "go 1.21\n\nuse "
+        echo "("
+        for i in "${data[@]}"; do
             echo -e "\t../$i"
-        done 
-        echo  ")" 
-    } >> $filename
+        done
+        echo ")"
+    } >>$filename
 
     cat -p $filename
-    for i in "${data[@]}"; do 
+    for i in "${data[@]}"; do
         echo cp -f /tmp/go.work "$GOPATH/src/jspp/$i/go.work"
     done
+}
+
+function solitaire() {
+    userQrcode=MAlHDK5Sg
+    groupQrcode=O4W1DKcSg
+    domain=https://devwww.jspp.com
+    getinfoResp=$(curl --silent "$domain/solitaire/getinfo?user_qrcode=$userQrcode")
+    echo $getinfoResp
+    code=$(echo $getinfoResp | jq '.res')
+    if [[ "$code" != "200" ]]; then
+        echo "failed for /solitaire/getinfo"
+        return
+    fi
+
+    addResp=$(curl --silent -d '
+    {
+        "title": "abc",
+        "user_qrcode": "'$userQrcode'",
+        "group_qrcode": "'$groupQrcode'",
+        "content": [
+            {
+            "content": "abc"
+            }
+        ],
+        "example": "abc",
+        "extra_info": "abc"
+    }' "$domain/solitaire/add")
+    echo $addResp
+    code=$(echo $addResp | jq '.res')
+    if [[ "$code" != "200" ]]; then
+        echo "failed for /solitaire/add"
+        return
+    fi
+    topicQrcode=$(echo $addResp | jq '.data' | tr -d '"')
+
+    detailResp=$(curl --silent "$domain/solitaire/detail?user_qrcode=$userQrcode&topic_qrcode=$topicQrcode")
+    echo $detailResp
+    code=$(echo $detailResp | jq '.res')
+    if [[ "$code" != "200" ]]; then
+        echo "failed for /solitaire/detail"
+        return
+    fi
+
+    postResp=$(curl --silent -d '
+        {
+            "user_qrcode": "'$userQrcode'",
+            "topic_qrcode": "'$topicQrcode'",
+            "content": [
+                {
+                    "content": "'$(uuidgen)'"
+                }
+            ]
+        }' "$domain/solitaire/post")
+    echo $postResp
+    code=$(echo $postResp | jq '.res')
+    if [[ "$code" != "200" ]]; then
+        echo "failed for /solitaire/post"
+        return
+    fi
+}
+
+function vote() {
+    userQrcode=MAlHDK5Sg
+    groupQrcode=O4W1DKcSg
+    domain=https://devwww.jspp.com
+    # domain=http://localhost:18083
+    addResp=$(curl --silent -d '{
+            "name": "'$(openssl rand -base64 8)'",
+            "user_qrcode": "'$userQrcode'",
+            "group_qrcode": "'$groupQrcode'",
+            "end_time": '$(date -v+5d +"%s")',
+            "is_multi_select": true,
+            "is_anonymous": true,
+            "option": [
+                {
+                    "name": "中国队",
+                    "image": "https://img.jspp.com/xxx/xxx.png"
+                },
+                {
+                    "name": "美国队",
+                    "image": "https://img.jspp.com/xxx/xxx222.png"
+                }
+            ]
+        }' $domain/vote/add)
+    echo $addResp
+    code=$(echo $addResp | jq '.res')
+    if [[ "$code" != "200" ]]; then
+        echo "failed for /vote/add"
+        return
+    fi
+    topicQrcode=$(echo $addResp | jq '.data' | tr -d '"')
+
+    listResp=$(curl -d '{"user_qrcode":"'$userQrcode'","group_qrcode":"'$groupQrcode'"}' --silent  $domain/vote/list)
+    echo $listResp
+    code=$(echo $listResp | jq '.res')
+    if [[ "$code" != "200" ]]; then
+        echo "failed for /vote/list"
+        return
+    fi
+
+    recordResp=$(curl --silent -d '
+        {
+            "user_qrcode": "'$userQrcode'",
+            "topic_qrcode": "'$topicQrcode'"
+        }' "$domain/vote/record")
+    echo $recordResp
+    code=$(echo $recordResp | jq '.res')
+    if [[ "$code" != "200" ]]; then
+        echo "failed for /vote/record"
+        return
+    fi
+
+    postResp=$(curl --silent -d '
+        {
+            "user_qrcode": "'$userQrcode'",
+            "topic_qrcode": "'$topicQrcode'",
+            "option_id": [
+                '$(echo $recordResp|jq ".data.options.[0].option.id")'
+            ]
+        }' "$domain/vote/post")
+    echo $postResp
+    code=$(echo $postResp | jq '.res')
+    if [[ "$code" != "200" ]]; then
+        echo "failed for /vote/post"
+        return
+    fi
 }

@@ -1,16 +1,34 @@
 package main
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"strings"
+)
+
+type user struct {
+	Name  trim `json:"name"`
+	Email trim `json:"email"`
+}
+
+type trim string
+
+func (t *trim) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*t = trim(strings.TrimSpace(s))
+	fmt.Printf("these are the strings: '%s'\n", *t)
+	return nil
+}
 
 func main() {
-	msg := "Greetings\nfrom\nTurkey\n"
-
-	var count int
-	for i := 0; i < len(msg); i++ {
-		if msg[i] == '\n' {
-			count++
-		}
+	var users user
+	newUser := `{"name":"random", "email":"random@.        "}`
+	if err := json.Unmarshal([]byte(newUser), &users); err != nil {
+		log.Fatal(err)
 	}
-
-	fmt.Println(count)
+	fmt.Printf("%s", users)
 }
