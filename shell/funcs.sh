@@ -426,6 +426,4 @@ function vote() {
         echo "failed for /vote/post"
         return
     fi
-
-    
 }

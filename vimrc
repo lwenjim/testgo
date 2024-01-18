@@ -29,6 +29,8 @@
 " Plug 'autozimu/LanguageClient-neovim', { 'branch': 'next', 'do': 'bash install.sh'}
 " Plug 'SirVer/ultisnips'
 " Plug 'honza/vim-snippets'
+" Plug 'dense-analysis/ale'
+" Plug 'rhysd/vim-lsp-ale'
 
 call plug#begin()
  Plug 'tomasr/molokai'
@@ -48,8 +50,6 @@ call plug#begin()
  Plug 'neoclide/coc.nvim', {'branch': 'release'}
  Plug 'rust-lang/rust.vim' 
  Plug 'prabirshrestha/vim-lsp' 
- Plug 'dense-analysis/ale'
- Plug 'rhysd/vim-lsp-ale'
 
  Plug 'mattn/vim-lsp-settings'
  Plug 'prabirshrestha/asyncomplete.vim'
@@ -139,6 +139,12 @@ vnoremap <c-y> "+y
 nnoremap <c-p> "+p
 nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zo')<CR>
 
+
+set cursorline
+hi CursorLine   cterm=NONE ctermbg=NONE ctermfg=NONE guibg=NONE guifg=NONE
+
+set cursorcolumn
+hi CursorColumn cterm=NONE ctermbg=NONE ctermfg=NONE guibg=NONE guifg=NONE
 "--------------
 " gutentags配置
 "--------------
@@ -411,3 +417,10 @@ nnoremap <M-r> :RustRun<CR>
 nnoremap <M-t> :RustTest<CR>
 let g:airline#extensions#ale#enabled = 1 
 
+""--------------
+"" airline配置
+""-------------- 
+let g:airline#extensions#tabline#enabled = 1
+let g:airline#extensions#tabline#left_sep = ' '
+let g:airline#extensions#tabline#left_alt_sep = '|'
+let g:airline#extensions#tabline#formatter = 'default'
