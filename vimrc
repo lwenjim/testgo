@@ -27,13 +27,13 @@
 " Plug 'ray-x/guihua.lua' 
 " Plug 'ray-x/aurora'
 " Plug 'autozimu/LanguageClient-neovim', { 'branch': 'next', 'do': 'bash install.sh'}
-" Plug 'SirVer/ultisnips'
-" Plug 'honza/vim-snippets'
 " Plug 'dense-analysis/ale'
 " Plug 'rhysd/vim-lsp-ale'
 
 call plug#begin()
  Plug 'tomasr/molokai'
+ Plug 'SirVer/ultisnips'
+ Plug 'honza/vim-snippets'
  Plug 'vim-airline/vim-airline'
  Plug 'vim-airline/vim-airline-themes'
  Plug 'ctrlpvim/ctrlp.vim'
