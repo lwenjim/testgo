@@ -32,27 +32,25 @@
 
 call plug#begin()
  Plug 'tomasr/molokai'
- Plug 'SirVer/ultisnips'
+" Plug 'SirVer/ultisnips'
  Plug 'honza/vim-snippets'
  Plug 'vim-airline/vim-airline'
  Plug 'vim-airline/vim-airline-themes'
- Plug 'ctrlpvim/ctrlp.vim'
+" Plug 'ctrlpvim/ctrlp.vim'
  Plug 'Yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
- Plug 'airblade/vim-rooter'
- Plug 'jlanzarotta/bufexplorer'
+" Plug 'airblade/vim-rooter'
+" Plug 'jlanzarotta/bufexplorer'
  Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
  Plug 'junegunn/fzf.vim'
- Plug 'ludovicchabant/vim-gutentags'
- 
+" Plug 'ludovicchabant/vim-gutentags'
  Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
- Plug 'AndrewRadev/splitjoin.vim'
-
+" Plug 'AndrewRadev/splitjoin.vim'
  Plug 'neoclide/coc.nvim', {'branch': 'release'}
- Plug 'rust-lang/rust.vim' 
- Plug 'prabirshrestha/vim-lsp' 
-
- Plug 'mattn/vim-lsp-settings'
- Plug 'prabirshrestha/asyncomplete.vim'
+" Plug 'rust-lang/rust.vim' 
+" Plug 'prabirshrestha/vim-lsp' 
+" Plug 'mattn/vim-lsp-settings'
+" Plug 'prabirshrestha/asyncomplete.vim'
+" Plug 'LucHermitte/VimFold4C'
 call plug#end()
 
 "--------------
@@ -115,7 +113,7 @@ set autowrite
 set nospell
 set foldmethod=indent
 set foldenable              " 开始折叠
-set foldmethod=syntax       " 设置语法折叠
+"set foldmethod=syntax       " 设置语法折叠
 set foldcolumn=0            " 设置折叠区域的宽度
 setlocal foldlevel=1        " 设置折叠层数为
 set foldlevelstart=99       " 打开文件是默认不折叠代码
@@ -138,13 +136,17 @@ nnoremap <space> za
 vnoremap <c-y> "+y
 nnoremap <c-p> "+p
 nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zo')<CR>
+nnoremap + zr
+nnoremap _ zM
+nnoremap ] zO
+nnoremap [ zc
 
 
 set cursorline
 hi CursorLine   cterm=NONE ctermbg=NONE ctermfg=NONE guibg=NONE guifg=NONE
-
 set cursorcolumn
 hi CursorColumn cterm=NONE ctermbg=NONE ctermfg=NONE guibg=NONE guifg=NONE
+
 "--------------
 " gutentags配置
 "--------------
@@ -423,4 +425,4 @@ let g:airline#extensions#ale#enabled = 1
 let g:airline#extensions#tabline#enabled = 1
 let g:airline#extensions#tabline#left_sep = ' '
 let g:airline#extensions#tabline#left_alt_sep = '|'
-let g:airline#extensions#tabline#formatter = 'default'
+let g:airline#extensions#tabline#formatter = 'jsformatter'
