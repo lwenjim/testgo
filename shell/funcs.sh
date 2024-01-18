@@ -266,7 +266,7 @@ function print-env-go() {
 
 function workspace-gowork-sync() {
     filename=/tmp/go.work
-    rm -f $filename
+    rm -f $filename >/dev/null 2>&1
     data=(
         openapi
         internal-tools
@@ -426,4 +426,6 @@ function vote() {
         echo "failed for /vote/post"
         return
     fi
+
+    
 }

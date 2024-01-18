@@ -5,8 +5,6 @@
 " Plug 'olimorris/onedarkpro.nvim'  
 " Plug 'NLKNguyen/papercolor-theme'
 " Plug 'dense-analysis/ale'
-" Plug 'vim-airline/vim-airline'
-" Plug 'vim-airline/vim-airline-themes'
 " Plug 'josa42/coc-sh'
 " Plug 'kana/vim-textobj-user'
 " Plug 'kana/vim-textobj-indent'
@@ -29,21 +27,32 @@
 " Plug 'ray-x/guihua.lua' 
 " Plug 'ray-x/aurora'
 " Plug 'autozimu/LanguageClient-neovim', { 'branch': 'next', 'do': 'bash install.sh'}
+" Plug 'SirVer/ultisnips'
+" Plug 'honza/vim-snippets'
 
 call plug#begin()
- Plug 'neoclide/coc.nvim', {'branch': 'release'}
- Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
- Plug 'ludovicchabant/vim-gutentags'
- Plug 'AndrewRadev/splitjoin.vim'
  Plug 'tomasr/molokai'
+ Plug 'vim-airline/vim-airline'
+ Plug 'vim-airline/vim-airline-themes'
  Plug 'ctrlpvim/ctrlp.vim'
  Plug 'Yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
  Plug 'airblade/vim-rooter'
  Plug 'jlanzarotta/bufexplorer'
  Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
  Plug 'junegunn/fzf.vim'
- Plug 'SirVer/ultisnips'
- Plug 'honza/vim-snippets'
+ Plug 'ludovicchabant/vim-gutentags'
+ 
+ Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
+ Plug 'AndrewRadev/splitjoin.vim'
+
+ Plug 'neoclide/coc.nvim', {'branch': 'release'}
+ Plug 'rust-lang/rust.vim' 
+ Plug 'prabirshrestha/vim-lsp' 
+ Plug 'dense-analysis/ale'
+ Plug 'rhysd/vim-lsp-ale'
+
+ Plug 'mattn/vim-lsp-settings'
+ Plug 'prabirshrestha/asyncomplete.vim'
 call plug#end()
 
 "--------------
@@ -121,6 +130,7 @@ let g:auto_save = 1
 let g:auto_save_events = ["InsertLeave", "TextChanged", "TextChangedI", "CursorHoldI", "CompleteDone"]
 let g:rehash256 = 1
 let g:molokai_original = 1
+let $NVIM_COC_LOG_LEVEL = 'trace'
 colorscheme molokai
 nmap <Tab> :bnext<Return>
 nmap <S-Tab> :bprev<Return>
@@ -382,4 +392,22 @@ let g:onedark_config = {
 "tnoremap   <silent>   <F2>   <C-\><C-n>:FloatermToggle<CR>
 "command! Rg FloatermNew --width=0.8 --height=0.8 rg
 "nmap <leader>rg :Rg<CR>
+
+""--------------
+"" rust配置
+""-------------- 
+let g:rustfmt_autosave = 1 
+let g:rustfmt_command = "rustfmt" 
+
+"--------------
+" ale配置
+"-------------- 
+ let g:ale_linters = {'rust': ['cargo', 'clippy'],}
+ let g:ale_fixers = {'rust': ['cargo', 'rustfmt'],}
+ let g:ale_rust_cargo_use_clippy = 1 
+vnoremap <leader>ft :RustFmtRange<CR>
+nnoremap <leader>ft :RustFmt<CR>
+nnoremap <M-r> :RustRun<CR>
+nnoremap <M-t> :RustTest<CR>
+let g:airline#extensions#ale#enabled = 1 
 
