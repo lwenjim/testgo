@@ -29,28 +29,28 @@
 " Plug 'autozimu/LanguageClient-neovim', { 'branch': 'next', 'do': 'bash install.sh'}
 " Plug 'dense-analysis/ale'
 " Plug 'rhysd/vim-lsp-ale'
+" Plug 'LucHermitte/VimFold4C'
+" Plug 'AndrewRadev/splitjoin.vim'
+" Plug 'jlanzarotta/bufexplorer'
+" Plug 'ctrlpvim/ctrlp.vim'
+" Plug 'ludovicchabant/vim-gutentags'
+" Plug 'SirVer/ultisnips'
+" Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
+" Plug 'junegunn/fzf.vim'
 
 call plug#begin()
  Plug 'tomasr/molokai'
-" Plug 'SirVer/ultisnips'
  Plug 'honza/vim-snippets'
  Plug 'vim-airline/vim-airline'
  Plug 'vim-airline/vim-airline-themes'
-" Plug 'ctrlpvim/ctrlp.vim'
  Plug 'Yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
-" Plug 'airblade/vim-rooter'
-" Plug 'jlanzarotta/bufexplorer'
- Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
- Plug 'junegunn/fzf.vim'
-" Plug 'ludovicchabant/vim-gutentags'
+ Plug 'airblade/vim-rooter'
  Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
-" Plug 'AndrewRadev/splitjoin.vim'
  Plug 'neoclide/coc.nvim', {'branch': 'release'}
-" Plug 'rust-lang/rust.vim' 
-" Plug 'prabirshrestha/vim-lsp' 
-" Plug 'mattn/vim-lsp-settings'
-" Plug 'prabirshrestha/asyncomplete.vim'
-" Plug 'LucHermitte/VimFold4C'
+ Plug 'rust-lang/rust.vim' 
+ Plug 'prabirshrestha/vim-lsp' 
+ Plug 'mattn/vim-lsp-settings'
+ Plug 'prabirshrestha/asyncomplete.vim'
 call plug#end()
 
 "--------------

@@ -7,17 +7,11 @@ import (
 	"strings"
 )
 
-// hello world
-// say hello
 type user struct {
 	Name  trim `json:"name"`
 	Email trim `json:"email"`
 }
 
-/*
- * ni hao
- * bu ke yi
- */
 type trim string
 
 func (t *trim) UnmarshalJSON(data []byte) error {
