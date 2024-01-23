@@ -29,10 +29,12 @@ function sync-config() {
     cd ~ || exit 1
     cd $GO_JSPP_WORKSPACE || exit 1
     cd testgo || exit 1
-    cp ~/.vimrc . && cp ~/.bashrc . && cp ~/.zshrc .
-    git add .
-    git commit -m "update config $(date +"%Y-%m-%d %H:%I:%S")"
-    git push
+    cp ~/.vimrc . \
+    && cp ~/.bashrc . \
+    && cp ~/.zshrc . \
+    && git add . \
+    && git commit -m "update config $(date +"%Y-%m-%d %H:%I:%S")" \
+    && git push
 }
 
 function main() {
