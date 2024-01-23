@@ -1,14 +1,5 @@
 #! /usr/bin/env bash
-# shellcheck source=/dev/null
-source "/Users/jim/.profile"
-
-export MAVEN_HOME=/Users/jim/Downloads/apache-maven-3.6.3
-export PATH=$PATH:/Users/jim/pear/bin:~/.composer/vendor/bin
-export PATH=$PATH:/Users/jim/Workdata/goland/bin
-export PATH=$PATH:/Users/jim/Workdata/testphp/bin
-export PATH=$PATH:$MAVEN_HOME/bin
-export M2_HOME=$MAVEN_HOME
-
+# shellcheck source=/dev/null disable=SC2206,2034,1091,2086,1090,2154,1087
 alias encodeURIComponent="xxd -p | tr -d '\n' | sed 's/\(..\)/%\1/g'"
 alias decodeURIComponent="sed 's/%/\\\\x/g' | xargs -0 printf '%b'"
 alias tomysql='mysql -h34.143.177.4 -uroot -p97KIA329dP3z075t'
@@ -41,7 +32,6 @@ alias to-bola-java-pre='gcloud compute ssh --zone "asia-southeast1-b" "bola-java
 alias to-go-ws1='gcloud compute ssh --zone "asia-southeast1-b" "go-ws1"  --project "molten-hall-346505"'
 alias to-go-ws2='gcloud compute ssh --zone "asia-southeast1-b" "go-ws-2"  --project "molten-hall-346505"'
 alias to-kafka='gcloud compute ssh --zone "asia-southeast1-b" "kafka"  --project "molten-hall-346505"'
-#alias pip='/usr/bin/pip3'
 alias jspp-kubectl='kubectl --kubeconfig ${HOME}/.kube/config.fuli -n jspp'
 alias jspp-kubectl-get-pod='kubectl -n jspp get node'
 alias jspp-kubectl-get-pod-name='jspp-kubectl -n jspp get pod|grep name'
@@ -51,14 +41,9 @@ alias ec='/usr/local/bin/emacs'
 alias grep='grep -v grep | grep --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn,.idea,.tox}'
 alias cdd='cd $(find * -type d | fzf)'
 alias gco='git checkout $(git branch -r | fzf)'
-alias fzf.w="fzf --height 40% --layout reverse --info inline --border \
-    --preview 'file {}' --preview-window down:1:noborder \
-    --color 'fg:#bbccdd,fg+:#ddeeff,bg:#334455,preview-bg:#223344,border:#778899'"
-alias fzf.p="fzf --preview 'bat --style=numbers --color=always --line-range :500 {}'"
 alias f="fzf.p"
 alias cat='bat -npp'
 alias ccat='/bin/cat'
-#alias vim='/usr/local/bin/nvim'
 alias rcli='repl redis-cli'
 alias gs='git status'
 alias ga='git add'
@@ -81,181 +66,132 @@ alias gmt='git_merge_to $(get_current_branch)'
 alias gpull='git pull origin $(get_current_branch)'
 alias gpush='git push origin $(get_current_branch)'
 alias rr='rustrover'
+
 # prompt
 ZSH_THEME_GIT_PROMPT_PREFIX="%{$reset_color%}%{$fg[green]%}["
 ZSH_THEME_GIT_PROMPT_SUFFIX="]%{$reset_color%}"
 ZSH_THEME_GIT_PROMPT_DIRTY="%{$fg[red]%}*%{$reset_color%}"
 ZSH_THEME_GIT_PROMPT_CLEAN=""
-# show git branch/tag, or name-rev if on detached head
-parse_git_branch() {
-  (command git symbolic-ref -q HEAD || command git name-rev --name-only --no-undefined --always HEAD) 2>/dev/null
-}
-# show red star if there are uncommitted changes
-parse_git_dirty() {
-  if command git diff-index --quiet HEAD 2> /dev/null; then
-    echo "$ZSH_THEME_GIT_PROMPT_CLEAN"
-  else
-    echo "$ZSH_THEME_GIT_PROMPT_DIRTY"
-  fi
-}
-# if in a git repo, show dirty indicator + git branch
-git_custom_status() {
-  local git_where="$(parse_git_branch)"
-  [ -n "$git_where" ] && echo "$(parse_git_dirty)$ZSH_THEME_GIT_PROMPT_PREFIX${git_where#(refs/heads/|tags/)}$ZSH_THEME_GIT_PROMPT_SUFFIX"
-}
-# show current rbenv version if different from rbenv global
-rbenv_version_status() {
-  local ver=$(rbenv version-name)
-  [ "$(rbenv global)" != "$ver" ] && echo "[$ver]"
-}
-#if which rbenv &> /dev/null; then
-#  RPS1='$(git_custom_status)%{$fg[red]%}$(rbenv_version_status)%{$reset_color%} $EPS1'
-#else
-#  RPS1='$(git_custom_status) $EPS1'
-#fi
-#PROMPT='%{$fg[cyan]%}%~% %(?.%{$fg[green]%}.%{$fg[red]%})%B$%b '
+SDKROOT=$(xcrun --show-sdk-path)
 
-#get_current_branch() {
-#    git symbolic-ref --short -q HEAD
-#}
-#
-#git_merge_to() {
-#    print merge $1 to $2
-#    git checkout $2
-#    git pull origin $(get_current_branch)
-#    vared -p 'Would you like to merge? (y/n) ' -c tmp
-#    if [[ "${tmp}" == "y" ]] then
-#        git merge $1
-#    fi
-#}
-#export GO111MODULE=auto
+export GO_JSPP_WORKSPACE=Workdata/goland/src/jspp
+export MAVEN_HOME=/Users/jim/Downloads/apache-maven-3.6.3
+export M2_HOME=$MAVEN_HOME
 export GOPATH=/Users/jim/Workdata/goland
-export PATH=$GOPATH/bin:$PATH
-#export GOPROXY=https://goproxy.io,direct
 export GOFLAGS=""
 export GOPRIVATE=code.jspp.com
 export GOOS=darwin
 export GOARCH=amd64
-export PATH="$PATH:$HOME/.rvm/bin"
-export LDFLAGS="-L/usr/local/opt/php@7.3/lib"
-export CPPFLAGS="-I/usr/local/opt/php@7.3/include"
-export HOMEBREW_NO_AUTO_UPDATE=true
 export XDEBUG_CONFIG="remote_enable=1 idekey=PHPSTORM remote_host=127.0.0.1 remote_port=9002 remote_autostart=0"
-export SDKROOT="$(xcrun --show-sdk-path)"
-export PATH="/usr/local/opt/qt/bin:$PATH"
-export PATH="/usr/local/k9s_Darwin_amd64:$PATH"
-export LDFLAGS="-L/usr/local/opt/qt/lib"
-export CPPFLAGS="-I/usr/local/opt/qt/include -I/usr/local/opt/pcre2/include"
-export PKG_CONFIG_PATH="/usr/local/opt/qt/lib/pkgconfig"
+export SDKROOT
 export MONGODB_HOME=/usr/local/Cellar/mongodb-community/4.4.3
-export PATH=$PATH:$MONGODB_HOME/bin
+export ERLANG_HOME=/usr/local/Cellar/erlang/24.0.3
 export LUAJIT_LIB=/usr/local/Cellar/openresty/1.15.8.3_1/luajit/lib:q:
 export LUAJIT_INC=/usr/local/Cellar/openresty/1.15.8.3_1/luajit/include/luajit-2.1
 export GO15VENDOREXPERIMENT=1
-[[ -r "/usr/local/etc/profile.d/bash_completion.sh" ]] && . "/usr/local/etc/profile.d/bash_completion.sh"
-export ERLANG_HOME=/usr/local/Cellar/erlang/24.0.3
-export PATH=$PATH:$ERLANG_HOME/bin
 export RABBITMQ_SERVER=/usr/local/Cellar/rabbitmq/3.8.19
-export PATH=$PATH:$RABBITMQ_SERVER/bin
-export PATH=/Users/jim/Downloads:$PATH
-export PATH="/usr/local/opt/make/libexec/gnubin:$PATH"
-export PATH="/Applications/SwitchHosts.app/Contents/MacOS:$PATH"
-export HOMEBREW_NO_AUTO_UPDATE=1
-export PATH=/usr/local/opt/rabbitmq/sbin/:/Users/jim/Downloads/apache-maven-3.6.3/bin:$PATH
 export HOMEBREW_NO_INSTALL_CLEANUP=1
-#export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=true
-export LWENJIM=789
-export LWENJIM3=789
 export HISTSIZE=2000000
-export PATH=/Users/jim/Workdata/protobuf.dart-master/protoc_plugin/bin:$PATH
-export PATH=/usr/local/Cellar/consul/1.16.0/bin:$PATH
 export TERM="xterm-256color"
 export GIPHY_API_KEY=xVXd8j7UxP8Lvn8Dn1aLjLAd5EHYGE31
 export GIPHY_RATING=pg-13
 export HOMEBREW_GITHUB_API_TOKEN=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
 export IDEA_LAUNCHER_DEBUG=true
+export LDFLAGS=
+export CPPFLAGS=
+export PKG_CONFIG_PATH=
+export GOROOT="/usr/local/Cellar/go/1.21.3/libexec"
+export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+export FZF_DEFAULT_COMMAND="fd --exclude={.git,.idea,.vscode,.sass-cache,node_modules,build} --type f"
+export FZF_DEFAULT_OPTS="--height 40% --layout=reverse "
+export KUBEBUILDER_ASSETS="/Users/jim/Library/Application Support/io.kubebuilder.envtest/k8s/1.22.1-darwin-amd64"
+export ENVTEST_INSTALLED_ONLY=true
+export KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT=true
+export HISTFILE=~/.zsh_history
+export HISTCONTROL=ignoredups
+export PROMPT_COMMAND='history -a'
+export VIMCONFIG=/Users/jim/Workdata/nvim-config
+export VIMDATA=~/.local/share/nvim
+export GIN_MODE=release
+export ISABLE_MAGIC_FUNCTIONS=true
+export RUST_BACKTRACE=full
+export ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=60'
+export JMETER_HOME=/usr/local/apache-jmeter-5.1.1
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_321.jdk/Contents/Home
+export CLASSPAHT=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
+export HOMEBREW_NO_AUTO_UPDATE=true
+export HOMEBREW_BOTTLE_DOMAIN=https://mirrors.aliyun.com/homebrew/homebrew-bottles
+export KE_HOME=/Users/jim/Workdata/EFAK
+
+export PATH="/usr/local/sbin:$PATH"
+export PATH="/usr/local/opt/mongodb-community@5.0/bin:$PATH"
+export PATH="$HOME/.jenv/bin:$PATH"
+export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
+export PATH="$PATH:$HOME/.rvm/bin"
+export PATH=$JAVA_HOME/bin:$PATH:
+export PATH="/usr/local/opt/openssl/bin:$PATH:$JMETER_HOME/bin"
+export PATH=$PATH:$KE_HOME/bin
+export PATH="/usr/local/opt/node@18/bin:$PATH"
+export PATH=$PATH:/Users/jim/pear/bin:~/.composer/vendor/bin
+export PATH=$PATH:/Users/jim/Workdata/goland/bin
+export PATH=$PATH:/Users/jim/Workdata/testphp/bin
+export PATH=$PATH:$MAVEN_HOME/bin
+export PATH=$GOPATH/bin:$PATH
+export PATH="$PATH:$HOME/.rvm/bin"
+export PATH="/usr/local/opt/qt/bin:$PATH"
+export PATH="/usr/local/k9s_Darwin_amd64:$PATH"
+export PATH=$PATH:$MONGODB_HOME/bin
+export PATH=$PATH:$ERLANG_HOME/bin
+export PATH=$PATH:$RABBITMQ_SERVER/bin
+export PATH=/Users/jim/Downloads:$PATH
+export PATH="/usr/local/opt/make/libexec/gnubin:$PATH"
+export PATH="/Applications/SwitchHosts.app/Contents/MacOS:$PATH"
+export PATH=/usr/local/opt/rabbitmq/sbin/:/Users/jim/Downloads/apache-maven-3.6.3/bin:$PATH
+export PATH=/Users/jim/Workdata/protobuf.dart-master/protoc_plugin/bin:$PATH
+export PATH=/usr/local/Cellar/consul/1.16.0/bin:$PATH
 export PATH="/Applications/GoLand.app/Contents/MacOS":$PATH
 export PATH="/usr/local/go/bin":$PATH
 export PATH="/usr/local/oh-command-line-tools/bin":$PATH
 export PATH="/usr/local/command-line-tools/bin":$PATH
-#export PATH="/usr/local/opt/python@3.11/libexec/bin":$PATH
 export PATH="/usr/local/Cellar/ctags/5.8_2/bin":$PATH
 export PATH="/usr/local/opt/gnu-getopt/bin":$PATH
 export PATH="/usr/local/opt/gnu-indent/libexec/gnubin":$PATH
-export LDFLAGS=
-export CPPFLAGS=
-export PKG_CONFIG_PATH=
 export PATH=$PATH:$GOPATH/bin
 export PATH="/Users/jim/.cargo/bin":$PATH
-export GOROOT="/usr/local/go"
-#export PATH="/usr/local/Cellar/node/20.7.0/bin":$PATH
 export PATH="/Users/jim/Workdata/rust/dtool/target/debug":$PATH
 export PATH="/usr/local/opt/findutils/libexec/gnubin:$PATH"
-export GOROOT="/usr/local/Cellar/go/1.21.3/libexec"
 export PATH="$GOROOT/bin:$PATH"
-export MANPAGER="sh -c 'col -bx | bat -l man -p'"
-
 export PATH="/usr/local/Cellar/kubernetes-cli/1.28.2/bin":$PATH
 export PATH="/usr/local/Cellar/docker/23.0.1/bin":$PATH
 export PATH="/Applications/RustRover 2023.3 EAP.app/Contents/MacOS":$PATH
 export PATH="/usr/local/opt/binutils/bin:$PATH"
 export PATH="/usr/local/command-line-tools/bin:$PATH"
-source "/Users/jim/.cargo/env"
-
-###############################  Automation Script   ##################################
-
-function a() {
-    /Users/jim/Workdata/goland/src/jspp/testgo/shell/bootstrap.sh "$@"
-}
-
-###---------------------- fzf ----------------------------
-export FZF_DEFAULT_COMMAND="fd --exclude={.git,.idea,.vscode,.sass-cache,node_modules,build} --type f"
-export FZF_DEFAULT_OPTS="--height 40% --layout=reverse "
-
-
-# eval $(minikube docker-env)
-export KUBEBUILDER_ASSETS="/Users/jim/Library/Application Support/io.kubebuilder.envtest/k8s/1.22.1-darwin-amd64"
-export ENVTEST_INSTALLED_ONLY=true
-export KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT=true
 export PATH="/usr/local/Cellar/kubebuilder/3.12.0/bin":$PATH
 export PATH="/Applications/IDA\ Freeware\ 8.3/ida64.app/Contents/MacOS":$PATH
-#export PATH="/Users/jim/Library/Python/3.9/bin":$PATH
-export HISTFILE=~/.zsh_history
-export HISTCONTROL=ignoredups
-export PROMPT_COMMAND='history -a'
+export PATH="/usr/local/Cellar/bash/5.2.15/bin":$PATH
 
+function a() {
+  /Users/jim/Workdata/goland/src/jspp/testgo/shell/bootstrap.sh "$@"
+}
 
-# export VIMCONFIG=~/.config/nvim
-export VIMCONFIG=/Users/jim/Workdata/nvim-config
-export VIMDATA=~/.local/share/nvim
-
-#export DOTNET_ROOT=$HOME/dotnet
-#export PATH=$PATH:$HOME/dotnet
-
-# proxy
 function proxy_on() {
-	export https_proxy=http://127.0.0.1:33210
-	export http_proxy=http://127.0.0.1:33210
-	export no_proxy=127.0.0.1,localhost
-    export HTTP_PROXY=http://127.0.0.1:33210
-    export HTTPS_PROXY=https://127.0.0.1:33210
-    export NO_PROXY=localhost,127.0.0.1
-    echo -e "proxy on"
+  export https_proxy=http://127.0.0.1:33210
+  export http_proxy=http://127.0.0.1:33210
+  export no_proxy=127.0.0.1,localhost
+  export HTTP_PROXY=http://127.0.0.1:33210
+  export HTTPS_PROXY=https://127.0.0.1:33210
+  export NO_PROXY=localhost,127.0.0.1
+  echo -e "proxy on 2"
 }
 
 function proxy_off() {
-	unset https_proxy
-	unset http_proxy
-	unset no_proxy
-    unset HTTP_PROXY
-    unset HTTPS_PROXY
-    unset NO_PROXY
-    unset http_proxy
-    unset https_proxy
-    echo -e "proxy off"
+  unset https_proxy
+  unset http_proxy
+  unset no_proxy
+  unset HTTP_PROXY
+  unset HTTPS_PROXY
+  unset NO_PROXY
+  unset http_proxy
+  unset https_proxy
+  echo -e "proxy off"
 }
-
-export GIN_MODE=release
-export ISABLE_MAGIC_FUNCTIONS=true
-export RUST_BACKTRACE=1
-export RUST_BACKTRACE=full

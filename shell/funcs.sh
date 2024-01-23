@@ -1,4 +1,4 @@
-#!/bin/bash
+#! /usr/bin/env bash
 # shellcheck disable=SC2206 disable=SC2068 disable=SC2086 disable=SC1091 disable=SC2317 disable=SC1090 disable=SC2090 disable=SC2089 disable=SC2059  disable=SC2046
 
 declare -A ServiceServers=(
@@ -24,6 +24,13 @@ declare -A ServiceServers=(
 )
 
 debug=false
+
+function sync-config() {
+    cd ~ || exit 1
+    cd $GO_JSPP_WORKSPACE || exit 1
+    cd testgo || exit 1
+    cp ~/.vimrc . && cp ~/.bashrc . && cp ~/.zshrc .
+}
 
 function main() {
     cmd="${1//--/}"
@@ -392,7 +399,7 @@ function vote() {
     fi
     topicQrcode=$(echo $addResp | jq '.data' | tr -d '"')
 
-    listResp=$(curl -d '{"user_qrcode":"'$userQrcode'","group_qrcode":"'$groupQrcode'"}' --silent  $domain/vote/list)
+    listResp=$(curl -d '{"user_qrcode":"'$userQrcode'","group_qrcode":"'$groupQrcode'"}' --silent $domain/vote/list)
     echo $listResp
     code=$(echo $listResp | jq '.res')
     if [[ "$code" != "200" ]]; then
@@ -417,7 +424,7 @@ function vote() {
             "user_qrcode": "'$userQrcode'",
             "topic_qrcode": "'$topicQrcode'",
             "option_id": [
-                '$(echo $recordResp|jq ".data.options.[0].option.id")'
+                '$(echo $recordResp | jq ".data.options.[0].option.id")'
             ]
         }' "$domain/vote/post")
     echo $postResp
