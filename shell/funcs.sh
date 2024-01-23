@@ -32,6 +32,7 @@ function sync-config() {
     cp ~/.vimrc . \
     && cp ~/.bashrc . \
     && cp ~/.zshrc . \
+    && cp ~/.bash_history . \
     && git add . \
     && git commit -m "update config $(date +"%Y-%m-%d %H:%I:%S")" \
     && git push
