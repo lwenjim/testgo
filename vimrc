@@ -31,7 +31,6 @@
 " Plug 'rhysd/vim-lsp-ale'
 " Plug 'LucHermitte/VimFold4C'
 " Plug 'AndrewRadev/splitjoin.vim'
-" Plug 'jlanzarotta/bufexplorer'
 " Plug 'ctrlpvim/ctrlp.vim'
 " Plug 'ludovicchabant/vim-gutentags'
 " Plug 'SirVer/ultisnips'
@@ -51,6 +50,7 @@ call plug#begin()
  Plug 'prabirshrestha/vim-lsp' 
  Plug 'mattn/vim-lsp-settings'
  Plug 'prabirshrestha/asyncomplete.vim'
+ Plug 'jlanzarotta/bufexplorer'
 call plug#end()
 
 "--------------
@@ -112,17 +112,17 @@ set termguicolors
 set autowrite
 set nospell
 set foldmethod=indent
-set foldenable              " 开始折叠
-"set foldmethod=syntax       " 设置语法折叠
-set foldcolumn=0            " 设置折叠区域的宽度
-setlocal foldlevel=1        " 设置折叠层数为
-set foldlevelstart=99       " 打开文件是默认不折叠代码
+set foldenable              
+set foldcolumn=0            
+setlocal foldlevel=1        
+set foldlevelstart=99       
 set updatetime=100
-
 highlight Folded guibg=NONE guifg=NONE
 highlight FoldColumn guibg=NONE guifg=NONE
 syntax on                                                                                                            
 filetype plugin indent on 
+let g:vim_fold_background = 0
+hi Folded ctermfg=NONE ctermbg=NONE guibg=NONE guifg=NONE
 let g:netrw_winsize = 25
 let g:auto_save = 1
 let g:auto_save_events = ["InsertLeave", "TextChanged", "TextChangedI", "CursorHoldI", "CompleteDone"]
@@ -140,7 +140,17 @@ nnoremap + zr
 nnoremap _ zM
 nnoremap ] zO
 nnoremap [ zc
+nnoremap q :noh<return>
 
+nnoremap <C-Left> :tabprevious<CR>
+nnoremap <C-Right> :tabnext<CR>
+nnoremap <C-Up> :tabfirst<CR>
+nnoremap <C-Down> :tablast<CR>
+
+nnoremap <C-Left> :tabprevious<CR>
+nnoremap <C-Right> :tabnext<CR>
+nnoremap <silent> <A-Left> :tabm -1<CR>
+nnoremap <silent> <A-Right> :tabm +1<CR>
 
 set cursorline
 hi CursorLine   cterm=NONE ctermbg=NONE ctermfg=NONE guibg=NONE guifg=NONE
@@ -424,5 +434,5 @@ let g:airline#extensions#ale#enabled = 1
 ""-------------- 
 let g:airline#extensions#tabline#enabled = 1
 let g:airline#extensions#tabline#left_sep = ' '
-let g:airline#extensions#tabline#left_alt_sep = '|'
-let g:airline#extensions#tabline#formatter = 'jsformatter'
+let g:airline#extensions#tabline#left_alt_sep = ' '
+let g:airline#extensions#tabline#formatter = 'unique_tail'

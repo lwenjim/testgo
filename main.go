@@ -30,5 +30,6 @@ func main() {
 	if err := json.Unmarshal([]byte(newUser), &users); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("%s", users)
+	fmt.Printf("%s\n", users)
+	fmt.Println(123)
 }

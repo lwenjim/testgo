@@ -158,7 +158,7 @@ export JMETER_HOME=/usr/local/apache-jmeter-5.1.1
 
 export HOMEBREW_BOTTLE_DOMAIN=https://mirrors.ustc.edu.cn/homebrew-bottles
 
-export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_321.jdk/Contents/Home 
+#export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_321.jdk/Contents/Home 
 
 export CLASSPAHT=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
 
@@ -199,3 +199,4 @@ _git_merge_to_comp()
 autoload -Uz compinit
 compinit
 source <(kubectl completion zsh)
+export PATH="/usr/local/opt/node@18/bin:$PATH"
