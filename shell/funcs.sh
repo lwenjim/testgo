@@ -117,7 +117,7 @@ function log() {
 }
 
 function lprint() {
-    echo "$1"
+    echo "$1" >/dev/null 2>&1
 }
 
 function port-forward() {
