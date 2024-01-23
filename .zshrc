@@ -18,8 +18,8 @@ source ~/.bashrc
 source ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
 source /usr/local/etc/profile.d/z.sh
-source "/usr/local/etc/profile.d/bash_completion.sh"
+source /usr/local/etc/profile.d/bash_completion.sh
 source ~/.fzf.zsh
-source "$HOME/.cargo/env"
+source $HOME/.cargo/env
 source <(kubectl completion zsh)
 eval "$(jenv init -)"

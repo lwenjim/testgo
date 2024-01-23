@@ -1,5 +1,5 @@
 #! /usr/bin/env bash
-# shellcheck disable=SC2206 disable=SC2068 disable=SC2086 disable=SC1091 disable=SC2317 disable=SC1090 disable=SC2090 disable=SC2089 disable=SC2059  disable=SC2046
+# shellcheck disable=SC2206,2068,2086,1091,2317,1090,2090,2089,2059,2046
 
 declare -A ServiceServers=(
     ["mongo"]=27017
