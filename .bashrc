@@ -1,5 +1,5 @@
 #! /usr/bin/env bash
-# shellcheck source=/dev/null disable=SC2206,2034,1091,2086,1090,2154,1087
+#shellcheck source=/dev/null disable=SC2206,2034,1091,2086,1090,2154,1087
 alias encodeURIComponent="xxd -p | tr -d '\n' | sed 's/\(..\)/%\1/g'"
 alias decodeURIComponent="sed 's/%/\\\\x/g' | xargs -0 printf '%b'"
 alias tomysql='mysql -h34.143.177.4 -uroot -p97KIA329dP3z075t'
@@ -91,7 +91,6 @@ export LUAJIT_INC=/usr/local/Cellar/openresty/1.15.8.3_1/luajit/include/luajit-2
 export GO15VENDOREXPERIMENT=1
 export RABBITMQ_SERVER=/usr/local/Cellar/rabbitmq/3.8.19
 export HOMEBREW_NO_INSTALL_CLEANUP=1
-export HISTSIZE=2000000
 export TERM="xterm-256color"
 export GIPHY_API_KEY=xVXd8j7UxP8Lvn8Dn1aLjLAd5EHYGE31
 export GIPHY_RATING=pg-13
@@ -109,6 +108,7 @@ export ENVTEST_INSTALLED_ONLY=true
 export KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT=true
 export HISTFILE=~/.zsh_history
 export HISTCONTROL=ignoredups
+export HISTSIZE=2000000
 export PROMPT_COMMAND='history -a'
 export VIMCONFIG=/Users/jim/Workdata/nvim-config
 export VIMDATA=~/.local/share/nvim
