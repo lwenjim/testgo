@@ -7,11 +7,6 @@ import (
 	"strings"
 )
 
-type user struct {
-	Name  trim `json:"name"`
-	Email trim `json:"email"`
-}
-
 type trim string
 
 func (t *trim) UnmarshalJSON(data []byte) error {
@@ -24,7 +19,11 @@ func (t *trim) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func main() {
+func TestTrim() {
+	type user struct {
+		Name  trim `json:"name"`
+		Email trim `json:"email"`
+	}
 	var users user
 	newUser := `{"name":"random", "email":"random@.        "}`
 	if err := json.Unmarshal([]byte(newUser), &users); err != nil {
