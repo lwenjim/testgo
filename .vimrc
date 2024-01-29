@@ -51,6 +51,7 @@ call plug#begin()
  Plug 'mattn/vim-lsp-settings'
  Plug 'prabirshrestha/asyncomplete.vim'
  Plug 'jlanzarotta/bufexplorer'
+ Plug 'Mofiqul/vscode.nvim'
 call plug#end()
 
 "--------------
@@ -135,7 +136,7 @@ nmap <S-Tab> :bprev<Return>
 nnoremap <space> za
 vnoremap <c-y> "+y
 nnoremap <c-p> "+p
-nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zo')<CR>
+nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zO')<CR>
 nnoremap + zr
 nnoremap _ zM
 nnoremap ] zO
