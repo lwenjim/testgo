@@ -105,14 +105,10 @@ export FZF_DEFAULT_OPTS="--height 40% --layout=reverse "
 export KUBEBUILDER_ASSETS="/Users/jim/Library/Application Support/io.kubebuilder.envtest/k8s/1.22.1-darwin-amd64"
 export ENVTEST_INSTALLED_ONLY=true
 export KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT=true
-export HISTFILE=~/.zsh_history
 export HISTCONTROL=ignoredups
-export HISTSIZE=2000000
 export HISTFILE=~/.zsh_history #记录历史命令的文件
 export HISTSIZE=2000000 #记录历史命令条数
 export SAVEHIST=2000000
-setopt appendhistory
-
 export PROMPT_COMMAND='history -a'
 export VIMCONFIG=/Users/jim/Workdata/nvim-config
 export VIMDATA=~/.local/share/nvim
