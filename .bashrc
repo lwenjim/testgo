@@ -172,6 +172,7 @@ export PATH="/usr/local/Cellar/kubebuilder/3.12.0/bin":$PATH
 export PATH="/Applications/IDA\ Freeware\ 8.3/ida64.app/Contents/MacOS":$PATH
 export PATH="/usr/local/Cellar/bash/5.2.15/bin":$PATH
 export PATH="/usr/local/Cellar/cocoapods/1.14.3/bin":$PATH
+export PATH="/Users/jim/Workdata/flutter/bin":$PATH
 export GITHUB_TOKEN="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"
 export ELECTRON_MIRROR="http://cdn.npm.taobao.org/dist/electron/"
 function a() {
@@ -182,9 +183,9 @@ function proxy_on() {
   export https_proxy=http://127.0.0.1:33210
   export http_proxy=http://127.0.0.1:33210
   export no_proxy=127.0.0.1,localhost
-#  export HTTP_PROXY=http://127.0.0.1:33210
-#  export HTTPS_PROXY=https://127.0.0.1:33210
-#  export NO_PROXY=localhost,127.0.0.1
+  export HTTP_PROXY=http://127.0.0.1:33210
+  export HTTPS_PROXY=https://127.0.0.1:33210
+  export NO_PROXY=localhost,127.0.0.1
   echo -e "proxy on 2"
 }
 
