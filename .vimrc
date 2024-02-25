@@ -33,12 +33,12 @@
 " Plug 'AndrewRadev/splitjoin.vim'
 " Plug 'ctrlpvim/ctrlp.vim'
 " Plug 'ludovicchabant/vim-gutentags'
-" Plug 'SirVer/ultisnips'
 " Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 " Plug 'junegunn/fzf.vim'
 
 call plug#begin()
  Plug 'tomasr/molokai'
+ Plug 'SirVer/ultisnips'
  Plug 'honza/vim-snippets'
  Plug 'vim-airline/vim-airline'
  Plug 'vim-airline/vim-airline-themes'
@@ -51,7 +51,6 @@ call plug#begin()
  Plug 'mattn/vim-lsp-settings'
  Plug 'prabirshrestha/asyncomplete.vim'
  Plug 'jlanzarotta/bufexplorer'
- Plug 'Mofiqul/vscode.nvim'
 call plug#end()
 
 "--------------
@@ -78,6 +77,7 @@ set scrolloff=5
 set sidescrolloff=15
 set laststatus=2
 set ruler
+
 set showmatch
 set hlsearch
 set incsearch
@@ -86,15 +86,18 @@ set smartcase
 set spell spelllang=en_us
 set nobackup
 set noswapfile
+
 set undofile
 set autochdir
 set history=10000
 set autoread
 set wildmenu
+
 set wildmode=longest:list,full
 set backspace=2
 set exrc
 set confirm      
+
 set fileencodings=utf-8,ucs-bom,shift-jis,gb18030,gbk,gb2312,cp936,utf-16,big5,euc-jp,latin1      
 set splitbelow      
 set splitright     
@@ -107,23 +110,25 @@ set tags=./.tags;,.tags
 set fileencoding=utf-8                                             
 set termencoding=utf-8                                             
 set nocompatible
+
 set smartindent                                                    
 set cindent                                                        
 set termguicolors
 set autowrite
 set nospell
 set foldmethod=indent
-set foldenable              
-set foldcolumn=0            
-setlocal foldlevel=1        
-set foldlevelstart=99       
+
+set foldenable              " 开始折叠
+"set foldmethod=syntax       " 设置语法折叠
+set foldcolumn=0            " 设置折叠区域的宽度
+setlocal foldlevel=1        " 设置折叠层数为
+set foldlevelstart=99       " 打开文件是默认不折叠代码
 set updatetime=100
+
 highlight Folded guibg=NONE guifg=NONE
 highlight FoldColumn guibg=NONE guifg=NONE
 syntax on                                                                                                            
 filetype plugin indent on 
-let g:vim_fold_background = 0
-hi Folded ctermfg=NONE ctermbg=NONE guibg=NONE guifg=NONE
 let g:netrw_winsize = 25
 let g:auto_save = 1
 let g:auto_save_events = ["InsertLeave", "TextChanged", "TextChangedI", "CursorHoldI", "CompleteDone"]
@@ -136,22 +141,12 @@ nmap <S-Tab> :bprev<Return>
 nnoremap <space> za
 vnoremap <c-y> "+y
 nnoremap <c-p> "+p
-nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zO')<CR>
+nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zo')<CR>
 nnoremap + zr
 nnoremap _ zM
 nnoremap ] zO
 nnoremap [ zc
-nnoremap q :noh<return>
 
-nnoremap <C-Left> :tabprevious<CR>
-nnoremap <C-Right> :tabnext<CR>
-nnoremap <C-Up> :tabfirst<CR>
-nnoremap <C-Down> :tablast<CR>
-
-nnoremap <C-Left> :tabprevious<CR>
-nnoremap <C-Right> :tabnext<CR>
-nnoremap <silent> <A-Left> :tabm -1<CR>
-nnoremap <silent> <A-Right> :tabm +1<CR>
 
 set cursorline
 hi CursorLine   cterm=NONE ctermbg=NONE ctermfg=NONE guibg=NONE guifg=NONE
@@ -435,5 +430,5 @@ let g:airline#extensions#ale#enabled = 1
 ""-------------- 
 let g:airline#extensions#tabline#enabled = 1
 let g:airline#extensions#tabline#left_sep = ' '
-let g:airline#extensions#tabline#left_alt_sep = ' '
-let g:airline#extensions#tabline#formatter = 'unique_tail'
+let g:airline#extensions#tabline#left_alt_sep = '|'
+let g:airline#extensions#tabline#formatter = 'jsformatter'
