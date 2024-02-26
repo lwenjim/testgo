@@ -90,6 +90,7 @@ export LUAJIT_LIB=/usr/local/Cellar/openresty/1.15.8.3_1/luajit/lib:q:
 export LUAJIT_INC=/usr/local/Cellar/openresty/1.15.8.3_1/luajit/include/luajit-2.1
 export GO15VENDOREXPERIMENT=1
 export RABBITMQ_SERVER=/usr/local/Cellar/rabbitmq/3.8.19
+export HOMEBREW_NO_INSTALL_CLEANUP=1
 export TERM="xterm-256color"
 export GIPHY_API_KEY=xVXd8j7UxP8Lvn8Dn1aLjLAd5EHYGE31
 export GIPHY_RATING=pg-13
@@ -98,17 +99,16 @@ export IDEA_LAUNCHER_DEBUG=true
 export LDFLAGS=
 export CPPFLAGS=
 export PKG_CONFIG_PATH=
-export GOROOT="/usr/local/Cellar/go/1.21.3/libexec"
+export GOROOT="/usr/local/Cellar/go/1.21.1/libexec"
 export MANPAGER="sh -c 'col -bx | bat -l man -p'"
 export FZF_DEFAULT_COMMAND="fd --exclude={.git,.idea,.vscode,.sass-cache,node_modules,build} --type f"
 export FZF_DEFAULT_OPTS="--height 40% --layout=reverse "
 export KUBEBUILDER_ASSETS="/Users/jim/Library/Application Support/io.kubebuilder.envtest/k8s/1.22.1-darwin-amd64"
 export ENVTEST_INSTALLED_ONLY=true
 export KUBEBUILDER_ATTACH_CONTROL_PLANE_OUTPUT=true
+export HISTFILE=~/.zsh_history
 export HISTCONTROL=ignoredups
-export HISTFILE=~/.zsh_history #记录历史命令的文件
-export HISTSIZE=2000000 #记录历史命令条数
-export SAVEHIST=2000000
+export HISTSIZE=2000000
 export PROMPT_COMMAND='history -a'
 export VIMCONFIG=/Users/jim/Workdata/nvim-config
 export VIMDATA=~/.local/share/nvim
@@ -117,13 +117,11 @@ export ISABLE_MAGIC_FUNCTIONS=true
 export RUST_BACKTRACE=full
 export ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=60'
 export JMETER_HOME=/usr/local/apache-jmeter-5.1.1
-export KE_HOME=/Users/jim/Workdata/EFAK
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_321.jdk/Contents/Home
+export CLASSPAHT=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
 export HOMEBREW_NO_AUTO_UPDATE=true
 export HOMEBREW_BOTTLE_DOMAIN=https://mirrors.aliyun.com/homebrew/homebrew-bottles
-export HOMEBREW_NO_INSTALL_CLEANUP=1
-
-#export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_321.jdk/Contents/Home
-#export CLASSPAHT=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
+export KE_HOME=/Users/jim/Workdata/EFAK
 
 export PATH="/usr/local/sbin":$PATH
 export PATH="/usr/local/opt/mongodb-community@5.0/bin:$PATH"
@@ -171,10 +169,7 @@ export PATH="/usr/local/command-line-tools/bin:$PATH"
 export PATH="/usr/local/Cellar/kubebuilder/3.12.0/bin":$PATH
 export PATH="/Applications/IDA\ Freeware\ 8.3/ida64.app/Contents/MacOS":$PATH
 export PATH="/usr/local/Cellar/bash/5.2.15/bin":$PATH
-export PATH="/usr/local/Cellar/cocoapods/1.14.3/bin":$PATH
 export PATH="/Users/jim/Workdata/flutter/bin":$PATH
-export GITHUB_TOKEN="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"
-export ELECTRON_MIRROR="http://cdn.npm.taobao.org/dist/electron/"
 function a() {
   /Users/jim/Workdata/goland/src/jspp/testgo/shell/bootstrap.sh "$@"
 }
@@ -188,7 +183,6 @@ function proxy_on() {
   export NO_PROXY=localhost,127.0.0.1
   echo -e "proxy on 2"
 }
-
 function proxy_off() {
   unset https_proxy
   unset http_proxy
