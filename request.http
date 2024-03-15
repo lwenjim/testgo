@@ -13,3 +13,14 @@ Content-Disposition: form-data; name="data"; filename="data.json"
 
 < /Users/jim/Workdata/goland/src/jspp/testgo/gin/gin
 --WebAppBoundary--
+
+###
+POST http://localhost:8080/multipart/form-data
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="name"
+Content-Type: text/plain
+
+abc
+--WebAppBoundary--

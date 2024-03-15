@@ -47,7 +47,7 @@ function main() {
         if $cmd "$@"; then
             echo
         else
-            echo no exists for $cmd
+            echo  failed to executed or no exists for $cmd
         fi
     fi
 }
@@ -441,3 +441,9 @@ function vote() {
         return
     fi
 }
+
+dir=${SHELL_FOLDER}/handlers
+list=$(ls $dir)
+for i in ${list[@]} ; do
+    source ${dir}/${i}
+done

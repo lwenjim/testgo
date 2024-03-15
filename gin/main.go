@@ -1,6 +1,12 @@
 package main
 
-import "github.com/gin-gonic/gin"
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
 
 func main() {
 	r := gin.Default()
@@ -9,5 +15,17 @@ func main() {
 			"message": "pong",
 		})
 	})
-	r.Run() // listen and serve on 0.0.0.0:8080
+	type Param struct {
+		Name string `json:"name,omitempty" form:"name"`
+	}
+	r.POST("/test", func(context *gin.Context) {
+		var p Param
+		if err := context.ShouldBind(&p); err != nil {
+			fmt.Println(err)
+			return
+		}
+		buff, _ := json.Marshal(p)
+		context.JSON(http.StatusOK, string(buff))
+	})
+	r.Run()
 }

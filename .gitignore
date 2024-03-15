@@ -9,3 +9,4 @@ testgo.code-workspace
 testgo
 go.work
 go.work.sum
+bin

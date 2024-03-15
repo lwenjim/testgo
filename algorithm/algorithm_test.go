@@ -1,7 +1,6 @@
 package algorithm
 
 import (
-	"encoding/json"
 	"fmt"
 	"testing"
 )
@@ -9,8 +8,9 @@ import (
 func TestAlgorithm_GenerateParenthesis(t *testing.T) {
 	a := new(Algorithm)
 	res := a.GenerateParenthesis(8)
-	data, _ := json.Marshal(res)
-	fmt.Printf("res: %v\n", string(data))
+	for v := range res {
+		fmt.Printf("res: %v\n", res[v])
+	}
 }
 
 func TestAlgorithm_Permute(t *testing.T) {
