@@ -1,0 +1,26 @@
+### Send a form with the text and file fields
+POST http://localhost:8080/ping
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="element-name"
+Content-Type: text/plain
+
+Name
+--WebAppBoundary
+Content-Disposition: form-data; name="data"; filename="data.json"
+#Content-Type: application/json
+
+< /Users/jim/Workdata/goland/src/jspp/testgo/gin/gin
+--WebAppBoundary--
+
+###
+POST http://localhost:8080/multipart/form-data
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="name"
+Content-Type: text/plain
+
+abc
+--WebAppBoundary--

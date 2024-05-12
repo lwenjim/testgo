@@ -1,20 +1,16 @@
 package main
 
-import (
-	"fmt"
-	"time"
-)
+import "fmt"
 
 func main() {
-	loc, err := time.LoadLocation("GMT-8")
-	if err != nil {
-		fmt.Println(err)
-		return
+	m := make(chan int)
+	go func() {
+		for i := 0; i < 10; i++ {
+			m <- i
+		}
+		close(m)
+	}()
+	for v := range m {
+		fmt.Println(v)
 	}
-	fmt.Println(time.Now().Location())
-	fmt.Println(time.Now().Local().Location())
-	fmt.Println(time.Now().UTC().Location())
-	fmt.Println(loc)
-
-	fmt.Println(time.Now().In(loc).Format("2006-01-02 15:04:05"))
 }
