@@ -183,6 +183,7 @@ function proxy_on() {
   export NO_PROXY=localhost,127.0.0.1
   echo -e "proxy on 2"
 }
+
 function proxy_off() {
   unset https_proxy
   unset http_proxy

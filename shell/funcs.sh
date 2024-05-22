@@ -282,38 +282,25 @@ function workspace-gowork-sync() {
     filename=/tmp/go.work
     rm -f $filename >/dev/null 2>&1
     data=(
-        openapi
-        internal-tools
         pushersv
-        adminsv
-        authsv
-        edgesv
-        messagesv
-        squaresv
-        uploadsv
+        internal-tools
         akita-go
-        deliversv
-        favoritesv
-        groupsv
-        momentsv
-        paysv
-        smssv
         usersv
-        testgo
+        deliversv
+        authsv
+        uploadsv
     )
     {
-        echo -e "go 1.21\n\nuse "
-        echo "("
+        echo -e "go 1.21\n\nuse ("
         for i in "${data[@]}"; do
             echo -e "\t../$i"
         done
         echo ")"
     } >>$filename
-
-    cat -p $filename
     for i in "${data[@]}"; do
-        echo cp -f /tmp/go.work "$GOPATH/src/jspp/$i/go.work"
+        cp -f /tmp/go.work "$GOPATH/src/jspp/$i/go.work"
     done
+    echo "sync go.work done"
 }
 
 function solitaire() {

@@ -7,7 +7,7 @@ import (
 
 func TestAlgorithm_GenerateParenthesis(t *testing.T) {
 	a := new(Algorithm)
-	res := a.GenerateParenthesis(8)
+	res := a.GenerateParenthesis(2)
 	for v := range res {
 		fmt.Printf("res: %v\n", res[v])
 	}
@@ -15,7 +15,7 @@ func TestAlgorithm_GenerateParenthesis(t *testing.T) {
 
 func TestAlgorithm_Permute(t *testing.T) {
 	a := new(Algorithm)
-	res := a.Permute([]int{3, 2, 1, 4})
+	res := a.PermuteUnique([]int{3, 2, 1, 4})
 	fmt.Printf("res: %v\n", res)
 }
 

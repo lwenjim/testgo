@@ -5,7 +5,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type Algorithm struct{}
@@ -36,46 +35,15 @@ func (*Algorithm) GenerateParenthesis(n int) []string {
 			return
 		}
 		if lRemain > 0 {
-			fmt.Printf("第%d层, 左边插入, str: %s\n", layout, str+"(")
+			//fmt.Printf("第%d层, 左边插入, str: %s\n", layout, str+"(")
 			backTracing(lRemain-1, rRemain, str+"(", layout)
 		}
 		if lRemain < rRemain {
-			fmt.Printf("第%d层, 右边插入, str: %s\n", layout, str+")")
+			//fmt.Printf("第%d层, 右边插入, str: %s\n", layout, str+")")
 			backTracing(lRemain, rRemain-1, str+")", layout)
 		}
 	}
 	backTracing(n, n, "", 0)
-	return res
-}
-
-// 给定一个不含重复数字的数组 nums ，返回其 所有可能的全排列 。你可以 按任意顺序 返回答案。
-func (*Algorithm) Permute(nums []int) [][]int {
-	startTime := time.Now()
-	if len(nums) <= 0 {
-		return [][]int{}
-	}
-	res := make([][]int, 0)
-	var backTrack func(path []int, layout int)
-	backTrack = func(path []int, layout int) {
-		layout++
-		if len(path) == len(nums) {
-			res = append(res, path)
-			fmt.Printf("第%d层循环, 合法路径,  %v\n", layout, path)
-			fmt.Println(strings.Repeat("=", 100))
-			return
-		}
-		for i := 0; i < len(nums); i++ {
-			if slices.Index(path, nums[i]) > -1 {
-				fmt.Printf("第%d层循环, %d已存在, %v\n", layout, nums[i], path)
-				continue
-			}
-			backTrack(append(path, nums[i]), layout)
-			fmt.Printf("第%d层循环, %d加入, %v\n", layout, nums[i], path)
-		}
-		fmt.Printf("第%d层循环, 结束, %v\n", layout, path)
-	}
-	backTrack([]int{}, 0)
-	fmt.Printf("take time: %fs\n", time.Since(startTime).Seconds())
 	return res
 }
 
@@ -92,7 +60,7 @@ func (*Algorithm) TotalNQueens(n int) int {
 		}
 		fmt.Printf("\n%s\n", strings.Repeat("=", 100))
 	}
-	isValid := func(row, col int, board [][]string, n int) bool {
+	isValid := func(row, col int, board [][]string) bool {
 		//所在行不用判断，每次都会下移一行
 		//判断同一列的数据是否包含
 		for i := 0; i < row; i++ {
@@ -125,7 +93,7 @@ func (*Algorithm) TotalNQueens(n int) int {
 		}
 		for i := 0; i < n; i++ {
 			//判断该位置是否可以放置
-			if isValid(row, i, board, n) {
+			if isValid(row, i, board) {
 				//放置
 				board[row][i] = "*"
 				fmt.Printf("插入 row: %d, col: %d\n", row, i)
