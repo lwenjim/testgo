@@ -282,6 +282,7 @@ function workspace-gowork-sync() {
     filename=/tmp/go.work
     rm -f $filename >/dev/null 2>&1
     data=(
+<<<<<<< HEAD
         pushersv
         internal-tools
         akita-go
@@ -292,15 +293,47 @@ function workspace-gowork-sync() {
     )
     {
         echo -e "go 1.21\n\nuse ("
+=======
+        openapi
+        internal-tools
+        pushersv
+        adminsv
+        authsv
+        edgesv
+        messagesv
+        squaresv
+        uploadsv
+        akita-go
+        deliversv
+        favoritesv
+        groupsv
+        momentsv
+        paysv
+        smssv
+        usersv
+        testgo
+    )
+    {
+        echo -e "go 1.21\n\nuse "
+        echo "("
+>>>>>>> 6bb84f2172ac498843462bbc3150bf510c348af7
         for i in "${data[@]}"; do
             echo -e "\t../$i"
         done
         echo ")"
     } >>$filename
+<<<<<<< HEAD
     for i in "${data[@]}"; do
         cp -f /tmp/go.work "$GOPATH/src/jspp/$i/go.work"
     done
     echo "sync go.work done"
+=======
+
+    cat -p $filename
+    for i in "${data[@]}"; do
+        echo cp -f /tmp/go.work "$GOPATH/src/jspp/$i/go.work"
+    done
+>>>>>>> 6bb84f2172ac498843462bbc3150bf510c348af7
 }
 
 function solitaire() {
@@ -433,4 +466,8 @@ dir=${SHELL_FOLDER}/handlers
 list=$(ls $dir)
 for i in ${list[@]} ; do
     source ${dir}/${i}
+<<<<<<< HEAD
 done
+=======
+done
+>>>>>>> 6bb84f2172ac498843462bbc3150bf510c348af7

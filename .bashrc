@@ -2,6 +2,7 @@
 #shellcheck source=/dev/null disable=SC2206,2034,1091,2086,1090,2154,1087
 alias encodeURIComponent="xxd -p | tr -d '\n' | sed 's/\(..\)/%\1/g'"
 alias decodeURIComponent="sed 's/%/\\\\x/g' | xargs -0 printf '%b'"
+<<<<<<< HEAD
 alias tomysql='mysql -h34.143.177.4 -uroot -p97KIA329dP3z075t'
 alias toxhgui='/usr/local/bin/php /Users/jim/Workdata/xhgui/external/import.php -f /var/tmp/xhprof/output/xhgui.data.jsonl'
 alias to216='ssh yx-admin@192.168.30.216'
@@ -13,10 +14,16 @@ alias toldev='ssh root@localdev'
 alias inetstat='netstat -nat|grep -i "listen\b"|grep "tcp4\b"'
 alias tosql='mysql -h 127.0.0.1 -uroot -p11111111 mysql'
 alias todev2='ssh root@dev2'
+=======
+alias toxhgui='/usr/local/bin/php /Users/jim/Workdata/xhgui/external/import.php -f /var/tmp/xhprof/output/xhgui.data.jsonl'
+alias ll='ls -l'
+alias inetstat='netstat -nat|grep -i "listen\b"|grep "tcp4\b"'
+>>>>>>> 6bb84f2172ac498843462bbc3150bf510c348af7
 alias phpNodebug='php -c /usr/local/etc/php/7.3/php-no-xdebug.ini '
 alias phpunitLocal='php -c /usr/local/etc/php/7.3/php-no-xdebug.ini /Users/jim/phpunit'
 alias mgrep='grep -v grep'
 alias k='/usr/local/bin/kubectl'
+<<<<<<< HEAD
 alias to73='ssh root@10.160.7.3'
 alias php74='/usr/local/Cellar/php@7.4/7.4.21_1/bin/php'
 alias phpize74='/usr/local/Cellar/php@7.4/7.4.21_1/bin/phpize'
@@ -36,6 +43,11 @@ alias jspp-kubectl='kubectl --kubeconfig ${HOME}/.kube/config.fuli -n jspp'
 alias jspp-kubectl-get-pod='kubectl -n jspp get node'
 alias jspp-kubectl-get-pod-name='jspp-kubectl -n jspp get pod|grep name'
 alias jspp-kubectl-describe='jspp-kubectl -n jspp  describe'
+=======
+alias php74='/usr/local/Cellar/php@7.4/7.4.21_1/bin/php'
+alias phpize74='/usr/local/Cellar/php@7.4/7.4.21_1/bin/phpize'
+alias jspp-kubectl='kubectl --kubeconfig ${HOME}/.kube/config.fuli -n jspp'
+>>>>>>> 6bb84f2172ac498843462bbc3150bf510c348af7
 alias agv='ag --ignore-dir github.com'
 alias ec='/usr/local/bin/emacs'
 alias grep='grep -v grep | grep --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn,.idea,.tox}'
@@ -122,7 +134,10 @@ export CLASSPAHT=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
 export HOMEBREW_NO_AUTO_UPDATE=true
 export HOMEBREW_BOTTLE_DOMAIN=https://mirrors.aliyun.com/homebrew/homebrew-bottles
 export KE_HOME=/Users/jim/Workdata/EFAK
+<<<<<<< HEAD
 
+=======
+>>>>>>> 6bb84f2172ac498843462bbc3150bf510c348af7
 export PATH="/usr/local/sbin":$PATH
 export PATH="/usr/local/opt/mongodb-community@5.0/bin:$PATH"
 export PATH="$HOME/.jenv/bin":$PATH
@@ -170,6 +185,10 @@ export PATH="/usr/local/Cellar/kubebuilder/3.12.0/bin":$PATH
 export PATH="/Applications/IDA\ Freeware\ 8.3/ida64.app/Contents/MacOS":$PATH
 export PATH="/usr/local/Cellar/bash/5.2.15/bin":$PATH
 export PATH="/Users/jim/Workdata/flutter/bin":$PATH
+<<<<<<< HEAD
+=======
+
+>>>>>>> 6bb84f2172ac498843462bbc3150bf510c348af7
 function a() {
   /Users/jim/Workdata/goland/src/jspp/testgo/shell/bootstrap.sh "$@"
 }
