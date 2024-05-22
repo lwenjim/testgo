@@ -25,11 +25,7 @@ func TestTrim() {
 		Email trim `json:"email"`
 	}
 	var users user
-<<<<<<< HEAD
-	newUser := `{"name":"random", "email":"random@.        "}`
-=======
-	newUser := `{"name":"random", "email":"random@."}`
->>>>>>> 6bb84f2172ac498843462bbc3150bf510c348af7
+	newUser := `{"name":"random", "email":"random"}`
 	if err := json.Unmarshal([]byte(newUser), &users); err != nil {
 		log.Fatal(err)
 	}

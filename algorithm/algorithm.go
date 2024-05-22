@@ -5,10 +5,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-<<<<<<< HEAD
-=======
 	"time"
->>>>>>> 6bb84f2172ac498843462bbc3150bf510c348af7
 )
 
 type Algorithm struct{}
@@ -39,19 +36,11 @@ func (*Algorithm) GenerateParenthesis(n int) []string {
 			return
 		}
 		if lRemain > 0 {
-<<<<<<< HEAD
-			//fmt.Printf("第%d层, 左边插入, str: %s\n", layout, str+"(")
-			backTracing(lRemain-1, rRemain, str+"(", layout)
-		}
-		if lRemain < rRemain {
-			//fmt.Printf("第%d层, 右边插入, str: %s\n", layout, str+")")
-=======
 			fmt.Printf("第%d层, 左边插入, str: %s\n", layout, str+"(")
 			backTracing(lRemain-1, rRemain, str+"(", layout)
 		}
 		if lRemain < rRemain {
 			fmt.Printf("第%d层, 右边插入, str: %s\n", layout, str+")")
->>>>>>> 6bb84f2172ac498843462bbc3150bf510c348af7
 			backTracing(lRemain, rRemain-1, str+")", layout)
 		}
 	}
@@ -59,8 +48,6 @@ func (*Algorithm) GenerateParenthesis(n int) []string {
 	return res
 }
 
-<<<<<<< HEAD
-=======
 // 给定一个不含重复数字的数组 nums ，返回其 所有可能的全排列 。你可以 按任意顺序 返回答案。
 func (*Algorithm) Permute(nums []int) [][]int {
 	startTime := time.Now()
@@ -92,7 +79,6 @@ func (*Algorithm) Permute(nums []int) [][]int {
 	return res
 }
 
->>>>>>> 6bb84f2172ac498843462bbc3150bf510c348af7
 // 研究的是如何将 n 个皇后放置在 n × n 的棋盘上，并且使皇后彼此之间不能相互攻击。
 func (*Algorithm) TotalNQueens(n int) int {
 	count := 0
@@ -106,11 +92,7 @@ func (*Algorithm) TotalNQueens(n int) int {
 		}
 		fmt.Printf("\n%s\n", strings.Repeat("=", 100))
 	}
-<<<<<<< HEAD
-	isValid := func(row, col int, board [][]string) bool {
-=======
 	isValid := func(row, col int, board [][]string, n int) bool {
->>>>>>> 6bb84f2172ac498843462bbc3150bf510c348af7
 		//所在行不用判断，每次都会下移一行
 		//判断同一列的数据是否包含
 		for i := 0; i < row; i++ {
@@ -143,11 +125,7 @@ func (*Algorithm) TotalNQueens(n int) int {
 		}
 		for i := 0; i < n; i++ {
 			//判断该位置是否可以放置
-<<<<<<< HEAD
-			if isValid(row, i, board) {
-=======
 			if isValid(row, i, board, n) {
->>>>>>> 6bb84f2172ac498843462bbc3150bf510c348af7
 				//放置
 				board[row][i] = "*"
 				fmt.Printf("插入 row: %d, col: %d\n", row, i)
