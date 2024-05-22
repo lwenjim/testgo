@@ -92,7 +92,7 @@ func (*Algorithm) TotalNQueens(n int) int {
 		}
 		fmt.Printf("\n%s\n", strings.Repeat("=", 100))
 	}
-	isValid := func(row, col int, board [][]string, n int) bool {
+	isValid := func(row, col int, board [][]string) bool {
 		//所在行不用判断，每次都会下移一行
 		//判断同一列的数据是否包含
 		for i := 0; i < row; i++ {
@@ -125,7 +125,7 @@ func (*Algorithm) TotalNQueens(n int) int {
 		}
 		for i := 0; i < n; i++ {
 			//判断该位置是否可以放置
-			if isValid(row, i, board, n) {
+			if isValid(row, i, board) {
 				//放置
 				board[row][i] = "*"
 				fmt.Printf("插入 row: %d, col: %d\n", row, i)
