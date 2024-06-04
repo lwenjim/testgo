@@ -10,3 +10,4 @@ testgo
 go.work
 go.work.sum
 bin
+app

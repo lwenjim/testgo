@@ -28,5 +28,4 @@ func main() {
 		context.JSON(http.StatusOK, string(buff))
 	})
 	_ = r.Run()
-	_, _ = http.Get("http://localhost:8080/ping")
 }

@@ -1,8 +1,10 @@
 package main
 
-//#include "main.h"
-import "C"
+import "fmt"
+
+// #include "mylib.h"
+// import "C"
 
 func main() {
-	C.print()
+	fmt.Println("Hello, world!")
 }
