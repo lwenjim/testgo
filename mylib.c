@@ -3,12 +3,14 @@
 #include <stdlib.h>
 #include <assert.h>
 
+
 char* print(char* str)
 {
     char* name;
     name = (char*)malloc(10);
     strcpy(name, str);
     return name;
+
 }
 
 char* print2(char* des, const char* source)
