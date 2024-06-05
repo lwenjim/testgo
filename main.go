@@ -1,6 +1,8 @@
 package main
 
-// #include "mylib.h"
+// #cgo CFLAGS:  -I./cgo -I.
+// #cgo LDFLAGS: -L. -L./cgo
+// #include "mylib.c"
 import "C"
 import "fmt"
 
@@ -10,9 +12,9 @@ func main() {
 
 	var desc string
 	newName = C.GoString(C.print2(C.CString(desc), C.CString("456")))
-	fmt.Println(newName)
+	fmt.Printf("newName: %s\n", newName)
+	fmt.Printf("desc: %s\n", desc)
 
 	fmt.Println(C.GoString(C.print3()))
-
 	fmt.Println(C.GoString(C.print4()))
 }
