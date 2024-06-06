@@ -1,20 +1,31 @@
 package main
 
-// #cgo CFLAGS:  -I./cgo -I.
-// #cgo LDFLAGS: -L. -L./cgo
-// #include "mylib.c"
-import "C"
-import "fmt"
+import (
+	"fmt"
+	"math/rand"
+	"time"
+)
 
 func main() {
-	newName := C.GoString(C.print(C.CString("123")))
-	fmt.Println(newName)
+	//    runtime.GOMAXPROCS(0)
+	//    f, _ := os.Create("trace.output")
+	//    defer f.Close()
+	//    _ = trace.Start(f)
+	//    defer trace.Stop()
+	//    var wg sync.WaitGroup
+	//    for i := 0; i < 30; i++ {
+	//        wg.Add(1)
+	//        go func() {
+	//            defer wg.Done()
+	//            t := 0
+	//            for i:=0;i<1e8;i++ {
+	//                t+=2
+	//            }
+	//            fmt.Println("total:", t)
+	//        }()
+	//    }
+	//    wg.Wait()
 
-	var desc string
-	newName = C.GoString(C.print2(C.CString(desc), C.CString("456")))
-	fmt.Printf("newName: %s\n", newName)
-	fmt.Printf("desc: %s\n", desc)
-
-	fmt.Println(C.GoString(C.print3()))
-	fmt.Println(C.GoString(C.print4()))
+	a := rand.Int63n(time.Now().Unix() - 7*24*3600)
+	fmt.Println(time.Unix(a, 0).Format("2006-01-02 15:04:05.000"))
 }
