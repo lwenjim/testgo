@@ -12,3 +12,5 @@ go.work.sum
 bin
 app
 go-main
+trace.output
+main
