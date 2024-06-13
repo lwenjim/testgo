@@ -1,9 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
-	"math/rand"
-	"time"
+
+	"github.com/ledongthuc/pdf"
 )
 
 func main() {
@@ -26,6 +27,25 @@ func main() {
 	//    }
 	//    wg.Wait()
 
-	a := rand.Int63n(time.Now().Unix() - 7*24*3600)
-	fmt.Println(time.Unix(a, 0).Format("2006-01-02 15:04:05.000"))
+	pdf.DebugOn = true
+	content, err := readPdf("/Users/jim/Downloads/BILL-DETAIL.pdf") // Read local pdf file
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(content)
+}
+
+func readPdf(path string) (string, error) {
+	f, r, err := pdf.Open(path)
+	defer f.Close()
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	b, err := r.GetPlainText()
+	if err != nil {
+		return "", err
+	}
+	buf.ReadFrom(b)
+	return buf.String(), nil
 }
