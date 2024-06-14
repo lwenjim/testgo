@@ -1,11 +1,5 @@
 package main
 
-import (
-	"fmt"
-	"math/rand"
-	"time"
-)
-
 func main() {
 	//    runtime.GOMAXPROCS(0)
 	//    f, _ := os.Create("trace.output")
@@ -25,9 +19,4 @@ func main() {
 	//        }()
 	//    }
 	//    wg.Wait()
-
-	a := rand.Int63n(time.Now().Unix() - 7*24*3600)
-	fmt.Println(time.Unix(a, 0).Format("2006-01-02 15:04:05.000"))
-
-	fmt.Println("Hello World")
 }

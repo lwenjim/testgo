@@ -15,7 +15,7 @@ var redisClientOnce sync.Once
 
 func NewRedisClient(addr string) *redis.Client {
 	redisClientOnce.Do(func() {
-		GlobalRedisClient = redis.NewClient(&redis.Options{
+		option := &redis.Options{
 			Network:            "tcp",
 			Addr:               addr,
 			Password:           "",
@@ -32,7 +32,8 @@ func NewRedisClient(addr string) *redis.Client {
 			MaxRetries:         0,
 			MinRetryBackoff:    8 * time.Millisecond,
 			MaxRetryBackoff:    512 * time.Millisecond,
-		})
+		}
+		GlobalRedisClient = redis.NewClient(option)
 		pong, err := GlobalRedisClient.Ping(context.Background()).Result()
 		if err != nil {
 			log.Fatal(fmt.Errorf("redis connect error:%s", err))
