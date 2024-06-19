@@ -2,8 +2,6 @@ module jspp/testgo
 
 go 1.21
 
-toolchain go1.22.1
-
 require (
 	github.com/alicebob/miniredis/v2 v2.33.0
 	github.com/cheggaaa/pb/v3 v3.1.5
