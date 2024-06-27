@@ -128,27 +128,24 @@ let g:rehash256 = 1
 let g:molokai_original = 1
 let $NVIM_COC_LOG_LEVEL = 'trace'
 colorscheme molokai
-nmap <Tab> :bnext<Return>
-nmap <S-Tab> :bprev<Return>
+nnoremap <Tab> :bnext<Return>
+nnoremap <S-Tab> :bprev<Return>
 nnoremap <space> za
 vnoremap <c-y> "+y
 nnoremap <c-p> "+p
-nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zO')<CR>
-nnoremap + zr
-nnoremap _ zM
-nnoremap ] zO
-nnoremap [ zc
 nnoremap q :noh<return>
 
-nnoremap <C-Left> :tabprevious<CR>
-nnoremap <C-Right> :tabnext<CR>
-nnoremap <C-Up> :tabfirst<CR>
-nnoremap <C-Down> :tablast<CR>
-
-nnoremap <C-Left> :tabprevious<CR>
-nnoremap <C-Right> :tabnext<CR>
-nnoremap <silent> <A-Left> :tabm -1<CR>
-nnoremap <silent> <A-Right> :tabm +1<CR>
+"nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zO')<CR>
+"nnoremap + zr
+"nnoremap _ zM
+"nnoremap ] zO
+"nnoremap [ zc
+"nnoremap <C-Up> :tabfirst<CR>
+"nnoremap <C-Down> :tablast<CR>
+"nnoremap <C-Left> :tabprevious<CR>
+"nnoremap <C-Right> :tabnext<CR>
+"nnoremap <silent> <A-Left> :tabm -1<CR>
+"nnoremap <silent> <A-Right> :tabm +1<CR>
 
 "set cursorline
 "hi CursorLine   cterm=NONE ctermbg=NONE ctermfg=NONE guibg=NONE guifg=NONE
@@ -158,24 +155,25 @@ nnoremap <silent> <A-Right> :tabm +1<CR>
 "--------------
 " gutentags配置
 "--------------
-let g:gutentags_project_root = ['.root', '.svn', '.git', '.hg', '.project']
-let g:gutentags_ctags_tagfile = '.tags'
-let s:vim_tags = expand('~/.cache/tags')
-let g:gutentags_cache_dir = s:vim_tags
-let g:gutentags_ctags_extra_args = ['--fields=+niazS', '--extra=+q']
-let g:gutentags_ctags_extra_args += ['--c++-kinds=+px']
-let g:gutentags_ctags_extra_args += ['--c-kinds=+px']
-if !isdirectory(s:vim_tags)
-   silent! call mkdir(s:vim_tags, 'p')
-endif
+"let g:gutentags_project_root = ['.root', '.svn', '.git', '.hg', '.project']
+"let g:gutentags_ctags_tagfile = '.tags'
+"let s:vim_tags = expand('~/.cache/tags')
+"let g:gutentags_cache_dir = s:vim_tags
+"let g:gutentags_ctags_extra_args = ['--fields=+niazS', '--extra=+q']
+"let g:gutentags_ctags_extra_args += ['--c++-kinds=+px']
+"let g:gutentags_ctags_extra_args += ['--c-kinds=+px']
+"if !isdirectory(s:vim_tags)
+"   silent! call mkdir(s:vim_tags, 'p')
+"endif
 
 ""--------------
 "" vim-go配置
 ""--------------
-map <F2> :GoFillStruct<cr>
-map <F3> :GoAlternate<cr>
-map <F4> :GoTest<cr>
-map <F5> :GoDebugContinue<cr>
+nnoremap <F2> :GoFillStruct<cr>
+nnoremap <F3> :GoAlternate<cr>
+nnoremap <F4> :GoDecls<cr>
+nnoremap <S-F6> :GoRename<cr>
+
 "map <F9> :GoDebugBreakpoint<cr>
 "map <F8> :GoDebugNext<cr>
 "map <F7> :GoDebugStep<cr>
@@ -188,17 +186,16 @@ let g:onedark_termcolors=256
 let g:rehash256 = 1
 let g:go_auto_type_info = 1
 let g:go_auto_use_cmpfunc = 1
+let g:go_fmt_fail_silently = 1
 let g:go_metalinter_enabled = ["vet", "errcheck", "golangci-lint"]
 let g:go_metalinter_autosave = 1
 let g:go_metalinter_autosave_enabled = ["vet", "errcheck", "golangci-lint"]
 let g:go_metalinter_deadline = "10s"
 let g:go_metalinter_fast = 1
 let g:go_metalinter_linters = ["vet", "errcheck", "golangci-lint"]
-let g:go_metalinter_deadline = "5s"
-let g:go_def_mode = 'godef'
 let g:go_gopls_enabled = 1
-let g:go_def_mode='gopls'
-let g:go_info_mode='gopls'
+let g:go_def_mode='godef'
+let g:go_info_mode='godef'
 let g:go_autodetect_gopath = 1
 let g:go_fmt_command = "goimports"
 let g:go_decls_includes = "func,type"
@@ -215,6 +212,7 @@ let g:go_highlight_build_constraints = 1
 let g:go_highlight_generate_tags = 1
 let g:go_fmt_autosave = 1
 let g:go_gopls_options = ['-remote=auto']
+let g:go_completion_enabled = 1
 function! s:build_go_files()
   let l:file = expand('%')
   if l:file =~# '^\f\+_test\.go$'

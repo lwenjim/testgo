@@ -128,7 +128,7 @@ function lprint() {
 }
 
 function port-forward() {
-    ps aux | pgrep kube | awk '{print "kill -9 " $1}' | sudo bash
+    ps aux | pgrep kube | awk '{print "kill -9 " $1}' | bash
     template="%-19s %-30s %-10s\n"
     printf "${template}" "服务名称" "环境变量" "    变量值"
     for server in "${!ServiceServers[@]}"; do
@@ -282,13 +282,10 @@ function workspace-gowork-sync() {
     filename=/tmp/go.work
     rm -f $filename >/dev/null 2>&1
     data=(
-        pushersv
         internal-tools
         akita-go
         usersv
-        deliversv
-        authsv
-        uploadsv
+        testgo
     )
     {
         echo -e "go 1.21\n\nuse "
