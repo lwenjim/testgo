@@ -1,49 +1,8 @@
-" Plug 'junegunn/seoul256.vim'
-" Plug 'fatih/molokai'
-" Plug 'navarasu/onedark.nvim'
-" Plug 'olimorris/onedarkpro.nvim'  
-" Plug 'NLKNguyen/papercolor-theme'
-" Plug 'dense-analysis/ale'
-" Plug 'josa42/coc-sh'
-" Plug 'kana/vim-textobj-user'
-" Plug 'kana/vim-textobj-indent'
-" Plug 'kana/vim-textobj-syntax'
-" Plug 'kana/vim-textobj-function', { 'for':['c', 'cpp', 'vim', 'java'] }
-" Plug 'sgur/vim-textobj-parameter'
-" Plug 'scrooloose/nerdtree'
-" Plug 'preservim/tagbar'
-" Plug 'skywind3000/quickmenu.vim'  
-" Plug 'voldikss/vim-floaterm' "浮窗
-" Plug 'junegunn/vim-easy-align' "轻松对齐
-" Plug 'tpope/vim-fireplace', { 'for': 'clojure' }  
-" Plug 'rdnetto/YCM-Generator', { 'branch': 'stable' }
-" Plug 'nsf/gocode', { 'tag': 'v.20150303', 'rtp': 'vim' }
-" Plug 'rakr/vim-one'
-" Plug 'nvim-treesitter/nvim-treesitter'
-" Plug 'neovim/nvim-lspconfig' "nvim
-" Plug 'ray-x/go.nvim'
-" Plug 'ray-x/guihua.lua' 
-" Plug 'ray-x/aurora'
-" Plug 'autozimu/LanguageClient-neovim', { 'branch': 'next', 'do': 'bash install.sh'}
-" Plug 'dense-analysis/ale'
-" Plug 'rhysd/vim-lsp-ale'
-" Plug 'LucHermitte/VimFold4C'
-" Plug 'ludovicchabant/vim-gutentags'
-" Plug 'AndrewRadev/splitjoin.vim'
-" Plug 'voldikss/vim-floaterm'
-" Plug 'rust-lang/rust.vim' 
-" Plug 'prabirshrestha/vim-lsp' 
-" Plug 'mattn/vim-lsp-settings'
-" Plug 'prabirshrestha/asyncomplete.vim'
-" Plug 'jlanzarotta/bufexplorer'
-" Plug 'Mofiqul/vscode.nvim'
-" Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
-" Plug 'junegunn/fzf.vim'
-" Plug 'honza/vim-snippets'
 call plug#begin()
- Plug 'SirVer/ultisnips'
  Plug 'neoclide/coc.nvim', {'branch': 'release'}
+ Plug 'SirVer/ultisnips'
  Plug 'vim-airline/vim-airline'
+ Plug 'vim-airline/vim-airline-themes'
  Plug 'joshdick/onedark.vim'
  Plug 'ctrlpvim/ctrlp.vim'
  Plug 'tomasr/molokai'
@@ -51,6 +10,208 @@ call plug#begin()
  Plug 'airblade/vim-rooter'
  Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
 call plug#end()
+
+""--------------
+"" vim-go配置
+""--------------
+nnoremap <f2>   :GoFillStruct<cr>
+nnoremap <f3>   :GoAlternate<cr>
+nnoremap <f4>   :GoDecls<cr>
+nnoremap <s-f6> :GoRename<cr>
+let g:go_imports_autosave = 1
+let g:go_debug_windows = {'vars':'rightbelow 60vnew','stack':'rightbelow 10new'}
+let g:lightline = {'colorscheme': 'onedark'}
+let g:onedark_termcolors=256  
+let g:rehash256 = 1
+let g:go_auto_type_info = 1
+let g:go_auto_use_cmpfunc = 1
+let g:go_fmt_fail_silently = 1
+let g:go_metalinter_enabled = ["vet", "errcheck", "golangci-lint"]
+let g:go_metalinter_autosave = 1
+let g:go_metalinter_autosave_enabled = ["vet", "errcheck", "golangci-lint"]
+let g:go_metalinter_deadline = "10s"
+let g:go_metalinter_fast = 1
+let g:go_metalinter_linters = ["vet", "errcheck", "golangci-lint"]
+let g:go_gopls_enabled = 1
+let g:go_def_mode = 'gopls'
+let g:go_info_mode = 'gopls'
+let g:go_autodetect_gopath = 1
+let g:go_fmt_command = "goimports"
+let g:go_decls_includes = "func,type"
+let g:LanguageClient_serverCommands = {'go': ['gopls']}
+let g:go_list_type = "quickfix"
+let g:go_test_timeout = '10s'
+let g:go_highlight_types = 1
+let g:go_highlight_fields = 1
+let g:go_highlight_functions = 1
+let g:go_highlight_function_calls = 1
+let g:go_highlight_operators = 1
+let g:go_highlight_extra_types = 1
+let g:go_highlight_build_constraints = 1
+let g:go_highlight_generate_tags = 1
+let g:go_fmt_autosave = 1
+let g:go_gopls_options = ['-remote=auto']
+let g:go_completion_enabled = 1
+
+"--------------
+" coc.nvim推荐的配置--------------------
+"--------------
+set hidden
+set nobackup
+set nowritebackup
+set cmdheight=2
+set updatetime=300
+set shortmess+=c
+if has("nvim-0.5.0") || has("patch-8.1.1564")
+  set signcolumn=number
+else
+  set signcolumn=yes
+endif
+inoremap <silent><expr> <c-@> coc#refresh()
+inoremap <silent><expr> <cr> pumvisible() ? coc#_select_confirm(): "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"
+nmap <silent> sn <Plug>(coc-diagnostic-prev)
+nmap <silent> sp <Plug>(coc-diagnostic-next)
+nmap <silent> gd <Plug>(coc-definition)
+nmap <silent> gy <Plug>(coc-type-definition)
+nmap <silent> gi <Plug>(coc-implementation)
+nmap <silent> gr <Plug>(coc-references)
+nnoremap <silent> K :call <SID>show_documentation()<CR>
+function! s:show_documentation()
+  if (index(['vim','help'], &filetype) >= 0)
+    execute 'h '.expand('<cword>')
+  elseif (coc#rpc#ready())
+    call CocActionAsync('doHover')
+  else
+    execute '!' . &keywordprg . " " . expand('<cword>')
+  endif
+endfunction
+nmap <leader>rn <Plug>(coc-rename)
+xmap <leader>f  <Plug>(coc-format-selected)
+nmap <leader>f  <Plug>(coc-format-selected)
+augroup mygroup
+  autocmd!
+  autocmd FileType typescript,json setl formatexpr=CocAction('formatSelected')
+  autocmd User CocJumpPlaceholder call CocActionAsync('showSignatureHelp')
+augroup end
+xmap <leader>a  <Plug>(coc-codeaction-selected)
+nmap <leader>a  <Plug>(coc-codeaction-selected)
+nmap <leader>ac  <Plug>(coc-codeaction)
+nmap <leader>qf  <Plug>(coc-fix-current)
+xmap if <Plug>(coc-funcobj-i)
+omap if <Plug>(coc-funcobj-i)
+xmap af <Plug>(coc-funcobj-a)
+omap af <Plug>(coc-funcobj-a)
+xmap ic <Plug>(coc-classobj-i)
+omap ic <Plug>(coc-classobj-i)
+xmap ac <Plug>(coc-classobj-a)
+omap ac <Plug>(coc-classobj-a)
+nmap <silent> <C-s> <Plug>(coc-range-select)
+xmap <silent> <C-s> <Plug>(coc-range-select)
+command! -nargs=0 Format :call CocAction('format')
+command! -nargs=? Fold :call     CocAction('fold', <f-args>)
+command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organizeImport')
+nnoremap <silent><nowait> <space>a  :<C-u>CocList diagnostics<cr>
+
+"--------------
+" crip config
+"--------------
+let g:ctrlp_map = '<c-p>'
+let g:ctrlp_cmd = 'CtrlP /Users/jim/Workdata/goland/src/jspp'
+let g:ctrlp_working_path_mode = 'w'
+let g:ctrlp_root_markers = ['pom.xml', '.p4ignore']
+let g:ctrlp_user_command = 'find %s -type f'        
+let g:ctrlp_user_command = 'dir %s /-n /b /s /a-d'  
+let g:ctrlp_user_command = ['.git', 'cd %s && git ls-files -co --exclude-standard']
+set wildignore+="*/tmp/*,*.so,*.swp,*.zip"
+let g:ctrlp_switch_buffer = 'et'
+let g:ctrlp_custom_ignore = '\v[\/]\.(git|hg|svn)$'
+let g:ctrlp_custom_ignore = {'dir':  '\v[\/]\.(git|hg|svn)$','file': '\v\.(exe|so|dll)$','link': 'some_bad_symbolic_links',}
+
+"--------------
+" LeaderF start
+"--------------
+let mapleader=";" 
+let g:Lf_CommandMap = {'<C-K>': ['<Up>'], '<C-J>': ['<Down>']}
+let g:Lf_ShowDevIcons = 0
+let g:Lf_WorkingDirectoryMode = 'a'
+let g:Lf_RootMarkers = ['.workspace_root']
+let g:Lf_UseVersionControlTool=0 
+let g:Lf_DefaultExternalTool='rg'
+let g:Lf_ExternalCommand = 'fd --ignore-file  /Users/jim/.ignore.ag.rg "%s"'
+let g:Lf_PreviewInPopup = 0
+let g:Lf_WindowHeight = 0.3
+let g:Lf_PopupHeight = float2nr(&lines * 0.3)
+let g:Lf_CacheDirectory = "/tmp"
+let g:Lf_StlColorscheme = 'onedark'
+let g:Lf_PopupAutoAdjustHeight = 1
+let g:Lf_GtagsAutoGenerate = 1
+let g:Lf_GtagsGutentags = 1
+let g:Lf_ShortcutF = '<s-space>'
+let g:Lf_ShortcutB = '<c-l>'
+let g:Lf_PreviewResult = {'Function': 20, 'BufTag': 20 }
+let g:Lf_NumberOfCache = 10000
+let g:Lf_GtagsAutoGenerate = 1
+let g:Lf_GtagsSource = 1
+let g:Lf_Gtagsconf = '/usr/local/Cellar/global/6.6.10/share/gtags/gtags.conf'
+let g:Lf_Gtagslabel = 'native-pygments'
+let g:Lf_ReverseOrder = 0
+let g:Lf_DefaultMode = 'NameOnly'
+noremap <leader>f   :LeaderfSelf<cr>
+noremap <leader>fm  :LeaderfMru<cr>
+noremap <leader>ff  :LeaderfFunction<cr>
+noremap <Leader>fb  :LeaderfBuffer<cr>
+noremap <leader>ft  :LeaderfBufTag<cr>
+noremap <leader>fl  :LeaderfLine<cr>
+noremap <leader>fw  :LeaderfWindow<cr>
+noremap <leader>frr :LeaderfRgRecall<cr>
+noremap <leader>fgo :<C-U><C-R>=printf("Leaderf! gtags --recall %s", "")<CR><CR>
+noremap <leader>fgn :<C-U><C-R>=printf("Leaderf gtags --next %s", "")<CR><CR>
+noremap <leader>fgp :<C-U><C-R>=printf("Leaderf gtags --previous %s", "")<CR><CR>
+noremap <c-space>   :<C-U>Leaderf rg --ignore-file /Users/jim/.ignore.ag.rg -e<Space>
+noremap <leader>ra  <Plug>LeaderfRgCwordLiteralNoBoundary
+noremap <leader>rb  <Plug>LeaderfRgCwordLiteralBoundary
+noremap <leader>rc  <Plug>LeaderfRgCwordRegexNoBoundary
+noremap <leader>rd  <Plug>LeaderfRgCwordRegexBoundary
+noremap <leader>fgd <Plug>LeaderfGtagsDefinition
+noremap <leader>fgr <Plug>LeaderfGtagsReference
+noremap <leader>fgs <Plug>LeaderfGtagsSymbol
+noremap <leader>fgg <Plug>LeaderfGtagsGrep
+
+"--------------
+" Rooter start
+"--------------
+let g:rooter_targets = '/,*.yml,*.yaml,*.go,*.proto'
+let g:rooter_patterns = ['.workspace_root']
+let g:eleline_slim = 1
+let g:onedark_config = {'style': 'deep','toggle_style_key': '<leader>ts','ending_tildes': v:true,'diagnostics': {  'darker': v:false,  'background': v:false,},} 
+
+""--------------
+"" rust配置
+""-------------- 
+let g:rustfmt_autosave = 1 
+let g:rustfmt_command = "rustfmt" 
+
+"--------------
+" ale配置
+"-------------- 
+let g:ale_linters = {'rust': ['cargo', 'clippy'],}
+let g:ale_fixers = {'rust': ['cargo', 'rustfmt'],}
+let g:ale_rust_cargo_use_clippy = 1 
+vnoremap <leader>ft :RustFmtRange<CR>
+nnoremap <leader>ft :RustFmt<CR>
+nnoremap <M-r>      :RustRun<CR>
+nnoremap <M-t>      :RustTest<CR>
+
+""--------------
+"" airline配置
+""-------------- 
+let g:airline_theme='onedark'
+let g:airline#extensions#ale#enabled = 1 
+let g:airline#extensions#tabline#enabled = 1
+let g:airline#extensions#tabline#left_sep = ''
+let g:airline#extensions#tabline#left_alt_sep = ''
+let g:airline#extensions#tabline#formatter = 'unique_tail'
+
 
 "--------------
 " vim基本属性配置
@@ -113,336 +274,27 @@ set nospell
 set foldmethod=indent
 set foldenable              
 set foldcolumn=0            
-setlocal foldlevel=1        
+set foldlevel=1        
 set foldlevelstart=99       
 set updatetime=100
 set cursorline
 syntax on                                                                                                            
 filetype plugin indent on 
-hi Folded ctermfg=NONE ctermbg=NONE guibg=NONE guifg=NONE
+
 let g:vim_fold_background = 0
 let g:netrw_winsize = 25
 let g:auto_save = 1
 let g:auto_save_events = ["InsertLeave", "TextChanged", "TextChangedI", "CursorHoldI", "CompleteDone"]
 let g:rehash256 = 1
 let g:molokai_original = 1
-let $NVIM_COC_LOG_LEVEL = 'trace'
-colorscheme molokai
-nnoremap <Tab> :bnext<Return>
-nnoremap <S-Tab> :bprev<Return>
-nnoremap <space> za
-vnoremap <c-y> "+y
-nnoremap <c-p> "+p
-nnoremap q :noh<return>
+nnoremap <tab>   :bnext<Return>
+nnoremap <s-tab> :bprev<Return>
+vnoremap <c-y>   "+y
+nnoremap <c-p>   "+p
+nnoremap <esc>   :noh<return>
 
-"nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zO')<CR>
-"nnoremap + zr
-"nnoremap _ zM
-"nnoremap ] zO
-"nnoremap [ zc
-"nnoremap <C-Up> :tabfirst<CR>
-"nnoremap <C-Down> :tablast<CR>
-"nnoremap <C-Left> :tabprevious<CR>
-"nnoremap <C-Right> :tabnext<CR>
-"nnoremap <silent> <A-Left> :tabm -1<CR>
-"nnoremap <silent> <A-Right> :tabm +1<CR>
-
-"set cursorline
-"hi CursorLine   cterm=NONE ctermbg=NONE ctermfg=NONE guibg=NONE guifg=NONE
-"set cursorcolumn
-"hi CursorColumn cterm=NONE ctermbg=NONE ctermfg=NONE guibg=NONE guifg=NONE
-
-"--------------
-" gutentags配置
-"--------------
-"let g:gutentags_project_root = ['.root', '.svn', '.git', '.hg', '.project']
-"let g:gutentags_ctags_tagfile = '.tags'
-"let s:vim_tags = expand('~/.cache/tags')
-"let g:gutentags_cache_dir = s:vim_tags
-"let g:gutentags_ctags_extra_args = ['--fields=+niazS', '--extra=+q']
-"let g:gutentags_ctags_extra_args += ['--c++-kinds=+px']
-"let g:gutentags_ctags_extra_args += ['--c-kinds=+px']
-"if !isdirectory(s:vim_tags)
-"   silent! call mkdir(s:vim_tags, 'p')
-"endif
-
-""--------------
-"" vim-go配置
-""--------------
-nnoremap <F2> :GoFillStruct<cr>
-nnoremap <F3> :GoAlternate<cr>
-nnoremap <F4> :GoDecls<cr>
-nnoremap <S-F6> :GoRename<cr>
-
-"map <F9> :GoDebugBreakpoint<cr>
-"map <F8> :GoDebugNext<cr>
-"map <F7> :GoDebugStep<cr>
-"map <S-F8> :GoDebugStepOut<cr>
-let g:go_imports_autosave=1
-let g:go_debug_windows = {'vars':'rightbelow 60vnew','stack':'rightbelow 10new'}
-let g:airline_theme='onedark'
-let g:lightline = {'colorscheme': 'onedark'}
-let g:onedark_termcolors=256  
-let g:rehash256 = 1
-let g:go_auto_type_info = 1
-let g:go_auto_use_cmpfunc = 1
-let g:go_fmt_fail_silently = 1
-let g:go_metalinter_enabled = ["vet", "errcheck", "golangci-lint"]
-let g:go_metalinter_autosave = 1
-let g:go_metalinter_autosave_enabled = ["vet", "errcheck", "golangci-lint"]
-let g:go_metalinter_deadline = "10s"
-let g:go_metalinter_fast = 1
-let g:go_metalinter_linters = ["vet", "errcheck", "golangci-lint"]
-let g:go_gopls_enabled = 1
-let g:go_def_mode='godef'
-let g:go_info_mode='godef'
-let g:go_autodetect_gopath = 1
-let g:go_fmt_command = "goimports"
-let g:go_decls_includes = "func,type"
-let g:LanguageClient_serverCommands = {'go': ['gopls']}
-let g:go_list_type = "quickfix"
-let g:go_test_timeout = '10s'
-let g:go_highlight_types = 1
-let g:go_highlight_fields = 1
-let g:go_highlight_functions = 1
-let g:go_highlight_function_calls = 1
-let g:go_highlight_operators = 1
-let g:go_highlight_extra_types = 1
-let g:go_highlight_build_constraints = 1
-let g:go_highlight_generate_tags = 1
-let g:go_fmt_autosave = 1
-let g:go_gopls_options = ['-remote=auto']
-let g:go_completion_enabled = 1
-function! s:build_go_files()
-  let l:file = expand('%')
-  if l:file =~# '^\f\+_test\.go$'
-    call go#test#Test(0, 1)
-  elseif l:file =~# '^\f\+\.go$'
-    call go#cmd#Build(0)
-  endif
-endfunction
-autocmd FileType go nmap <leader>b :<C-u>call <SID>build_go_files()<CR>
-map <C-n> :cnext<CR>
-map <C-m> :cprevious<CR>
-autocmd BufNewFile,BufRead *.go setlocal noexpandtab tabstop=4 shiftwidth=4 
-nnoremap <leader>a :cclose<CR>
-autocmd FileType go nmap <leader>b  <Plug>(go-build)
-autocmd FileType go nmap <leader>r  <Plug>(go-run)
-autocmd FileType go nmap <leader>t  <Plug>(go-test)
-autocmd FileType go nmap <Leader>c <Plug>(go-coverage-toggle)
-autocmd FileType go nmap <Leader>i <Plug>(go-info)
-
-"--------------
-" coc.nvim推荐的配置--------------------
-"--------------
-set hidden
-set nobackup
-set nowritebackup
-set cmdheight=2
-set updatetime=300
-set shortmess+=c
-if has("nvim-0.5.0") || has("patch-8.1.1564")
-  set signcolumn=number
-else
-  set signcolumn=yes
-endif
-inoremap <silent><expr> <c-@> coc#refresh()
-inoremap <silent><expr> <cr> pumvisible() ? coc#_select_confirm(): "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"
-nmap <silent> sn <Plug>(coc-diagnostic-prev)
-nmap <silent> sp <Plug>(coc-diagnostic-next)
-nmap <silent> gd <Plug>(coc-definition)
-nmap <silent> gy <Plug>(coc-type-definition)
-nmap <silent> gi <Plug>(coc-implementation)
-nmap <silent> gr <Plug>(coc-references)
-nnoremap <silent> K :call <SID>show_documentation()<CR>
-function! s:show_documentation()
-  if (index(['vim','help'], &filetype) >= 0)
-    execute 'h '.expand('<cword>')
-  elseif (coc#rpc#ready())
-    call CocActionAsync('doHover')
-  else
-    execute '!' . &keywordprg . " " . expand('<cword>')
-  endif
-endfunction
-nmap <leader>rn <Plug>(coc-rename)
-xmap <leader>f  <Plug>(coc-format-selected)
-nmap <leader>f  <Plug>(coc-format-selected)
-augroup mygroup
-  autocmd!
-  autocmd FileType typescript,json setl formatexpr=CocAction('formatSelected')
-  autocmd User CocJumpPlaceholder call CocActionAsync('showSignatureHelp')
-augroup end
-xmap <leader>a  <Plug>(coc-codeaction-selected)
-nmap <leader>a  <Plug>(coc-codeaction-selected)
-nmap <leader>ac  <Plug>(coc-codeaction)
-nmap <leader>qf  <Plug>(coc-fix-current)
-xmap if <Plug>(coc-funcobj-i)
-omap if <Plug>(coc-funcobj-i)
-xmap af <Plug>(coc-funcobj-a)
-omap af <Plug>(coc-funcobj-a)
-xmap ic <Plug>(coc-classobj-i)
-omap ic <Plug>(coc-classobj-i)
-xmap ac <Plug>(coc-classobj-a)
-omap ac <Plug>(coc-classobj-a)
-nmap <silent> <C-s> <Plug>(coc-range-select)
-xmap <silent> <C-s> <Plug>(coc-range-select)
-command! -nargs=0 Format :call CocAction('format')
-command! -nargs=? Fold :call     CocAction('fold', <f-args>)
-command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organizeImport')
-nnoremap <silent><nowait> <space>a  :<C-u>CocList diagnostics<cr>
-
-
-" "--------------
-" " crip config
-" "--------------
-let g:ctrlp_map = '<c-p>'
-let g:ctrlp_cmd = 'CtrlP /Users/jim/Workdata/goland/src/jspp'
-let g:ctrlp_working_path_mode = 'w'
-let g:ctrlp_root_markers = ['pom.xml', '.p4ignore']
-let g:ctrlp_user_command = 'find %s -type f'        " MacOSX/Linux
-let g:ctrlp_user_command = 'dir %s /-n /b /s /a-d'  " Windows
-let g:ctrlp_user_command = ['.git', 'cd %s && git ls-files -co --exclude-standard']
-set wildignore+="*/tmp/*,*.so,*.swp,*.zip"
-let g:ctrlp_switch_buffer = 'et'
-let g:ctrlp_custom_ignore = '\v[\/]\.(git|hg|svn)$'
-let g:ctrlp_custom_ignore = {
-  \ 'dir':  '\v[\/]\.(git|hg|svn)$',
-  \ 'file': '\v\.(exe|so|dll)$',
-  \ 'link': 'some_bad_symbolic_links',
-  \ }
-
-"--------------
-" FZF配置
-"--------------
-nnoremap <silent><nowait> <space>o :<C-u>FZF --reverse --info=inline --border /Users/jim/Workdata/goland/src/jspp<CR> 
-nnoremap <silent><nowait> <space>a :<C-u>Ag<CR> 
-nnoremap <silent><nowait> <space>r :<C-u>Rg<CR> 
-nnoremap <silent><nowait> <space>g :<C-u>RG<CR> 
-command!  -bang -nargs=* Ag   call fzf#vim#ag(<q-args>, fzf#vim#with_preview(), <bang>1)
-command!  -bang -nargs=* Rg   call fzf#vim#grep("rg  --ignore-file /Users/jim/.ignore.ag.rg   --column --line-number --no-heading --color=always --smart-case -- ".shellescape(<q-args>), fzf#vim#with_preview(), <bang>1)
-command!  -bang -nargs=* RG   call fzf#vim#grep2("rg  --ignore-file /Users/jim/.ignore.ag.rg  --column --line-number --no-heading --color=always --smart-case -- ", <q-args>, fzf#vim#with_preview(), <bang>1)
-" nnoremap <C-Q> :RG<cr>
-" nnoremap <C-R> :History<cr>
-" nnoremap <C-E> :Buffers<cr>
-" nnoremap <C-K> :Files<cr>
-" nnoremap <SPACE> <Nop>
-" map <Space> <Leader>
-" let g:fzf_preview_window = ['right:hidden', 'ctrl-/']
-" let g:fzf_layout = {'up':'~90%', 'window': { 'width': 0.8, 'height': 0.8,'yoffset':0.5,'xoffset': 0.5, 'highlight': 'Todo', 'border': 'rounded' } }
-" let g:fzf_buffers_jump = 1
-" let g:fzf_commits_log_options = '--graph --color=always --format="%C(auto)%h%d %s %C(black)%C(bold)%cr"'
-" let g:fzf_tags_command = 'ctags -R'
-" set rtp+=/usr/local/opt/fzf
-" map <C-j> :cn<CR>
-" map <C-k> :cp<CR>
-"--------------
-" LeaderF start
-"--------------
-let mapleader=";" 
-let g:Lf_CommandMap = {'<C-K>': ['<Up>'], '<C-J>': ['<Down>']}
-let g:Lf_ShowDevIcons = 0
-let g:Lf_WorkingDirectoryMode = 'a'
-let g:Lf_RootMarkers = ['.workspace_root']
-let g:Lf_UseVersionControlTool=0 
-let g:Lf_DefaultExternalTool='rg'
-let g:Lf_ExternalCommand = 'fd --ignore-file  /Users/jim/.ignore.ag.rg "%s"'
-let g:Lf_PreviewInPopup = 0
-let g:Lf_WindowHeight = 0.3
-let g:Lf_PopupHeight = float2nr(&lines * 0.3)
-let g:Lf_CacheDirectory = "/tmp"
-let g:Lf_StlColorscheme = 'onedark'
-let g:Lf_PopupAutoAdjustHeight = 1
-let g:Lf_GtagsAutoGenerate = 1
-let g:Lf_GtagsGutentags = 1
-let g:Lf_ShortcutF = '<s-space>'
-let g:Lf_ShortcutB = '<c-l>'
-let g:Lf_PreviewResult = {'Function': 20, 'BufTag': 20 }
-let g:Lf_NumberOfCache = 10000
-let g:Lf_GtagsAutoGenerate = 1
-let g:Lf_GtagsSource = 1
-let g:Lf_Gtagsconf = '/usr/local/Cellar/global/6.6.10/share/gtags/gtags.conf'
-let g:Lf_Gtagslabel = 'native-pygments'
-let g:Lf_ReverseOrder = 0
-let g:Lf_DefaultMode = 'NameOnly'
-noremap <leader>f :LeaderfSelf<cr>
-noremap <leader>fm :LeaderfMru<cr>
-noremap <leader>ff :LeaderfFunction<cr>
-noremap fb :LeaderfBuffer<cr>
-noremap <leader>ft :LeaderfBufTag<cr>
-noremap <leader>fl :LeaderfLine<cr>
-noremap <leader>fw :LeaderfWindow<cr>
-noremap <leader>frr :LeaderfRgRecall<cr>
-noremap <leader>fgo :<C-U><C-R>=printf("Leaderf! gtags --recall %s", "")<CR><CR>
-noremap <leader>fgn :<C-U><C-R>=printf("Leaderf gtags --next %s", "")<CR><CR>
-noremap <leader>fgp :<C-U><C-R>=printf("Leaderf gtags --previous %s", "")<CR><CR>
-noremap <Plug>LeaderfRgPrompt2 :<C-U>Leaderf rg --ignore-file /Users/jim/.ignore.ag.rg -e<Space>
-nmap <a-space>   <Plug>LeaderfRgPrompt2
-nmap <leader>ra  <Plug>LeaderfRgCwordLiteralNoBoundary
-nmap <leader>rb  <Plug>LeaderfRgCwordLiteralBoundary
-nmap <leader>rc  <Plug>LeaderfRgCwordRegexNoBoundary
-nmap <leader>rd  <Plug>LeaderfRgCwordRegexBoundary
-nmap <leader>fgd <Plug>LeaderfGtagsDefinition
-nmap <leader>fgr <Plug>LeaderfGtagsReference
-nmap <leader>fgs <Plug>LeaderfGtagsSymbol
-nmap <leader>fgg <Plug>LeaderfGtagsGrep
-
-"--------------
-" Rooter start
-"--------------
-let g:rooter_targets = '/,*.yml,*.yaml,*.go,*.proto'
-let g:rooter_patterns = ['.workspace_root']
-let g:eleline_slim = 1
-let g:onedark_config = {
-  \ 'style': 'deep',
-  \ 'toggle_style_key': '<leader>ts',
-  \ 'ending_tildes': v:true,
-  \ 'diagnostics': {
-    \ 'darker': v:false,
-    \ 'background': v:false,
-  \ },
-\ } 
-
-"--------------
-" vim-floaterm配置
-"-------------- 
-"nnoremap   <silent>   <F7>    :FloatermNew --height=0.9 --position=bottomright<CR>
-"tnoremap   <silent>   <F7>    <C-\><C-n>:FloatermNew --height=0.9 --position=bottomright<CR>
-"nnoremap   <silent>   <F8>    :FloatermPrev<CR>
-"tnoremap   <silent>   <F8>    <C-\><C-n>:FloatermPrev<CR>
-"nnoremap   <silent>   <F9>    :FloatermNext<CR>
-"tnoremap   <silent>   <F9>    <C-\><C-n>:FloatermNext<CR>
-"nnoremap   <silent>   <F2>   :FloatermToggle<CR>
-"tnoremap   <silent>   <F2>   <C-\><C-n>:FloatermToggle<CR>
-"command! Rg FloatermNew --width=0.8 --height=0.8 rg
-"nmap <leader>rg :Rg<CR>
-
-""--------------
-"" rust配置
-""-------------- 
-let g:rustfmt_autosave = 1 
-let g:rustfmt_command = "rustfmt" 
-
-"--------------
-" ale配置
-"-------------- 
- let g:ale_linters = {'rust': ['cargo', 'clippy'],}
- let g:ale_fixers = {'rust': ['cargo', 'rustfmt'],}
- let g:ale_rust_cargo_use_clippy = 1 
-vnoremap <leader>ft :RustFmtRange<CR>
-nnoremap <leader>ft :RustFmt<CR>
-nnoremap <M-r> :RustRun<CR>
-nnoremap <M-t> :RustTest<CR>
-let g:airline#extensions#ale#enabled = 1 
-
-""--------------
-"" airline配置
-""-------------- 
-let g:airline#extensions#tabline#enabled = 1
-let g:airline#extensions#tabline#left_sep = ' '
-let g:airline#extensions#tabline#left_alt_sep = ' '
-let g:airline#extensions#tabline#formatter = 'unique_tail'
-
+colorscheme onedark
 highlight clear CursorLine
+highlight Folded ctermfg=NONE ctermbg=NONE guibg=NONE guifg=NONE
 highlight Folded guibg=NONE guifg=NONE
 highlight FoldColumn guibg=NONE guifg=NONE
-"highlight CursorLine cterm=NONE ctermbg=blue
