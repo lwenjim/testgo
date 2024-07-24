@@ -73,7 +73,7 @@ for server in "${arr[@]}"; do
 server {
     server_name aaaaaa-svc;
     listen 9090 http2;
-    access_log /Users/jim/Workdata/wwwlogs/aaaaaa-svc_nginx.log combined;
+    access_log /tmp/aaaaaa-svc_nginx.log combined;
 
     location / {
         grpc_pass grpc://127.0.0.1:77777;

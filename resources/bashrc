@@ -9,13 +9,14 @@ alias cat='bat --tabs 4 --theme gruvbox-dark -p --paging=never'
 alias python='/usr/local/bin/python3.7'
 alias pip='/usr/local/bin/pip3.7'
 alias ag='/usr/local/bin/ag --color-match 35:48 --color-path 6:37 '
+alias rg='/Users/jim/.cargo/bin/rg --ignore-file=/Users/jim/.gitignore --colors "match:fg:magenta" --colors "line:bg:yellow" '
+alias fd='/usr/local/bin/fd --ignore-file=/Users/jim/.gitignore '
 
 ZSH_THEME_GIT_PROMPT_PREFIX="%{$reset_color%}%{$fg[green]%}["
 ZSH_THEME_GIT_PROMPT_SUFFIX="]%{$reset_color%}"
 ZSH_THEME_GIT_PROMPT_DIRTY="%{$fg[red]%}*%{$reset_color%}"
 ZSH_THEME_GIT_PROMPT_CLEAN=""
 SDKROOT=$(xcrun --show-sdk-path)
-
 export BAT_PAGER="less -RF"
 export GOMAXPROCS=12
 export ELECTRON_MIRROR="http://cdn.npm.taobao.org/dist/electron/"
