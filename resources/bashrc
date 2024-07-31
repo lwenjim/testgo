@@ -12,18 +12,8 @@ alias ag='/usr/local/bin/ag --color-match 35:48 --color-path 6:37 '
 alias rg='/Users/jim/.cargo/bin/rg --ignore-file=/Users/jim/.gitignore --colors "match:fg:magenta" --colors "line:bg:yellow" '
 alias fd='/usr/local/bin/fd --ignore-file=/Users/jim/.gitignore '
 
-ZSH_THEME_GIT_PROMPT_PREFIX="%{$reset_color%}%{$fg[green]%}["
-ZSH_THEME_GIT_PROMPT_SUFFIX="]%{$reset_color%}"
-ZSH_THEME_GIT_PROMPT_DIRTY="%{$fg[red]%}*%{$reset_color%}"
-ZSH_THEME_GIT_PROMPT_CLEAN=""
-SDKROOT=$(xcrun --show-sdk-path)
-export BAT_PAGER="less -RF"
-export GOMAXPROCS=12
-export ELECTRON_MIRROR="http://cdn.npm.taobao.org/dist/electron/"
-export FZF_COMPLETION_TRIGGER='**' 
+export GO15VENDOREXPERIMENT=1
 export GO_JSPP_WORKSPACE=Workdata/goland/src/jspp
-export MAVEN_HOME=/usr/local/apache-maven-3.6.3
-export M2_HOME=$MAVEN_HOME
 export GOPATH=/Users/jim/Workdata/goland
 export GOFLAGS=""
 export GOPRIVATE=code.jspp.com
@@ -31,14 +21,15 @@ export GOOS=darwin
 export GOARCH=amd64
 export GOROOT="/Users/jim/Workdata/goland/go1.21.12"
 export CGO_ENABLED=1
+export GOMAXPROCS=12
+
+export BAT_PAGER="less -RF"
+export ELECTRON_MIRROR="http://cdn.npm.taobao.org/dist/electron/"
+export FZF_COMPLETION_TRIGGER='**' 
+export MAVEN_HOME=/usr/local/apache-maven-3.6.3
+export M2_HOME=$MAVEN_HOME
 export XDEBUG_CONFIG="remote_enable=1 idekey=PHPSTORM remote_host=127.0.0.1 remote_port=9002 remote_autostart=0"
 export SDKROOT
-export MONGODB_HOME=/usr/local/Cellar/mongodb-community/4.4.3
-export ERLANG_HOME=/usr/local/Cellar/erlang/24.0.3
-export LUAJIT_LIB=/usr/local/Cellar/openresty/1.15.8.3_1/luajit/lib:q:
-export LUAJIT_INC=/usr/local/Cellar/openresty/1.15.8.3_1/luajit/include/luajit-2.1
-export GO15VENDOREXPERIMENT=1
-export RABBITMQ_SERVER=/usr/local/Cellar/rabbitmq/3.8.19
 export TERM="xterm-256color"
 export GIPHY_API_KEY=xVXd8j7UxP8Lvn8Dn1aLjLAd5EHYGE31
 export GIPHY_RATING=pg-13
@@ -77,20 +68,16 @@ export ANDROID_HOME="/Users/jim/Library/Android/sdk"
 export PYTHONDONTWRITEBYTECODE=1
 export JAVA_HOME="/Users/jim/Library/Java/JavaVirtualMachines/openjdk-22.0.1/Contents/Home"
 export CLASSPAHT=".:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar"
+
 export PATH="/usr/local/sbin":$PATH
-export PATH="/usr/local/opt/mongodb-community@5.0/bin:$PATH"
 export PATH="$HOME/.jenv/bin":$PATH
 export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin":$PATH
 export PATH="$HOME/.rvm/bin":$PATH
 export PATH="$JAVA_HOME/bin":$PATH
 export PATH="/usr/local/opt/openssl/bin:$JMETER_HOME/bin":$PATH
 export PATH="$KE_HOME/bin":$PATH
-#export PATH="/usr/local/opt/node@18/bin":$PATH
 export PATH="/Users/jim/pear/bin:~/.composer/vendor/bin":$PATH
-export PATH="/Users/jim/Workdata/goland/bin":$PATH
-export PATH="/Users/jim/Workdata/testphp/bin":$PATH
 export PATH="$MAVEN_HOME/bin":$PATH
-export PATH="$GOPATH/bin":$PATH
 export PATH="$HOME/.rvm/bin":$PATH
 export PATH="/usr/local/opt/qt/bin:$PATH"
 export PATH="/usr/local/k9s_Darwin_amd64:$PATH"
@@ -102,37 +89,32 @@ export PATH="/usr/local/opt/make/libexec/gnubin:$PATH"
 export PATH="/Applications/SwitchHosts.app/Contents/MacOS:$PATH"
 export PATH="/usr/local/opt/rabbitmq/sbin/:/usr/local/apache-maven-3.6.3/bin":$PATH
 export PATH="/Users/jim/Workdata/protobuf.dart-master/protoc_plugin/bin":$PATH
-export PATH="/usr/local/Cellar/consul/1.16.0/bin":$PATH
 export PATH="/Applications/GoLand.app/Contents/MacOS":$PATH
-export PATH="/usr/local/go/bin":$PATH
 export PATH="/usr/local/oh-command-line-tools/bin":$PATH
 export PATH="/usr/local/command-line-tools/bin":$PATH
 export PATH="/usr/local/Cellar/ctags/5.8_2/bin":$PATH
 export PATH="/usr/local/opt/gnu-getopt/bin":$PATH
 export PATH="/usr/local/opt/gnu-indent/libexec/gnubin":$PATH
-export PATH="$GOPATH/bin":$PATH
 export PATH="/Users/jim/.cargo/bin":$PATH
-export PATH="/Users/jim/Workdata/rust/dtool/target/debug":$PATH
 export PATH="/usr/local/opt/findutils/libexec/gnubin:$PATH"
-export PATH="$GOROOT/bin":$PATH
 export PATH="/usr/local/Cellar/kubernetes-cli/1.28.2/bin":$PATH
-export PATH="/usr/local/Cellar/docker/23.0.1/bin":$PATH
-export PATH="/Applications/RustRover 2023.3 EAP.app/Contents/MacOS":$PATH
 export PATH="/usr/local/opt/binutils/bin:$PATH"
 export PATH="/usr/local/command-line-tools/bin:$PATH"
-export PATH="/usr/local/Cellar/kubebuilder/3.12.0/bin":$PATH
-export PATH="/Applications/IDA\ Freeware\ 8.3/ida64.app/Contents/MacOS":$PATH
 export PATH="/usr/local/Cellar/bash/5.2.15/bin":$PATH
 export PATH="/usr/local/Cellar/cocoapods/1.14.3/bin":$PATH
 export PATH="/Users/jim/Workdata/flutter/bin":$PATH
 export PATH="/Users/jim/Workdata/micro":$PATH
-#export PATH="/Applications/ServBay/package/node/20/20.10.0/bin/":$PATH
-export PATH="/Users/jim/Workdata/goland/src/jspp/testgo/bin":$PATH
-export PATH="/Users/jim/Workdata/graalvm-jdk-22.0.1+8.1/Contents/Home/lib/svm/bin:$PATH"
 export PATH="/Users/jim/.tiup/bin:$PATH"
 export PATH="/usr/local/Cellar/ruby/3.3.4/bin:$PATH"
 export PATH="/usr/local/lib/ruby/gems/3.3.0/bin:$PATH"
-
+export PATH="/Users/jim/Workdata/goland/bin":$PATH
+export PATH="$GOPATH/bin":$PATH
+export PATH="$GOROOT/bin":$PATH
+SDKROOT=$(xcrun --show-sdk-path)
+ZSH_THEME_GIT_PROMPT_PREFIX="%{$reset_color%}%{$fg[green]%}["
+ZSH_THEME_GIT_PROMPT_SUFFIX="]%{$reset_color%}"
+ZSH_THEME_GIT_PROMPT_DIRTY="%{$fg[red]%}*%{$reset_color%}"
+ZSH_THEME_GIT_PROMPT_CLEAN=""
 
 function a() {
   /Users/jim/Workdata/goland/src/jspp/testgo/shell/bootstrap.sh "$@"
