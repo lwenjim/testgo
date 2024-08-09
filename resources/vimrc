@@ -289,6 +289,8 @@ set foldlevel=1
 set foldlevelstart=99       
 set updatetime=100
 set cursorline
+set clipboard=unnamed
+
 syntax on                                                                                                            
 filetype plugin indent on 
 
@@ -303,14 +305,14 @@ let g:node_client_debug = 0
 
 nnoremap <tab>   :bnext<Return>
 nnoremap <s-tab> :bprev<Return>
-vnoremap <c-y>   "+y
-nnoremap <c-p>   "+p
+vnoremap <c-c>   "+y
 nnoremap <esc>   :noh<return>
 
 highlight clear CursorLine
 highlight Folded ctermfg=NONE ctermbg=NONE guibg=NONE guifg=NONE
 highlight Folded guibg=NONE guifg=NONE
 highlight FoldColumn guibg=NONE guifg=NONE
+
 
 colorscheme codedark
 "colorscheme molokai

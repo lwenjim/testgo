@@ -1,0 +1,70 @@
+[core]
+	excludesfile = /Users/jim/.gitignore_global
+	autocrlf = input
+    pager = delta 
+[difftool "sourcetree"]
+	cmd = opendiff \"$LOCAL\" \"$REMOTE\"
+	path = 
+[mergetool "sourcetree"]
+	cmd = /Applications/Sourcetree.app/Contents/Resources/opendiff-w.sh \"$LOCAL\" \"$REMOTE\" -ancestor \"$BASE\" -merge \"$MERGED\"
+	trustExitCode = true
+[user]
+	name = liuwenjin
+	email = liuwenjin@jspp.com
+[commit]
+	template = /Users/jim/.stCommitMsg
+[filesystem "Oracle Corporation|13|/dev/disk1s5"]
+	timestampResolution = 8000 nanoseconds
+	minRacyThreshold = 0 nanoseconds
+[url "git@code.jspp.com:"]
+	insteadOf = https://code.jspp.com
+[commit]
+	template = ~/.commit.template
+[oh-my-zsh]
+	hide-status = 1
+    hide-dirty = 1
+[alias]
+	rank = shortlog -sn --no-merges
+    s = status
+    st = status
+    sb = status -s -b
+    d = diff
+    di = diff
+    dc = diff --cached
+    dk = diff --check
+    dck = diff --cached --check
+    c = commit
+    ca = commit -a
+    cm = commit -m
+    ci = commit
+    l = log --oneline
+    lg = log --oneline --graph --decorate
+    o = checkout
+    co = checkout
+    ob = checkout -b
+    cob = checkout -b
+    co = checkout
+    ci = commit
+    br = branch
+    st = status
+    flow = flow
+[https]
+	proxy = https://127.0.0.1:33210
+[http]
+	sslVerify = false
+	proxy = http://127.0.0.1:33210
+[url "git@github.com:"]
+	insteadOf = https://github.com/
+
+
+[interactive]
+    diffFilter = delta --color-only
+[color]
+	ui = true
+[delta]
+    syntax-theme = 1337
+    plus-style = bold syntax "#002800"
+[merge]
+    conflictstyle = diff3
+[diff]
+    colorMoved = default

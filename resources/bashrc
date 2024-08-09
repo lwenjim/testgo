@@ -9,8 +9,11 @@ alias cat='bat --tabs 4 --theme gruvbox-dark -p --paging=never'
 alias python='/usr/local/bin/python3.7'
 alias pip='/usr/local/bin/pip3.7'
 alias ag='/usr/local/bin/ag --color-match 35:48 --color-path 6:37 '
-alias rg='/Users/jim/.cargo/bin/rg --ignore-file=/Users/jim/.gitignore --colors "match:fg:magenta" --colors "line:bg:yellow" '
+alias rg='/Users/jim/.cargo/bin/rg --ignore-file=/Users/jim/.gitignore --colors "match:fg:magenta" --colors "line:bg:black" '
 alias fd='/usr/local/bin/fd --ignore-file=/Users/jim/.gitignore '
+alias code='/usr/local/bin/code 2>/dev/null '
+alias ls='/Users/jim/.cargo/bin/exa'
+
 
 export GO15VENDOREXPERIMENT=1
 export GO_JSPP_WORKSPACE=Workdata/goland/src/jspp
@@ -23,6 +26,7 @@ export GOROOT="/Users/jim/Workdata/goland/go1.21.12"
 export CGO_ENABLED=1
 export GOMAXPROCS=12
 
+export CARGO_NET_GIT_FETCH_WITH_CLI=true
 export BAT_PAGER="less -RF"
 export ELECTRON_MIRROR="http://cdn.npm.taobao.org/dist/electron/"
 export FZF_COMPLETION_TRIGGER='**' 
@@ -56,14 +60,14 @@ export VIMCONFIG=/Users/jim/Workdata/nvim-config
 export VIMDATA=~/.local/share/nvim
 export GIN_MODE=release
 export ISABLE_MAGIC_FUNCTIONS=true
-export RUST_BACKTRACE=full
+export RUST_BACKTRACE=0
 export ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=60'
 export JMETER_HOME=/usr/local/apache-jmeter-5.1.1
 export KE_HOME=/Users/jim/Workdata/EFAK
-export HOMEBREW_NO_AUTO_UPDATE=1
+#export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_BOTTLE_DOMAIN=https://mirrors.aliyun.com/homebrew/homebrew-bottles
-export HOMEBREW_NO_INSTALL_CLEANUP=1
-export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+#export HOMEBREW_NO_INSTALL_CLEANUP=1
+#export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
 export ANDROID_HOME="/Users/jim/Library/Android/sdk"
 export PYTHONDONTWRITEBYTECODE=1
 export JAVA_HOME="/Users/jim/Library/Java/JavaVirtualMachines/openjdk-22.0.1/Contents/Home"
@@ -116,6 +120,11 @@ ZSH_THEME_GIT_PROMPT_SUFFIX="]%{$reset_color%}"
 ZSH_THEME_GIT_PROMPT_DIRTY="%{$fg[red]%}*%{$reset_color%}"
 ZSH_THEME_GIT_PROMPT_CLEAN=""
 
+MACOSX_SDK="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+export LIBRARY_PATH="$MACOSX_SDK/usr/lib"
+export CPATH="$MACOSX_SDK/usr/include"
+
 function a() {
   /Users/jim/Workdata/goland/src/jspp/testgo/shell/bootstrap.sh "$@"
 }
+. "$HOME/.cargo/env"
