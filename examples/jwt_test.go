@@ -1,8 +1,8 @@
 package examples
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
 
 	"github.com/golang-jwt/jwt/v5"
 )

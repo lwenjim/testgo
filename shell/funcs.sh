@@ -454,6 +454,11 @@ function move-vsc-config() {
     echo "mv ~/Library/Saved\\ Application\\ State/com.microsoft.VSCode.savedState-bak ~/Library/Saved\\ Application\\ State/com.microsoft.VSCode.savedState"
 }
 
+function checkout-go-mod-sum(){
+    cd /Users/jim/Workdata/goland/src/jspp || exit 1
+    ll ./**/go.mod|awk -F' '  '{print $7}'|awk -F'/' '{print $1}'|xargs -I {} echo "cd {};git checkout go.mod go.sum"|xargs  -I {} bash -c {}
+}
+
 dir=${SHELL_FOLDER}/handlers
 list=$(ls $dir)
 for i in ${list[@]} ; do
