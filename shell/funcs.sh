@@ -1,5 +1,5 @@
 #! /usr/bin/env bash
-# shellcheck disable=SC2206,2068,2086,1091,2317,1090,2090,2089,2059,2046,2184
+# shellcheck disable=SC2206,2068,2086,1091,2317,1090,2090,2089,2059,2046,2184,2094,2128,2178,2030,2031,2129
 
 declare -A ServiceServers=(
     ["mongo"]=27017
@@ -457,6 +457,38 @@ function move-vsc-config() {
 function checkout-go-mod-sum(){
     cd /Users/jim/Workdata/goland/src/jspp || exit 1
     ll ./**/go.mod|awk -F' '  '{print $7}'|awk -F'/' '{print $1}'|xargs -I {} echo "cd {};git checkout go.mod go.sum"|xargs  -I {} bash -c {}
+}
+
+function CommitTimes() {
+    commitTimes=/tmp/commitTimes.log
+    author=hewen@jspp.cn
+    echo "">$commitTimes
+    for server in "${!ServiceServers[@]}"; do
+        cd /Users/jim/Workdata/goland/src/jspp/$server 2>/dev/null || continue
+        git log --pretty='%aN' | sort | uniq -c | sort -k1 -n -r | head -n 3 1>>$commitTimes
+    done
+    
+    echo "">>$commitTimes
+    cat $commitTimes|awk -F' ' '{ if($2 in num == 0) {num[$2]=0}; num[$2] += $1 } END{for(key in num){ if(num[key]==0) continue; else print key": ",num[key]", "}}'|xargs echo >>$commitTimes
+    cat $commitTimes
+
+    cat $commitTimes|awk -F' ' '{ if($2 in num == 0) {num[$2]=0}; num[$2] += $1 } END{for(key in num){ if(num[key]==0) continue; else if (key=="liuwenjin")print key"@jspp.com"; else print key"@jspp.cn"}}'|xargs -I {} bash -c 'source ~/.zshrc 2>/dev/null; a ChangeLineNum "$*"' _ {} 
+}
+
+function ChangeLineNum() {
+    filename=/tmp/countLine.log
+    author=$2
+    echo "">$filename
+    for server in "${!ServiceServers[@]}"; do
+        cd /Users/jim/Workdata/goland/src/jspp/$server 2>/dev/null || continue
+        git log --author="$author" --pretty=tformat: --numstat | awk '{ add += $1; subs += $2; loc += $1 - $2 } END { if (add > 0) {printf "%s,%s,%s\n", add, subs, loc }}' - 1>>$filename
+    done
+    
+    echo "">>$filename
+    data=$(cat $filename|awk -F',' '{ add += $1;subs += $2;loc += $3 } END { printf "added lines: %s, removed lines: %s, total lines: %s\n",add,subs,loc }')
+    echo $author>>$filename
+    echo $data>>$filename
+    cat $filename
 }
 
 dir=${SHELL_FOLDER}/handlers
