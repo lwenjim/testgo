@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 )
@@ -14,28 +15,28 @@ type Config struct {
 }
 
 func main() {
-	files, err := filepath.Glob("*.yaml")
+	files, err := filepath.Glob("/Users/jim/Workdata/goland/src/jspp/k8sconfig-dev/*.yaml")
 	if err != nil {
 		fmt.Printf("err: %v\n", err)
 		return
 	}
 
 	for _, file := range files {
-		buf, err := os.ReadFile(file)
+		fmt.Printf("file: %v\n", file)
+		buf, err := os.ReadFile("/Users/jim/Workdata/goland/src/jspp/k8sconfig-dev/usersv.yaml")
 		if err != nil {
 			fmt.Printf("err: %v\n", err)
 			return
 		}
-		var data []Config
-		err = yaml.Unmarshal(buf, data)
+		yamls := string(buf)
+		strs := strings.Split(yamls, "---")
+		var data Config
+		err = yaml.Unmarshal([]byte(strs[0]), &data)
 		if err != nil {
 			fmt.Printf("err: %v\n", err)
 			return
 		}
-		fmt.Printf("data: %v\n", &data)
-		for _, item := range data {
-			fmt.Printf("item.Data: %v\n", item.Data)
-			return
-		}
+		fmt.Printf("data: %v\n", data)
+		break
 	}
 }
