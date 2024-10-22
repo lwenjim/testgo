@@ -2,41 +2,39 @@
 # shellcheck disable=SC2206,2068,2086,1091,2317,1090,2090,2089,2059,2046,2184,2094,2128,2178,2030,2031,2129
 
 declare -A ServiceServers=(
-    ["mongo"]=27017
-    ["mysql"]=3306
-    ["redis"]=6379
-    ["pushersv"]=64440
-    ["messagesv"]=64441
-    ["squaresv"]=64442
-    ["edgesv"]=64443
-    ["usersv"]=64444
+["mongo"]=27017
+["mysql"]=3306
+["redis"]=6379
+["pushersv"]=64440
+["messagesv"]=64441
+["squaresv"]=64442
+["edgesv"]=64443
+["usersv"]=64444
 
-    ["authsv"]=64445
-    ["uploadsv"]=64446
-    ["deliversv"]=64447
-    ["usergrowthsv"]=64448
-    ["riskcontrolsv"]=64449
-    ["paysv"]=64450
-    ["connectorsv"]=64451
-    ["favoritesv"]=64452
-    ["openapi"]=64453
-    ["groupsv"]=64454
+["authsv"]=64445
+["uploadsv"]=64446
+["deliversv"]=64447
+["usergrowthsv"]=64448
+["riskcontrolsv"]=64449
+["paysv"]=64450
+["connectorsv"]=64451
+["favoritesv"]=64452
+["openapi"]=64453
+["groupsv"]=64454
 )
 
 debug=false
 
-function sync-config() {
+function SyncConfig() {
     cd ~ || exit 1
     cd $GO_JSPP_WORKSPACE || exit 1
     cd testgo || exit 1
     cp ~/.vimrc . \
-    && cp ~/.bashrc . \
-    && cp ~/.zshrc . \
-    && cp ~/.bash_history . \
-    && cp ~/.zsh_history . \
-    && git add . \
-    && git commit -m "update config $(date +"%Y-%m-%d %H:%I:%S")" \
-    && git push
+        && cp ~/.bashrc . \
+        && cp ~/.zshrc . \
+        && git add . \
+        && git commit -m "update config $(date +"%Y-%m-%d %H:%I:%S")" \
+        && git push
 }
 
 function main() {
@@ -69,23 +67,23 @@ function log() {
     eval set -- "${args}"
     while true; do
         case "$1" in
-        -o | --option)
-            option=$2
-            shift
-            shift
-            ;;
-        -p | --pipe)
-            pipe=$2
-            shift
-            shift
-            ;;
-        --)
-            shift
-            ;;
-        __ | *)
-            shift
-            break
-            ;;
+            -o | --option)
+                option=$2
+                shift
+                shift
+                ;;
+            -p | --pipe)
+                pipe=$2
+                shift
+                shift
+                ;;
+            --)
+                shift
+                ;;
+            __ | *)
+                shift
+                break
+                ;;
         esac
     done
     lprint $option
@@ -133,7 +131,7 @@ function port-forward() {
     ps aux | pgrep kube | awk '{print "kill -9 " $1}' | bash
     template="%-19s %-30s %-10s\n"
     printf "${template}" "服务名称" "环境变量" "    变量值"
-    
+
     if [[ ${#arr[@]} -gt 0 ]];then
         for server in ${arr[@]}; do
             port-forward-simple "$server" "${ServiceServers[$server]}"
@@ -146,7 +144,7 @@ function port-forward() {
             port-forward-simple "$server" "${ServiceServers[$server]}"
         done
     fi
-    
+
     if [[ $isReloadNginx != 1 ]];then
         general-conf-for-nginx
         brew services reload openresty
@@ -201,10 +199,10 @@ function help() {
 
 function general-conf-for-nginx() {
     declare -A DebugServers=(
-        # ["authsv"]=19090
-        # ["usersv"]=19091
-        # ["paysv"]=19092
-        # ["edgesv"]=19093
+    # ["authsv"]=19090
+    # ["usersv"]=19091
+    # ["paysv"]=19092
+    # ["edgesv"]=19093
     )
     filename=/usr/local/etc/openresty/servers/rpc.conf
     if [[ "$debug" = "false" ]]; then
@@ -215,31 +213,31 @@ function general-conf-for-nginx() {
             continue
         fi
         read -r -d '' template <<-'EOF'
-    server {
-        server_name aaaaaa-svc;
-        listen 9090 http2;
-        access_log /tmp/aaaaaa-svc_nginx.log combined;
+        server {
+            server_name aaaaaa-svc;
+            listen 9090 http2;
+            access_log /tmp/aaaaaa-svc_nginx.log combined;
 
-        location / {
-            grpc_pass grpc://127.0.0.1:77777;
+            location / {
+                grpc_pass grpc://127.0.0.1:77777;
+            }
         }
-    }
 EOF
-        finded=false
-        if [[ " ${!DebugServers[*]} " =~ $server ]]; then
-            finded=true
-        fi
-        template="${template//aaaaaa/$server}"
-        targetPort=${ServiceServers[$server]}
-        if $finded; then
-            targetPort=${DebugServers[$server]}
-        fi
-        template="${template//77777/$targetPort}"
-        if [[ "$debug" = "false" ]]; then
-            echo "$template" >>$filename
-        else
-            echo "$template"
-        fi
+    finded=false
+    if [[ " ${!DebugServers[*]} " =~ $server ]]; then
+        finded=true
+    fi
+    template="${template//aaaaaa/$server}"
+    targetPort=${ServiceServers[$server]}
+    if $finded; then
+        targetPort=${DebugServers[$server]}
+    fi
+    template="${template//77777/$targetPort}"
+    if [[ "$debug" = "false" ]]; then
+        echo "$template" >>$filename
+    else
+        echo "$template"
+    fi
     done
 }
 
@@ -338,9 +336,9 @@ function solitaire() {
         "user_qrcode": "'$userQrcode'",
         "group_qrcode": "'$groupQrcode'",
         "content": [
-            {
+        {
             "content": "abc"
-            }
+        }
         ],
         "example": "abc",
         "extra_info": "abc"
@@ -362,15 +360,15 @@ function solitaire() {
     fi
 
     postResp=$(curl --silent -d '
+    {
+        "user_qrcode": "'$userQrcode'",
+        "topic_qrcode": "'$topicQrcode'",
+        "content": [
         {
-            "user_qrcode": "'$userQrcode'",
-            "topic_qrcode": "'$topicQrcode'",
-            "content": [
-                {
-                    "content": "'$(uuidgen)'"
-                }
-            ]
-        }' "$domain/solitaire/post")
+            "content": "'$(uuidgen)'"
+        }
+        ]
+    }' "$domain/solitaire/post")
     echo $postResp
     code=$(echo $postResp | jq '.res')
     if [[ "$code" != "200" ]]; then
@@ -385,23 +383,23 @@ function vote() {
     domain=https://devwww.jspp.com
     # domain=http://localhost:18083
     addResp=$(curl --silent -d '{
-            "name": "'$(openssl rand -base64 8)'",
-            "user_qrcode": "'$userQrcode'",
-            "group_qrcode": "'$groupQrcode'",
-            "end_time": '$(date -v+5d +"%s")',
-            "is_multi_select": true,
-            "is_anonymous": true,
-            "option": [
-                {
-                    "name": "中国队",
-                    "image": "https://img.jspp.com/xxx/xxx.png"
-                },
-                {
-                    "name": "美国队",
-                    "image": "https://img.jspp.com/xxx/xxx222.png"
-                }
-            ]
-        }' $domain/vote/add)
+        "name": "'$(openssl rand -base64 8)'",
+        "user_qrcode": "'$userQrcode'",
+        "group_qrcode": "'$groupQrcode'",
+        "end_time": '$(date -v+5d +"%s")',
+        "is_multi_select": true,
+        "is_anonymous": true,
+        "option": [
+        {
+            "name": "中国队",
+            "image": "https://img.jspp.com/xxx/xxx.png"
+        },
+        {
+            "name": "美国队",
+            "image": "https://img.jspp.com/xxx/xxx222.png"
+        }
+        ]
+    }' $domain/vote/add)
     echo $addResp
     code=$(echo $addResp | jq '.res')
     if [[ "$code" != "200" ]]; then
@@ -423,21 +421,21 @@ function vote() {
             "user_qrcode": "'$userQrcode'",
             "topic_qrcode": "'$topicQrcode'"
         }' "$domain/vote/record")
-    echo $recordResp
-    code=$(echo $recordResp | jq '.res')
-    if [[ "$code" != "200" ]]; then
-        echo "failed for /vote/record"
-        return
-    fi
+        echo $recordResp
+        code=$(echo $recordResp | jq '.res')
+        if [[ "$code" != "200" ]]; then
+            echo "failed for /vote/record"
+            return
+        fi
 
     postResp=$(curl --silent -d '
-        {
-            "user_qrcode": "'$userQrcode'",
-            "topic_qrcode": "'$topicQrcode'",
-            "option_id": [
-                '$(echo $recordResp | jq ".data.options.[0].option.id")'
-            ]
-        }' "$domain/vote/post")
+    {
+        "user_qrcode": "'$userQrcode'",
+        "topic_qrcode": "'$topicQrcode'",
+        "option_id": [
+        '$(echo $recordResp | jq ".data.options.[0].option.id")'
+        ]
+    }' "$domain/vote/post")
     echo $postResp
     code=$(echo $postResp | jq '.res')
     if [[ "$code" != "200" ]]; then
@@ -467,7 +465,7 @@ function CommitTimes() {
         cd /Users/jim/Workdata/goland/src/jspp/$server 2>/dev/null || continue
         git log --pretty='%aN' | sort | uniq -c | sort -k1 -n -r | head -n 3 1>>$commitTimes
     done
-    
+
     echo "">>$commitTimes
     cat $commitTimes|awk -F' ' '{ if($2 in num == 0) {num[$2]=0}; num[$2] += $1 } END{for(key in num){ if(num[key]==0) continue; else print key": ",num[key]", "}}'|xargs echo >>$commitTimes
     cat $commitTimes
@@ -483,12 +481,31 @@ function ChangeLineNum() {
         cd /Users/jim/Workdata/goland/src/jspp/$server 2>/dev/null || continue
         git log --author="$author" --pretty=tformat: --numstat | awk '{ add += $1; subs += $2; loc += $1 - $2 } END { if (add > 0) {printf "%s,%s,%s\n", add, subs, loc }}' - 1>>$filename
     done
-    
+
     echo "">>$filename
     data=$(cat $filename|awk -F',' '{ add += $1;subs += $2;loc += $3 } END { printf "added lines: %s, removed lines: %s, total lines: %s\n",add,subs,loc }')
     echo $author>>$filename
     echo $data>>$filename
     cat $filename
+}
+
+function insert1000000t_push(){
+    num=0
+    mysql -uroot -P3306 -p123456789 -h127.0.0.1 jspp -e 'TRUNCATE t_push'
+    for index in $(seq 1 100); do
+        num=$((num + 1))
+        echo 'insert into t_push(id, app_id, device_id, device_token,channel_type, ringtone_sound, text_message_sound) values (null, 0, ' $num ', "b44aba24fbcc24e07af700314eb41438f43424895a916f9a9e7d8b818905684f", 1, null, null)' >/tmp/t_push_test.sql 
+        for item in $(seq 1 10000); do
+            num=$((num + 1))
+            echo ',(null, 0, '$num', "b44aba24fbcc24e07af700314eb41438f43424895a916f9a9e7d8b818905684f", 1, null, null)' >>/tmp/t_push_test.sql 
+        done
+        mysql -uroot -P3306 -p123456789 -h127.0.0.1 jspp -e 'source /tmp/t_push_test.sql'
+    done
+}
+
+function stockTrade() {
+    echo $((6599*5/10+9600*2/10+400*5+300*3))
+    echo 
 }
 
 dir=${SHELL_FOLDER}/handlers
