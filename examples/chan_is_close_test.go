@@ -2,11 +2,12 @@ package examples
 
 import (
 	"fmt"
+	"testing"
 	"time"
 	"unsafe"
 )
 
-func TestChanIsClose() {
+func TestChanIsClose(t *testing.T) {
 	c := make(chan int)
 	go func() {
 		c <- 0

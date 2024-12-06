@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"testing"
 )
 
 type Once struct {
@@ -25,7 +26,7 @@ func (o *Once) Do(f func()) {
 	}
 }
 
-func TestMutex() {
+func TestMutex(t *testing.T) {
 	var a Once
 	a.Do(func() {
 		resp, err := http.Get("https://www.baidu.com")

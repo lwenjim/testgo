@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"runtime/trace"
 	"sync/atomic"
+	"testing"
 )
 
 var stop uint64
@@ -24,7 +25,7 @@ func allocate() {
 	_ = make([]byte, int((1<<20)*0.25))
 }
 
-func TestGC() {
+func TestGC(t *testing.T) {
 	f, _ := os.Create("trace.out")
 	defer f.Close()
 	_ = trace.Start(f)

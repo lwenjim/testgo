@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"testing"
 )
 
-func TestJsonConvert() {
+func TestJsonConvert(t *testing.T) {
 	var bodyJson [4096]byte
 	total, err := os.Stdin.Read(bodyJson[:])
 	if err != nil {
