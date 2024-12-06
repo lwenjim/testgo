@@ -85,3 +85,10 @@ function AppLogReportData(){
     ' -plaintext localhost:19093 rpc.Edge.AppLogReport)
     echo $addResp 
 }
+
+function NetSecurityDataReport() {
+    addResp=$(grpcurl -d '
+{"auth":{"token":{"user_id":1}},"cmd":1,"request_data":"CgQSAigBEMe3qP1B","response_data":"CgMIyAESFwgBEgQiIigp8gEMIjEyM0BxcS5jb20i"}
+    ' -plaintext localhost:19091 rpc.NetSecurityDataReport.ReceiveReportData)
+    echo $addResp  
+}
