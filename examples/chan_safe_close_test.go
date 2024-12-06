@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"testing"
 	"time"
 )
 
-func TestChanSafeClose() {
+func TestChanSafeClose(t *testing.T) {
 	c := make(chan int, 10)
 	wg := sync.WaitGroup{}
 	ctx, cancel := context.WithCancel(context.TODO())

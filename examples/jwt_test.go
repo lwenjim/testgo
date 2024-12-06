@@ -3,11 +3,12 @@ package examples
 import (
 	"crypto/rand"
 	"fmt"
+	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func TestJWT() {
+func TestJWT(t *testing.T) {
 	mapClaims := jwt.MapClaims{
 		"iss": "程序员陈明勇",
 		"sub": "chenmingyong.cn",

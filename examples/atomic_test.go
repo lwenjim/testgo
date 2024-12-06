@@ -3,9 +3,10 @@ package examples
 import (
 	"sync"
 	"sync/atomic"
+	"testing"
 )
 
-func TestAtomic() {
+func TestAtomic(t *testing.T) {
 	var count = 0
 	var count2 atomic.Int32
 	var wg sync.WaitGroup

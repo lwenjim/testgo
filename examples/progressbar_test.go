@@ -1,12 +1,13 @@
 package examples
 
 import (
+	"testing"
 	"time"
 
 	"github.com/cheggaaa/pb/v3"
 )
 
-func TestProgressBar() {
+func TestProgressBar(t *testing.T) {
 	count := 1000
 	bar := pb.StartNew(count)
 	for i := 0; i < count; i++ {

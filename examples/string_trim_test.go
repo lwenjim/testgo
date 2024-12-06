@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"testing"
 )
 
 type trim string
@@ -19,7 +20,7 @@ func (t *trim) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func TestTrim() {
+func TestTrim(t *testing.T) {
 	type user struct {
 		Name  trim `json:"name"`
 		Email trim `json:"email"`
