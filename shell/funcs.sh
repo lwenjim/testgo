@@ -131,14 +131,11 @@ function port-forward() {
     ps aux | pgrep kube | awk '{print "kill -9 " $1}' | bash
     template="%-19s %-30s %-10s\n"
     printf "${template}" "服务名称" "环境变量" "    变量值"
-
     if [[ ${#arr[@]} -gt 0 ]];then
         for server in ${arr[@]}; do
             port-forward-simple "$server" "${ServiceServers[$server]}"
         done
-        if [[ ${#arr[@]} == 2 && ((${arr[2]} == "redis" && ${arr[1]} == "mysql") || (${arr[1]} == "redis" && ${arr[2]} == "mysql")) ]];then
-            isReloadNginx=1
-        fi
+        isReloadNginx=1
     else
         for server in "${!ServiceServers[@]}"; do
             port-forward-simple "$server" "${ServiceServers[$server]}"
