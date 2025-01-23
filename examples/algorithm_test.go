@@ -475,7 +475,7 @@ func (*Algorithm) PermuteUnique(nums []int) [][]int {
 }
 func TestAlgorithm_GenerateParenthesis(t *testing.T) {
 	a := new(Algorithm)
-	res := a.GenerateParenthesis(8)
+	res := a.GenerateParenthesis(2)
 	for v := range res {
 		fmt.Printf("res: %v\n", res[v])
 	}
