@@ -1,10 +1,9 @@
 package main
 
 import (
-	"fmt"
+	"jspp/testgo/cmd"
 )
 
 func main() {
-	a := "abc"
-	fmt.Println(a[len(a)-1:])
+	cmd.Execute()
 }
