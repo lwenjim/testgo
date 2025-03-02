@@ -4,10 +4,12 @@ import (
 	"crypto/des"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/apaxa-go/eval"
 	"github.com/spf13/cobra"
 	"github.com/traefik/yaegi/interp"
+	"github.com/traefik/yaegi/stdlib"
 )
 
 var rootCmd = &cobra.Command{
@@ -121,43 +123,40 @@ var superSubCmd = &cobra.Command{
 	Short: "eval expr string",
 	Long:  "eval expr from input or args",
 	Run: func(cmd *cobra.Command, args []string) {
-		var exprStr string
-		if len(args) == 1 {
-			exprStr = args[0]
+		exprStr, err := getParams(args)
+		if err != nil {
+			fmt.Println(err.Error())
+			return
 		}
-
 		if len(exprStr) == 0 {
-			if i, err := fmt.Scan(&exprStr); err != nil {
+			fmt.Println("len(exprStr) == 0")
+			return
+		}
+		i := interp.New(interp.Options{})
+		_ = i.Use(stdlib.Symbols)
+		for _, v := range strings.Split(exprStr, ";") {
+			_, err := i.Eval(v)
+			if err != nil {
 				fmt.Println(err.Error())
-				return
-			} else if i <= 0 {
-				fmt.Println(err.Error())
-				return
+				continue
 			}
 		}
-
-		if len(exprStr) == 0 {
-			fmt.Println("error param")
-		}
-
-		i := interp.New(interp.Options{})
-
-		const src = `package foo;func Bar(s string) string { return s + "-Foo" }`
-		_, err := i.Eval(src)
-		if err != nil {
-			panic(err)
-		}
-
-		v, err := i.Eval("foo.Bar")
-		if err != nil {
-			panic(err)
-		}
-
-		bar := v.Interface().(func(string) string)
-
-		r := bar("Kung")
-		println(r)
 	},
+}
+
+func getParams(args []string) (string, error) {
+	var exprStr string
+	if len(args) == 1 {
+		exprStr = args[0]
+	}
+
+	if len(exprStr) == 0 {
+		if _, err := fmt.Scan(&exprStr); err != nil {
+			fmt.Println(err.Error())
+			return "", err
+		}
+	}
+	return exprStr, nil
 }
 
 func init() {

@@ -489,7 +489,7 @@ function ChangeLineNum() {
 function insert1000000t_push(){
     num=0
     mysql -uroot -P3306 -p123456789 -h127.0.0.1 jspp -e 'TRUNCATE t_push'
-    for index in $(seq 1 100); do
+    for _ in $(seq 1 100); do
         num=$((num + 1))
         echo 'insert into t_push(id, app_id, device_id, device_token,channel_type, ringtone_sound, text_message_sound) values (null, 0, ' $num ', "b44aba24fbcc24e07af700314eb41438f43424895a916f9a9e7d8b818905684f", 1, null, null)' >/tmp/t_push_test.sql 
         for item in $(seq 1 10000); do
