@@ -7,9 +7,11 @@ import (
 )
 
 func TestAtomic(t *testing.T) {
-	var count = 0
+	var count = 0	
 	var count2 atomic.Int32
 	var wg sync.WaitGroup
+
+	// m := map[string]int{}
 	for i := 0; i < 10000; i++ {
 		wg.Add(1)
 		go func() {
