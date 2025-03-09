@@ -13,7 +13,7 @@ function icurl() {
     echo $args
     while true; do
         case "$1" in
-        -t | --content-type)        
+        -t | --content-type)
             shift
             contentType=$1
             shift
@@ -27,39 +27,39 @@ function icurl() {
             url=$2
             ;;
         __ | *)
-            shift         
+            shift
             break
             ;;
         esac
     done
 
     case "${contentType}" in
-        "application/json")
-            data=$($SHELL_FOLDER/../bin/json-convert "application/json")
-            curl \
+    "application/json")
+        data=$($SHELL_FOLDER/../bin/json-convert "application/json")
+        curl \
             -H 'Content-Type: application/json' \
             -H "Content-Length: ${#data}" \
             -d "${data}" \
             $url
         ;;
-        "application/x-www-form-urlencoded")
-            data=$($SHELL_FOLDER/../bin/json-convert "application/x-www-form-urlencoded")
-            curl \
+    "application/x-www-form-urlencoded")
+        data=$($SHELL_FOLDER/../bin/json-convert "application/x-www-form-urlencoded")
+        curl \
             -H 'Content-Type: application/x-www-form-urlencoded' \
             -H "Content-Length: ${#data}" \
             -d "${data}" \
             $url
         ;;
-        "multipart/form-data")
-            data=$($SHELL_FOLDER/../bin/json-convert 'multipart/form-data' 'WebAppBoundary')
-            curl \
+    "multipart/form-data")
+        data=$($SHELL_FOLDER/../bin/json-convert 'multipart/form-data' 'WebAppBoundary')
+        curl \
             -H 'Content-Type: multipart/form-data; boundary=WebAppBoundary' \
             -H "Content-Length: ${#data}" \
             -d "${data}" \
             $url
         ;;
-        *)
-            echo "default (none of above)"
+    *)
+        echo "default (none of above)"
         ;;
     esac
 }

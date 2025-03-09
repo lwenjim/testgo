@@ -13,6 +13,6 @@ openssl req -new -key /tmp/haimaxy.key -out /tmp/haimaxy.csr -subj "/CN=haimaxy/
 
 openssl x509 -req -in /tmp/haimaxy.csr -CA /Users/jim/.minikube/ca.crt -CAkey /Users/jim/.minikube/ca.key -CAcreateserial -out /tmp/haimaxy.crt -days 500
 
-for each in $(kubectl get ns -o jsonpath="{.items[*].metadata.name}" | grep -v kube-system);do
+for each in $(kubectl get ns -o jsonpath="{.items[*].metadata.name}" | grep -v kube-system); do
   echo kubectl delete ns $each
 done

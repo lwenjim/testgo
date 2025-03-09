@@ -3,7 +3,7 @@ function GroupPublicApply() {
     domain=localhost:9090
     addResp=$(grpcurl -plaintext $domain rpc.Group.GetGroupChatCategorys)
     echo $addResp
-    
+
     addResp=$(grpcurl -d '
        {
            "auth":{
@@ -45,7 +45,7 @@ function GroupPublicApply() {
     echo $addResp
 }
 
-function AppLogReportData(){
+function AppLogReportData() {
     addResp=$(grpcurl -d '
             {
                 "auth": {
@@ -83,12 +83,12 @@ function AppLogReportData(){
                 ]
             }
     ' -plaintext localhost:19093 rpc.Edge.AppLogReport)
-    echo $addResp 
+    echo $addResp
 }
 
 function NetSecurityDataReport() {
     addResp=$(grpcurl -d '
 {"auth":{"token":{"user_id":10019}},"cmd":8,"request_data":"CgUSAyijThAg","response_data":"CgMIyAE="}
     ' -plaintext localhost:19091 rpc.NetSecurityDataReport.ReceiveReportData)
-    echo $addResp  
+    echo $addResp
 }
