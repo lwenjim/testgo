@@ -28,10 +28,6 @@ func getParams(args []string) (string, error) {
 	return exprStr, nil
 }
 
-func init() {
-	rootCmd.AddCommand(subCmd)
-}
-
 func Exec() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
