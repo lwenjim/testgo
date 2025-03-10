@@ -520,12 +520,15 @@ function goshell() {
         if [[ "$item" == "testgo" ]]; then
             continue
         fi
+        if [[ ! -d "$item" ]];then
+            continue
+        fi
         cd $item || exit
         if [[ ! -f "go.mod" ]]; then
             cd ..
             continue
         fi
-        removeFiles=("go.work" "go.work.sum")
+        removeFiles=("go.work" "go.work.sum" "go.work.bak")
         for item2 in "${removeFiles[@]}"; do
             if [[ -f "$item2" ]]; then
                 rm -rf $item2 
