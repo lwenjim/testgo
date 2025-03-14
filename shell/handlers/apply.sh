@@ -88,7 +88,32 @@ function AppLogReportData() {
 
 function NetSecurityDataReport() {
     addResp=$(grpcurl -d '
-{"auth":{"token":{"user_id":10019}},"cmd":8,"request_data":"CgUSAyijThAg","response_data":"CgMIyAE="}
+    {
+      "auth": {
+        "token": {
+          "user_id": 10019
+        }
+      },
+      "cmd": 8,
+      "request_data": "CgUSAyijThAg",
+      "response_data": "CgMIyAE="
+    }
     ' -plaintext localhost:19091 rpc.NetSecurityDataReport.ReceiveReportData)
+    echo $addResp
+}
+
+function NetSecurityDataReport() {
+    addResp=$(grpcurl -d '
+    {
+      "auth": {
+        "token": {
+          "user_id": 10019
+        }
+      },
+      "cmd": 8,
+      "request_data": "CgUSAyijThAg",
+      "response_data": "CgMIyAE="
+    }
+    ' -plaintext localhost:19091 rpc.Upload.UploadFile)
     echo $addResp
 }
