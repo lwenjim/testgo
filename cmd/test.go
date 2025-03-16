@@ -81,8 +81,8 @@ var testCmd = &cobra.Command{
 		// 	panic(err)
 		// }
 
-		s := []int{3, 5, 4, 9}
-		examples.InsertionSort(s)
+		s := []int{3, 1, 5, 2, 4, 9}
+		examples.HeapSort(s)
 		fmt.Printf("s: %v\n", s)
 	},
 }
