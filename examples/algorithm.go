@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"testing"
 	"time"
 )
 
@@ -80,6 +79,11 @@ func (*Algorithm) Permute(nums []int) [][]int {
 }
 
 func index(s []int, num int) int {
+	for i := range s {
+		if s[i] == num {
+			return i
+		}
+	}
 	return 0
 }
 
@@ -157,9 +161,7 @@ func (*Algorithm) TotalNQueens(n int) int {
 /*
 你要开发一座金矿，地质勘测学家已经探明了这座金矿中的资源分布，并用大小为 m * n 的网格
 
-	进行了标注。每个单元格中的整数就表示这一单元格中的黄金数量；如果该单元格是空的，那么就是
-
-。
+进行了标注。每个单元格中的整数就表示这一单元格中的黄金数量；如果该单元格是空的，那么就是
 
 为了使收益最大化，矿工需要按以下规则来开采黄金：
 
@@ -168,7 +170,7 @@ func (*Algorithm) TotalNQueens(n int) int {
 每个单元格只能被开采（进入）一次。
 不得开采（进入）黄金数目为
 
-	的单元格。
+的单元格。
 
 矿工可以从网格中 「任意一个」 有黄金的单元格出发或者是停止。
 
@@ -424,106 +426,6 @@ func (*Algorithm) WaysToStep2(n int) int {
 		dp[i] = (dp[i-1] + dp[i-2] + dp[i-3]) % mod
 	}
 	return dp[n]
-}
-
-func BubbleSort(s []int) {
-	for i := 0; i < len(s); i++ {
-		for j := i + 1; j < len(s); j++ {
-			if s[i] > s[j] {
-				s[i], s[j] = s[j], s[i]
-			}
-		}
-	}
-}
-
-func SelectionSort(s []int) {
-	for i := 0; i < len(s); i++ {
-		m := s[i]
-		g := i
-		for j := i + 1; j < len(s); j++ {
-			if m > s[j] {
-				m = s[j]
-				g = j
-			}
-		}
-		s[i], s[g] = s[g], s[i]
-	}
-}
-
-func QuickSort(arr []int) []int {
-	return _quickSort(arr, 0, len(arr)-1)
-}
-
-func _quickSort(arr []int, left, right int) []int {
-	if left < right {
-		partitionIndex := partition(arr, left, right)
-		_quickSort(arr, left, partitionIndex-1)
-		_quickSort(arr, partitionIndex+1, right)
-	}
-	return arr
-}
-
-func partition(arr []int, left, right int) int {
-	pivot := left
-	j := pivot + 1
-
-	for i := j; i <= right; i++ {
-		if arr[i] < arr[pivot] {
-			arr[i], arr[j] = arr[j], arr[i]
-			j += 1
-		}
-	}
-	arr[pivot], arr[j-1] = arr[j-1], arr[pivot]
-	return j - 1
-}
-func InsertionSort(s []int) {
-	for i := 1; i < len(s); i++ {
-		for j := i - 1; j >= 0; j-- {
-			if s[j] > s[i] {
-				s[j], s[i] = s[i], s[j]
-				break
-			}
-		}
-	}
-}
-
-func MergeSort(arr []int) []int {
-	if len(arr) < 2 {
-		return arr
-	}
-	m := len(arr) / 2
-	l := arr[0:m]
-	r := arr[m:]
-
-	return merge(MergeSort(l), MergeSort(r))
-}
-
-func merge(l []int, r []int) []int {
-	var result []int
-	for len(l) != 0 && len(r) != 0 {
-		if l[0] < r[0] {
-			result = append(result, l[0])
-			l = l[1:]
-		} else {
-			result = append(result, r[0])
-			r = r[1:]
-		}
-	}
-	for len(l) != 0 {
-		result = append(result, l[0])
-		l = l[1:]
-	}
-	for len(r) != 0 {
-		result = append(result, r[0])
-		r = r[1:]
-	}
-	return result
-}
-
-func TestSort(t *testing.T) {
-	s := []int{1, 2, 4, 3, 8, 7, 5}
-	InsertionSort(s)
-	fmt.Printf("s: %v\n", s)
 }
 
 // 给定一个数组 candidates 和一个目标数 target ，找出 candidates 中所有可以使数字和为 target 的组合。
