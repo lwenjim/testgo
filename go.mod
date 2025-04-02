@@ -13,7 +13,6 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0
-	github.com/traefik/yaegi v0.16.1
 	github.com/xuri/excelize/v2 v2.9.0
 )
 

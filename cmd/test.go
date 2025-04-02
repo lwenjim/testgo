@@ -1,8 +1,9 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
-	"jspp/testgo/examples"
+	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -81,9 +82,26 @@ var testCmd = &cobra.Command{
 		// 	panic(err)
 		// }
 
-		s := []int{3, 1, 5, 2, 4, 9}
-		examples.HeapSort(s)
-		fmt.Printf("s: %v\n", s)
+		// s := []int{3, 1, 5, 2, 4, 9}
+		// examples.HeapSort(s)
+		// fmt.Printf("s: %v\n", s)
+		// code.jspp.com/jspp/adminsv/core.(*Core).ListAdmin-fm
+		// data := "code.jspp.com/jspp/adminsv/core.(*Core).ListAdmin-fm"
+		// splits := strings.Split(data, ".(*Core).")
+		// splits = strings.Split(splits[1], "-")
+		// fmt.Printf("splits[1]: %v\n", splits[0])
+		buffer, err := os.ReadFile("data.json")
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		data := map[string]interface{}{}
+		_ = json.Unmarshal(buffer, &data)
+		arr := data["data"].([]interface{})
+		for _, v := range arr {
+			item := v.(map[string]interface{})
+			fmt.Printf("v: %v\n", item["parent_id"])
+		}
 	},
 }
 

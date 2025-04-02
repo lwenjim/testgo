@@ -1,0 +1,1105 @@
+{
+    "res": 200,
+    "msg": "OK",
+    "trace": "yV08HKTNR",
+    "data": [
+        {
+            "id": 1,
+            "parent_id": 0,
+            "name": "",
+            "path": "/",
+            "component": "./user/welcome",
+            "sort": 1,
+            "status": 1
+        },
+        {
+            "id": 2,
+            "parent_id": 0,
+            "name": "userManagement",
+            "path": "/userManagement",
+            "component": "",
+            "sort": 2,
+            "status": 1
+        },
+        {
+            "id": 3,
+            "parent_id": 2,
+            "name": "userQueryByPhone",
+            "path": "userQueryByPhone",
+            "component": "./user/queryByPhone",
+            "sort": 3,
+            "status": 1
+        },
+        {
+            "id": 4,
+            "parent_id": 2,
+            "name": "userQueryByPP",
+            "path": "userQueryByPP",
+            "component": "./user/queryByPP",
+            "sort": 4,
+            "status": 1
+        },
+        {
+            "id": 5,
+            "parent_id": 2,
+            "name": "userQueryByUserId",
+            "path": "userQueryByUserId",
+            "component": "./user/queryById",
+            "sort": 5,
+            "status": 1
+        },
+        {
+            "id": 6,
+            "parent_id": 2,
+            "name": "userQueryByUsername",
+            "path": "userQueryByUsername",
+            "component": "./user/queryByUsername",
+            "sort": 6,
+            "status": 1
+        },
+        {
+            "id": 7,
+            "parent_id": 2,
+            "name": "userQueryBaseInfoByUserId",
+            "path": "userQueryBaseInfoByUserId",
+            "component": "./user/baseInfoByUserId",
+            "sort": 7,
+            "status": 1
+        },
+        {
+            "id": 8,
+            "parent_id": 2,
+            "name": "getUserFriendList",
+            "path": "getUserFriendList",
+            "component": "./user/friendList",
+            "sort": 8,
+            "status": 1
+        },
+        {
+            "id": 9,
+            "parent_id": 2,
+            "name": "getUserApplyFriendList",
+            "path": "getUserApplyFriendList",
+            "component": "./user/applyFriendList",
+            "sort": 9,
+            "status": 1
+        },
+        {
+            "id": 10,
+            "parent_id": 2,
+            "name": "getUserMomentList",
+            "path": "getUserMomentList",
+            "component": "./user/momentList",
+            "sort": 10,
+            "status": 1
+        },
+        {
+            "id": 11,
+            "parent_id": 2,
+            "name": "getUserSquareList",
+            "path": "getUserSquareList",
+            "component": "./user/squareList",
+            "sort": 11,
+            "status": 1
+        },
+        {
+            "id": 12,
+            "parent_id": 2,
+            "name": "getBlockIp",
+            "path": "getBlockIp",
+            "component": "./blockIp",
+            "sort": 12,
+            "status": 1
+        },
+        {
+            "id": 13,
+            "parent_id": 2,
+            "name": "getUserFriendList",
+            "path": "getUserFriendList/:id",
+            "component": "./user/friendList",
+            "sort": 13,
+            "status": 1
+        },
+        {
+            "id": 14,
+            "parent_id": 2,
+            "name": "deviceInfos",
+            "path": "deviceInfos",
+            "component": "./user/deviceInfos",
+            "sort": 14,
+            "status": 1
+        },
+        {
+            "id": 15,
+            "parent_id": 2,
+            "name": "getBlockUserLog",
+            "path": "getBlockUserLog",
+            "component": "./user/blockLogList",
+            "sort": 15,
+            "status": 1
+        },
+        {
+            "id": 16,
+            "parent_id": 2,
+            "name": "getBlockUserLog",
+            "path": "getBlockUserLog/:id",
+            "component": "./user/blockLogList",
+            "sort": 16,
+            "status": 1
+        },
+        {
+            "id": 17,
+            "parent_id": 2,
+            "name": "getBlockUser",
+            "path": "getBlockUser",
+            "component": "./user/blockList",
+            "sort": 17,
+            "status": 1
+        },
+        {
+            "id": 18,
+            "parent_id": 2,
+            "name": "getUserWrongList",
+            "path": "getUserWrongList",
+            "component": "./user/wrongList",
+            "sort": 18,
+            "status": 1
+        },
+        {
+            "id": 19,
+            "parent_id": 2,
+            "name": "getUserWrongTop100",
+            "path": "getUserWrongTop100",
+            "component": "./user/wrongTop100",
+            "sort": 19,
+            "status": 1
+        },
+        {
+            "id": 20,
+            "parent_id": 2,
+            "name": "exportUserInfo",
+            "path": "exportUserInfo",
+            "component": "./user/exportUserInfo",
+            "sort": 20,
+            "status": 1
+        },
+        {
+            "id": 21,
+            "parent_id": 0,
+            "name": "group",
+            "path": "/group",
+            "component": "",
+            "sort": 21,
+            "status": 1
+        },
+        {
+            "id": 22,
+            "parent_id": 21,
+            "name": "userGroup",
+            "path": "userGroup",
+            "component": "./group/userGroup",
+            "sort": 22,
+            "status": 1
+        },
+        {
+            "id": 23,
+            "parent_id": 21,
+            "name": "userGroup",
+            "path": "userGroup/:id",
+            "component": "./group/userGroup",
+            "sort": 23,
+            "status": 1
+        },
+        {
+            "id": 24,
+            "parent_id": 21,
+            "name": "queryGroupByTitle",
+            "path": "queryGroupByTitle",
+            "component": "./group/queryByTitle",
+            "sort": 24,
+            "status": 1
+        },
+        {
+            "id": 25,
+            "parent_id": 21,
+            "name": "queryGroupById",
+            "path": "queryGroupById",
+            "component": "./group/queryById",
+            "sort": 25,
+            "status": 1
+        },
+        {
+            "id": 26,
+            "parent_id": 21,
+            "name": "member",
+            "path": "member",
+            "component": "./group/member",
+            "sort": 26,
+            "status": 1
+        },
+        {
+            "id": 27,
+            "parent_id": 21,
+            "name": "member",
+            "path": "member/:id",
+            "component": "./group/member",
+            "sort": 27,
+            "status": 1
+        },
+        {
+            "id": 28,
+            "parent_id": 0,
+            "name": "appVersion",
+            "path": "/appVersion",
+            "component": "",
+            "sort": 28,
+            "status": 1
+        },
+        {
+            "id": 29,
+            "parent_id": 28,
+            "name": "appVersionInfos",
+            "path": "infos",
+            "component": "./appVersion/infos",
+            "sort": 29,
+            "status": 1
+        },
+        {
+            "id": 30,
+            "parent_id": 0,
+            "name": "feedback",
+            "path": "/feedback",
+            "component": "",
+            "sort": 30,
+            "status": 1
+        },
+        {
+            "id": 31,
+            "parent_id": 30,
+            "name": "feedbackUser",
+            "path": "feedbackUser",
+            "component": "./feedback/user",
+            "sort": 31,
+            "status": 1
+        },
+        {
+            "id": 32,
+            "parent_id": 0,
+            "name": "complained",
+            "path": "/complained",
+            "component": "",
+            "sort": 32,
+            "status": 1
+        },
+        {
+            "id": 33,
+            "parent_id": 32,
+            "name": "userComplained",
+            "path": "user",
+            "component": "./complained/user",
+            "sort": 33,
+            "status": 1
+        },
+        {
+            "id": 34,
+            "parent_id": 32,
+            "name": "groupComplained",
+            "path": "group",
+            "component": "./complained/group",
+            "sort": 34,
+            "status": 1
+        },
+        {
+            "id": 35,
+            "parent_id": 32,
+            "name": "momentComplained",
+            "path": "moment",
+            "component": "./complained/moment",
+            "sort": 35,
+            "status": 1
+        },
+        {
+            "id": 36,
+            "parent_id": 32,
+            "name": "squareComplained",
+            "path": "square",
+            "component": "./complained/square",
+            "sort": 36,
+            "status": 1
+        },
+        {
+            "id": 37,
+            "parent_id": 32,
+            "name": "squareReplyComplained",
+            "path": "squareReply",
+            "component": "./complained/squareReply",
+            "sort": 37,
+            "status": 1
+        },
+        {
+            "id": 38,
+            "parent_id": 0,
+            "name": "sensitive",
+            "path": "/sensitive",
+            "component": "",
+            "sort": 38,
+            "status": 1
+        },
+        {
+            "id": 39,
+            "parent_id": 38,
+            "name": "sensitiveInfos",
+            "path": "infos",
+            "component": "./sensitive/infos",
+            "sort": 39,
+            "status": 1
+        },
+        {
+            "id": 40,
+            "parent_id": 0,
+            "name": "risk",
+            "path": "/risk",
+            "component": "",
+            "sort": 40,
+            "status": 1
+        },
+        {
+            "id": 41,
+            "parent_id": 40,
+            "name": "image",
+            "path": "image",
+            "component": "./risk/image",
+            "sort": 41,
+            "status": 1
+        },
+        {
+            "id": 42,
+            "parent_id": 0,
+            "name": "audit",
+            "path": "/audit",
+            "component": "",
+            "sort": 42,
+            "status": 1
+        },
+        {
+            "id": 43,
+            "parent_id": 42,
+            "name": "userSensitive",
+            "path": "userSensitive",
+            "component": "./sensitive/user",
+            "sort": 43,
+            "status": 1
+        },
+        {
+            "id": 44,
+            "parent_id": 42,
+            "name": "userSensitiveSingle",
+            "path": "userSensitiveSingle",
+            "component": "./sensitive/single",
+            "sort": 44,
+            "status": 1
+        },
+        {
+            "id": 45,
+            "parent_id": 42,
+            "name": "userExamineInfo",
+            "path": "userExamineInfo",
+            "component": "./user/examineInfo",
+            "sort": 45,
+            "status": 1
+        },
+        {
+            "id": 46,
+            "parent_id": 42,
+            "name": "groupExamineInfo",
+            "path": "groupExamineInfo",
+            "component": "./group/examineInfo",
+            "sort": 46,
+            "status": 1
+        },
+        {
+            "id": 47,
+            "parent_id": 42,
+            "name": "momentExamine",
+            "path": "momentExamine",
+            "component": "./moment/examine",
+            "sort": 47,
+            "status": 1
+        },
+        {
+            "id": 48,
+            "parent_id": 42,
+            "name": "squareExamine",
+            "path": "squareExamine",
+            "component": "./square/examine",
+            "sort": 48,
+            "status": 1
+        },
+        {
+            "id": 49,
+            "parent_id": 42,
+            "name": "allWish",
+            "path": "allWish",
+            "component": "./square/wish",
+            "sort": 49,
+            "status": 1
+        },
+        {
+            "id": 50,
+            "parent_id": 42,
+            "name": "wishRedPacketCover",
+            "path": "wishRedPacketCover",
+            "component": "./square/redPacketCover",
+            "sort": 50,
+            "status": 1
+        },
+        {
+            "id": 51,
+            "parent_id": 42,
+            "name": "examineHandCertList",
+            "path": "examineHandCertList",
+            "component": "./user/verify",
+            "sort": 51,
+            "status": 1
+        },
+        {
+            "id": 52,
+            "parent_id": 42,
+            "name": "balanceWithdraw",
+            "path": "withdraw/0",
+            "component": "./pay/withdraw",
+            "sort": 52,
+            "status": 1
+        },
+        {
+            "id": 53,
+            "parent_id": 42,
+            "name": "unpackRedPacketWithdraw",
+            "path": "withdraw/1",
+            "component": "./pay/withdraw",
+            "sort": 53,
+            "status": 1
+        },
+        {
+            "id": 54,
+            "parent_id": 42,
+            "name": "giftWithdrawApply",
+            "path": "giftWithdrawApply",
+            "component": "./gift/withdraw",
+            "sort": 54,
+            "status": 1
+        },
+        {
+            "id": 55,
+            "parent_id": 42,
+            "name": "userBaseInfoList",
+            "path": "userBaseInfoList",
+            "component": "./user/baseInfoList",
+            "sort": 55,
+            "status": 1
+        },
+        {
+            "id": 56,
+            "parent_id": 42,
+            "name": "otherDomainInfos",
+            "path": "otherDomainInfos",
+            "component": "./domain/other",
+            "sort": 56,
+            "status": 1
+        },
+        {
+            "id": 57,
+            "parent_id": 42,
+            "name": "newlyFriendCount",
+            "path": "newlyFriendCount",
+            "component": "./user/friendCount",
+            "sort": 57,
+            "status": 1
+        },
+        {
+            "id": 58,
+            "parent_id": 42,
+            "name": "unusualUser",
+            "path": "unusualUser",
+            "component": "./user/unusualUser",
+            "sort": 58,
+            "status": 1
+        },
+        {
+            "id": 59,
+            "parent_id": 42,
+            "name": "vpnUser",
+            "path": "vpnUser",
+            "component": "./user/vpnUser",
+            "sort": 59,
+            "status": 1
+        },
+        {
+            "id": 60,
+            "parent_id": 42,
+            "name": "unusualGroup",
+            "path": "unusualGroup",
+            "component": "./group/unusualGroup",
+            "sort": 60,
+            "status": 1
+        },
+        {
+            "id": 61,
+            "parent_id": 42,
+            "name": "groupDailyActiveUser",
+            "path": "groupDailyActiveUser",
+            "component": "./group/activeGroup",
+            "sort": 61,
+            "status": 1
+        },
+        {
+            "id": 62,
+            "parent_id": 42,
+            "name": "secretShare",
+            "path": "secretShare",
+            "component": "./secretShare",
+            "sort": 62,
+            "status": 1
+        },
+        {
+            "id": 63,
+            "parent_id": 42,
+            "name": "shareMarkImageMessage",
+            "path": "shareMarkImageMessage",
+            "component": "./shareMarkImageMessage",
+            "sort": 63,
+            "status": 1
+        },
+        {
+            "id": 64,
+            "parent_id": 42,
+            "name": "accountAppeal",
+            "path": "accountAppeal",
+            "component": "./user/accountAppeal",
+            "sort": 64,
+            "status": 1
+        },
+        {
+            "id": 65,
+            "parent_id": 42,
+            "name": "agentOpenApply",
+            "path": "agentOpenApply",
+            "component": "./agent/openApply",
+            "sort": 65,
+            "status": 1
+        },
+        {
+            "id": 66,
+            "parent_id": 42,
+            "name": "groupPublicApply",
+            "path": "groupPublicApply",
+            "component": "./group/publicApply",
+            "sort": 66,
+            "status": 1
+        },
+        {
+            "id": 67,
+            "parent_id": 0,
+            "name": "domain",
+            "path": "/domain",
+            "component": "",
+            "sort": 67,
+            "status": 1
+        },
+        {
+            "id": 68,
+            "parent_id": 67,
+            "name": "whiteDomainInfos",
+            "path": "white",
+            "component": "./domain/white",
+            "sort": 68,
+            "status": 1
+        },
+        {
+            "id": 69,
+            "parent_id": 67,
+            "name": "blackDomainInfos",
+            "path": "black",
+            "component": "./domain/black",
+            "sort": 69,
+            "status": 1
+        },
+        {
+            "id": 70,
+            "parent_id": 0,
+            "name": "emoji",
+            "path": "/emoji",
+            "component": "",
+            "sort": 70,
+            "status": 1
+        },
+        {
+            "id": 71,
+            "parent_id": 70,
+            "name": "emojiCate",
+            "path": "emojiCate",
+            "component": "./emoji/cate",
+            "sort": 71,
+            "status": 1
+        },
+        {
+            "id": 72,
+            "parent_id": 70,
+            "name": "emojiLib",
+            "path": "emojiLib/:id",
+            "component": "./emoji/lib",
+            "sort": 72,
+            "status": 1
+        },
+        {
+            "id": 73,
+            "parent_id": 0,
+            "name": "whiteNoiseSound",
+            "path": "/whiteNoiseSound",
+            "component": "",
+            "sort": 73,
+            "status": 1
+        },
+        {
+            "id": 74,
+            "parent_id": 73,
+            "name": "type",
+            "path": "type",
+            "component": "./whiteNoiseSound/type",
+            "sort": 74,
+            "status": 1
+        },
+        {
+            "id": 75,
+            "parent_id": 73,
+            "name": "list",
+            "path": "list/:id",
+            "component": "./whiteNoiseSound/list",
+            "sort": 75,
+            "status": 1
+        },
+        {
+            "id": 76,
+            "parent_id": 0,
+            "name": "keywordAnimation",
+            "path": "/keywordAnimation",
+            "component": "",
+            "sort": 76,
+            "status": 1
+        },
+        {
+            "id": 77,
+            "parent_id": 76,
+            "name": "keywordAnimation",
+            "path": "keywordAnimation",
+            "component": "./keywordAnimation",
+            "sort": 77,
+            "status": 1
+        },
+        {
+            "id": 78,
+            "parent_id": 0,
+            "name": "adResources",
+            "path": "/adResources",
+            "component": "",
+            "sort": 78,
+            "status": 1
+        },
+        {
+            "id": 79,
+            "parent_id": 78,
+            "name": "ad",
+            "path": "ad",
+            "component": "./adResources",
+            "sort": 79,
+            "status": 1
+        },
+        {
+            "id": 80,
+            "parent_id": 0,
+            "name": "activity",
+            "path": "/activity",
+            "component": "",
+            "sort": 80,
+            "status": 1
+        },
+        {
+            "id": 81,
+            "parent_id": 80,
+            "name": "invite",
+            "path": "invite",
+            "component": "./activity/invite",
+            "sort": 81,
+            "status": 1
+        },
+        {
+            "id": 82,
+            "parent_id": 80,
+            "name": "activities",
+            "path": "activities",
+            "component": "./activity/activities",
+            "sort": 82,
+            "status": 1
+        },
+        {
+            "id": 83,
+            "parent_id": 80,
+            "name": "prize",
+            "path": "prize",
+            "component": "./activity/prize",
+            "sort": 83,
+            "status": 1
+        },
+        {
+            "id": 84,
+            "parent_id": 80,
+            "name": "userSign",
+            "path": "userSign",
+            "component": "./activity/sign",
+            "sort": 84,
+            "status": 1
+        },
+        {
+            "id": 85,
+            "parent_id": 0,
+            "name": "square",
+            "path": "/square",
+            "component": "",
+            "sort": 85,
+            "status": 1
+        },
+        {
+            "id": 86,
+            "parent_id": 85,
+            "name": "recommendTag",
+            "path": "recommendTag",
+            "component": "./square/tag",
+            "sort": 86,
+            "status": 1
+        },
+        {
+            "id": 87,
+            "parent_id": 85,
+            "name": "recommend",
+            "path": "recommend",
+            "component": "./square/recommend",
+            "sort": 87,
+            "status": 1
+        },
+        {
+            "id": 88,
+            "parent_id": 85,
+            "name": "near",
+            "path": "near",
+            "component": "./square/near",
+            "sort": 88,
+            "status": 1
+        },
+        {
+            "id": 89,
+            "parent_id": 85,
+            "name": "wishRedPacket",
+            "path": "wishRedPacket",
+            "component": "./square/redPacket",
+            "sort": 89,
+            "status": 1
+        },
+        {
+            "id": 90,
+            "parent_id": 0,
+            "name": "stat",
+            "path": "/stat",
+            "component": "",
+            "sort": 90,
+            "status": 1
+        },
+        {
+            "id": 91,
+            "parent_id": 90,
+            "name": "active",
+            "path": "active",
+            "component": "./stat/active",
+            "sort": 91,
+            "status": 1
+        },
+        {
+            "id": 92,
+            "parent_id": 90,
+            "name": "jsppActive",
+            "path": "jsppActive",
+            "component": "./stat/jsppActive",
+            "sort": 92,
+            "status": 1
+        },
+        {
+            "id": 93,
+            "parent_id": 90,
+            "name": "online",
+            "path": "online",
+            "component": "./stat/online",
+            "sort": 93,
+            "status": 1
+        },
+        {
+            "id": 94,
+            "parent_id": 90,
+            "name": "point",
+            "path": "point",
+            "component": "./stat/point",
+            "sort": 94,
+            "status": 1
+        },
+        {
+            "id": 95,
+            "parent_id": 90,
+            "name": "retention",
+            "path": "retention",
+            "component": "./stat/retention",
+            "sort": 95,
+            "status": 1
+        },
+        {
+            "id": 96,
+            "parent_id": 90,
+            "name": "moment",
+            "path": "moment",
+            "component": "./stat/moment",
+            "sort": 96,
+            "status": 1
+        },
+        {
+            "id": 97,
+            "parent_id": 90,
+            "name": "fuliStatList",
+            "path": "fuli/list",
+            "component": "./stat/fuli/list",
+            "sort": 97,
+            "status": 1
+        },
+        {
+            "id": 98,
+            "parent_id": 90,
+            "name": "fuliHuanxiuStatList",
+            "path": "fuli/huanxiu",
+            "component": "./stat/fuli/huanxiu",
+            "sort": 98,
+            "status": 1
+        },
+        {
+            "id": 99,
+            "parent_id": 90,
+            "name": "fuliJsppStatList",
+            "path": "fuli/jspp",
+            "component": "./stat/fuli/jspp",
+            "sort": 99,
+            "status": 1
+        },
+        {
+            "id": 100,
+            "parent_id": 90,
+            "name": "fuliHuanxiuInternationalStatList",
+            "path": "fuli/huanxiuInternational",
+            "component": "./stat/fuli/huanxiuInternational",
+            "sort": 100,
+            "status": 1
+        },
+        {
+            "id": 101,
+            "parent_id": 90,
+            "name": "fuliStatJspp",
+            "path": "fuli/0",
+            "component": "./stat/fuli",
+            "sort": 101,
+            "status": 1
+        },
+        {
+            "id": 106,
+            "parent_id": 90,
+            "name": "redPacket",
+            "path": "redPacket",
+            "component": "./stat/redPacket",
+            "sort": 106,
+            "status": 1
+        },
+        {
+            "id": 107,
+            "parent_id": 90,
+            "name": "balanceWithdraw",
+            "path": "withdraw",
+            "component": "./stat/withdraw",
+            "sort": 107,
+            "status": 1
+        },
+        {
+            "id": 108,
+            "parent_id": 90,
+            "name": "unpackRedPacket",
+            "path": "unpackRedPacket",
+            "component": "./stat/unpackRedPacket",
+            "sort": 108,
+            "status": 1
+        },
+        {
+            "id": 109,
+            "parent_id": 0,
+            "name": "pay",
+            "path": "/pay",
+            "component": "",
+            "sort": 109,
+            "status": 1
+        },
+        {
+            "id": 110,
+            "parent_id": 109,
+            "name": "order",
+            "path": "order",
+            "component": "./pay/order",
+            "sort": 110,
+            "status": 1
+        },
+        {
+            "id": 111,
+            "parent_id": 109,
+            "name": "order",
+            "path": "order/:id",
+            "component": "./pay/order",
+            "sort": 111,
+            "status": 1
+        },
+        {
+            "id": 112,
+            "parent_id": 0,
+            "name": "wakeUpEarly",
+            "path": "/wakeUpEarly",
+            "component": "",
+            "sort": 112,
+            "status": 1
+        },
+        {
+            "id": 113,
+            "parent_id": 112,
+            "name": "stat",
+            "path": "stat",
+            "component": "./wakeUpEarly/stat",
+            "sort": 113,
+            "status": 1
+        },
+        {
+            "id": 114,
+            "parent_id": 112,
+            "name": "withdraw",
+            "path": "withdraw",
+            "component": "./wakeUpEarly/withdraw",
+            "sort": 114,
+            "status": 1
+        },
+        {
+            "id": 115,
+            "parent_id": 0,
+            "name": "goods",
+            "path": "/goods",
+            "component": "",
+            "sort": 115,
+            "status": 1
+        },
+        {
+            "id": 116,
+            "parent_id": 115,
+            "name": "goodsCate",
+            "path": "goodsCate",
+            "component": "./goods/cate",
+            "sort": 116,
+            "status": 1
+        },
+        {
+            "id": 117,
+            "parent_id": 115,
+            "name": "goods",
+            "path": "goods/:id",
+            "component": "./goods/goods",
+            "sort": 117,
+            "status": 1
+        },
+        {
+            "id": 118,
+            "parent_id": 0,
+            "name": "FuliHealth",
+            "path": "/FuliHealth",
+            "component": "",
+            "sort": 118,
+            "status": 1
+        },
+        {
+            "id": 119,
+            "parent_id": 118,
+            "name": "orderTaskList",
+            "path": "orderTaskList",
+            "component": "./fuliHealthOrderTask",
+            "sort": 119,
+            "status": 1
+        },
+        {
+            "id": 120,
+            "parent_id": 0,
+            "name": "pusher",
+            "path": "/pusher",
+            "component": "",
+            "sort": 120,
+            "status": 1
+        },
+        {
+            "id": 121,
+            "parent_id": 120,
+            "name": "pusher",
+            "path": "pusher",
+            "component": "./pusher",
+            "sort": 121,
+            "status": 1
+        },
+        {
+            "id": 122,
+            "parent_id": 0,
+            "name": "adminManagement",
+            "path": "/adminManagement",
+            "component": "",
+            "sort": 122,
+            "status": 1
+        },
+        {
+            "id": 123,
+            "parent_id": 122,
+            "name": "editAdminPassword",
+            "path": "editAdminPassword/:id",
+            "component": "./admin/editAdminPassword",
+            "sort": 123,
+            "status": 1
+        },
+        {
+            "id": 124,
+            "parent_id": 122,
+            "name": "adminOpt",
+            "path": "adminOpt",
+            "component": "./admin/opt",
+            "sort": 124,
+            "status": 1
+        },
+        {
+            "id": 125,
+            "parent_id": 122,
+            "name": "optLog",
+            "path": "optLog",
+            "component": "./admin/log",
+            "sort": 125,
+            "status": 1
+        },
+        {
+            "id": 126,
+            "parent_id": 122,
+            "name": "listAdmin",
+            "path": "listAdmin",
+            "component": "./admin/list",
+            "sort": 126,
+            "status": 1
+        }
+    ]
+}
