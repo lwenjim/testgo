@@ -59,20 +59,31 @@ var RedisCmd = &cobra.Command{
 			Addrs: []string{":6379"},
 		})
 		var incrBy = redis.NewScript(`
-			local key = redis.REDIS_VERSION
-			local reply = redis.pcall('ECHO', unpack(ARGV))
+			local reply = redis.pcall('hgetall', 'abc')
 			if reply["err"] ~= nil then
 				redis.log(redis.LOG_WARNING, reply["err"])
+				return ""
 			end
-			return key
+
+			local mytable = {}
+			for key, value in pairs(reply) do
+				mytable[key] = value
+			end
+			return mytable
 		`)
 		keys := []string{"my_counter"}
-		result, err := incrBy.Run(ctx, rdb, keys).Text()
+		result, err := incrBy.Run(ctx, rdb, keys).StringSlice()
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 		fmt.Printf("result: %v\n", result)
+		arr := map[string]string{}
+		for i := 0; i < len(result); i++ {
+			arr[result[i]] = result[i+1]
+			i++
+		}
+		fmt.Printf("arr: %v\n", arr)
 	},
 }
 
