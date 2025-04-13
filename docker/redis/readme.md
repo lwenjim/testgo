@@ -1,3 +1,45 @@
+###### rdb备份
+
+```shell
+# 备份文件名
+dbfilename dump.rdb
+# 存放备份文件的文件夹
+dir ./
+# 数据压缩 
+rdbcompression yes
+# 触发rdb快照
+save
+flushall
+shutdown
+# 恢复数据  拷贝 dump.rdb 到 bin目录下面 运行服务即可
+
+
+```
+
+```shell
+docker run --rm -p 63791:6379 --name rdb -v ./rdb:/data redis redis-server redis.conf
+```
+
+###### aof增量备份
+
+```shell
+# 开启增量备份
+appendonly yes
+# 指定增量备份文件名称
+appendfilenname appenonly.aof
+# appendasync always/everysec/no
+appendfsync everysec
+# 配置重写触发机制
+auto-aof-rewrite-percentage 100
+auto-aof-rewrite-min-size 64m
+```
+
+```shell
+docker run --rm -p 63791:6379 --name aof -v ./aof:/data redis redis-server redis.conf
+
+
+```
+
 ###### 主节点关键配置
 
 ```
@@ -14,17 +56,17 @@ save 60 10000
 
 ```shell
 # 分别启动主从节点
-docker run --rm -p 16379:6379 --name master -v ./master:/data redis redis-server redis.conf
-docker run --rm -p 26379:6379 --name slave -v ./slave:/data/ redis redis-server redis.conf
+docker run --rm -p 16379:6379 --name master -v ./sentinel:/data redis redis-server master.conf
+docker run --rm -p 26379:6379 --name slave -v ./sentinel:/data redis redis-server slave.conf
 ```
 
 ###### 启动sentinel进程并连接master进程
 
 ```shell
 # 分别启动sentinel进程
-docker run --rm -p 36379:26379 --name master-sentinel-001 -v ./master:/data/ redis redis-sentinel sentinel-001.conf
-docker run --rm -p 46379:26379 --name master-sentinel-002 -v ./master:/data/ redis redis-sentinel sentinel-002.conf
-docker run --rm -p 56379:26379 --name master-sentinel-003 -v ./master:/data/ redis redis-sentinel sentinel-003.conf
+docker run --rm -p 36379:26379 --name master-sentinel-001 -v ./sentinel:/data/ redis redis-sentinel sentinel-001.conf
+docker run --rm -p 46379:26379 --name master-sentinel-002 -v ./sentinel:/data/ redis redis-sentinel sentinel-002.conf
+docker run --rm -p 56379:26379 --name master-sentinel-003 -v ./sentinel:/data/ redis redis-sentinel sentinel-003.conf
 ```
 
 节点配置
@@ -63,7 +105,7 @@ redis-cli --cluster create \
   192.168.100.104:6379 \
   192.168.100.105:6379 \
   192.168.100.106:6379 \
-  --cluster-replicas 1 \    
-  -a 111111            
+  --cluster-replicas 1 \  
+  -a 111111  
 
 ```
