@@ -27,45 +27,48 @@ func Sentinel() {
 		Password: "",
 	})
 
-	// 获取当前主节点地址
-	masterAddr, err := sentinelClient.GetMasterAddrByName(ctx, "mymaster").Result()
-	if err != nil {
-		panic(fmt.Sprintf("获取主节点失败: %v", err))
+	for {
+		masterAddr, err := sentinelClient.GetMasterAddrByName(ctx, "mymaster").Result()
+		if err != nil {
+			panic(fmt.Sprintf("获取主节点失败: %v", err))
+		}
+		fmt.Printf("time: %v, masterAddr: %v\n", time.Now().Format("2006-01-02 15:04:05"), masterAddr)
+		time.Sleep(1 * time.Second)
 	}
 
-	cmd := sentinelClient.Slaves(ctx, "mymaster")
-	res2, _ := cmd.Result()
-	slaveConfig := map[string]string{}
-	items := res2[0].([]interface{})
-	for i := 0; i < len(items)-1; i++ {
-		slaveConfig[items[i].(string)] = items[i+1].(string)
-		i++
-	}
+	// cmd := sentinelClient.Slaves(ctx, "mymaster")
+	// res2, _ := cmd.Result()
+	// slaveConfig := map[string]string{}
+	// items := res2[0].([]interface{})
+	// for i := 0; i < len(items)-1; i++ {
+	// 	slaveConfig[items[i].(string)] = items[i+1].(string)
+	// 	i++
+	// }
 
-	// 创建主节点客户端（写操作）
-	masterClient := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%s", masterAddr[0], masterAddr[1]),
-		Password: "111111",
-	})
+	// // 创建主节点客户端（写操作）
+	// masterClient := redis.NewClient(&redis.Options{
+	// 	Addr:     fmt.Sprintf("%s:%s", masterAddr[0], masterAddr[1]),
+	// 	Password: "111111",
+	// })
 
-	// 创建从节点客户端（读操作）
-	slaveClient := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%s", slaveConfig["name"], slaveConfig["port"]),
-		Password: "222222",
-	})
+	// // 创建从节点客户端（读操作）
+	// slaveClient := redis.NewClient(&redis.Options{
+	// 	Addr:     fmt.Sprintf("%s:%s", slaveConfig["name"], slaveConfig["port"]),
+	// 	Password: "111111",
+	// })
 
-	// 写入数据到主节点
-	err = masterClient.Set(ctx, "key2", "value2", 0).Err()
-	if err != nil {
-		panic(err)
-	}
+	// // 写入数据到主节点
+	// err = masterClient.Set(ctx, "key2", "value2", 0).Err()
+	// if err != nil {
+	// 	panic(err)
+	// }
 
-	// 从从节点读取数据
-	val, err := slaveClient.Get(ctx, "key2").Result()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("key2 的值为:", val)
+	// // 从从节点读取数据
+	// val, err := slaveClient.Get(ctx, "key2").Result()
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Println("key2 的值为:", val)
 }
 
 func Check() {
@@ -82,7 +85,7 @@ func Check() {
 	// 初始化主节点连接
 	masterClient = redis.NewClient(&redis.Options{
 		Addr:     "172.17.0.2:6379",
-		Password: "222222", // 密码（如果有）
+		Password: "111111", // 密码（如果有）
 		DB:       0,        // 数据库编号
 	})
 
@@ -199,7 +202,7 @@ func ClusterRedis() {
 			"192.168.100.102:6379",
 			"192.168.100.103:6379",
 		},
-		Password:     "222222",
+		Password:     "111111",
 		DialTimeout:  10 * time.Second,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -224,7 +227,7 @@ func MasterSlave() {
 	// 主节点客户端（写操作）
 	masterClient := redis.NewClient(&redis.Options{
 		Addr:     "localhost:16379",
-		Password: "222222", // 如果有密码
+		Password: "111111", // 如果有密码
 		DB:       0,
 	})
 
