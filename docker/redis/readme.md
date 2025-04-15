@@ -56,17 +56,38 @@ save 60 10000
 
 ```shell
 # 分别启动主从节点
-docker run --rm -p 16379:6379 --name master -v ./sentinel:/data redis redis-server master.conf
-docker run --rm -p 26379:6379 --name slave -v ./sentinel:/data redis redis-server slave.conf
+docker run --rm -p 16379:6379 --name master -v ./sentinel:/data --network my-static-network --ip 192.168.100.201 redis redis-server master.conf --loglevel verbose
+docker run --rm -p 26379:6379 --name slave -v ./sentinel:/data --network my-static-network --ip 192.168.100.202 redis redis-server slave.conf --replicaof 192.168.100.201 6379 --loglevel verbose
 ```
 
 ###### 启动sentinel进程并连接master进程
 
 ```shell
 # 分别启动sentinel进程
-docker run --rm -p 36379:26379 --name master-sentinel-001 -v ./sentinel:/data/ redis redis-sentinel sentinel-001.conf
-docker run --rm -p 46379:26379 --name master-sentinel-002 -v ./sentinel:/data/ redis redis-sentinel sentinel-002.conf
-docker run --rm -p 56379:26379 --name master-sentinel-003 -v ./sentinel:/data/ redis redis-sentinel sentinel-003.conf
+docker run --rm -p 36379:26379 --name master-sentinel-001 -v ./sentinel:/data/ --network my-static-network --ip 192.168.100.203 redis redis-sentinel sentinel-001.conf --sentinel monitor mymaster 192.168.100.201 6379 2 --loglevel verbose
+docker run --rm -p 46379:26379 --name master-sentinel-002 -v ./sentinel:/data/ --network my-static-network --ip 192.168.100.204 redis redis-sentinel sentinel-002.conf --sentinel monitor mymaster 192.168.100.201 6379 2 --loglevel verbose
+docker run --rm -p 56379:26379 --name master-sentinel-003 -v ./sentinel:/data/ --network my-static-network --ip 192.168.100.205  redis redis-sentinel sentinel-003.conf --sentinel monitor mymaster 192.168.100.201 6379 2 --loglevel verbose
+```
+
+```shell
+
+# 查看故障转移状态
+SENTINEL failover mymaster
+
+# 查看主节点信息
+SENTINEL master mymaster
+
+# 查看所有Sentinel节点
+SENTINEL sentinels mymaster
+
+# 修改检测超时时间（根据网络状况调整，通常5-15秒）
+SENTINEL set mymaster down-after-milliseconds 5000
+
+# 调整故障转移超时
+SENTINEL set mymaster failover-timeout 60000
+
+docker stop master
+
 ```
 
 节点配置
