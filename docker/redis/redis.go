@@ -33,7 +33,14 @@ func Sentinel() {
 		panic(fmt.Sprintf("获取主节点失败: %v", err))
 	}
 
-	fmt.Println(sentinelClient.CkQuorum(ctx, "mymaster"))
+	cmd := sentinelClient.Slaves(ctx, "mymaster")
+	res2, _ := cmd.Result()
+	slaveConfig := map[string]string{}
+	items := res2[0].([]interface{})
+	for i := 0; i < len(items)-1; i++ {
+		slaveConfig[items[i].(string)] = items[i+1].(string)
+		i++
+	}
 
 	// 创建主节点客户端（写操作）
 	masterClient := redis.NewClient(&redis.Options{
@@ -43,7 +50,7 @@ func Sentinel() {
 
 	// 创建从节点客户端（读操作）
 	slaveClient := redis.NewClient(&redis.Options{
-		Addr:     "172.17.0.3:6379", // 可配置多个从节点或动态获取
+		Addr:     fmt.Sprintf("%s:%s", slaveConfig["name"], slaveConfig["port"]),
 		Password: "222222",
 	})
 
