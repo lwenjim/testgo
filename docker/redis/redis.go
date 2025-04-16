@@ -13,74 +13,43 @@ import (
 var RedisCmd = &cobra.Command{
 	Use: "redis",
 	Run: func(cmd *cobra.Command, args []string) {
-		Sentinel()
+		ClusterRedis()
 	},
 }
 
-func Diagnosis() {
+func ClusterRedis() {
 	ctx := context.Background()
-	sentinelClient := redis.NewSentinelClient(&redis.Options{
-		Addr:     "localhost:36379",
-		Password: "",
+	Cluster := redis.NewClusterClient(&redis.ClusterOptions{
+		Addrs: []string{
+			"192.168.100.11:6379",
+			"192.168.100.12:6379",
+			"192.168.100.13:6379",
+			"192.168.100.14:6379",
+		},
+		Password:     "111111",
+		DialTimeout:  10 * time.Second,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
 	})
 
-	for {
-		masterAddr, err := sentinelClient.GetMasterAddrByName(ctx, "mymaster").Result()
-		if err != nil {
-			panic(fmt.Sprintf("获取主节点失败: %v", err))
-		}
-		fmt.Printf("time: %v, masterAddr: %v\n", time.Now().Format("2006-01-02 15:04:05"), masterAddr)
-		time.Sleep(1 * time.Second)
-	}
-}
+	// Cluster.Set(context.TODO(), SampleDemoKey, "666", 10*time.Minute)
+	// cmd := Cluster.Get(context.TODO(), SampleDemoKey)
+	// result, err := cmd.Result()
+	// fmt.Println("err:", err)
+	// fmt.Println("result:", result)
 
-func Sentinel() {
-	ctx := context.Background()
-	sentinelClient := redis.NewSentinelClient(&redis.Options{
-		Addr:     "localhost:36379",
-		Password: "",
+	err := Cluster.ForEachMaster(ctx, func(ctx context.Context, shard *redis.Client) error {
+		return shard.Ping(ctx).Err()
 	})
-
-	masterAddr, err := sentinelClient.GetMasterAddrByName(ctx, "mymaster").Result()
-	if err != nil {
-		panic(fmt.Sprintf("获取主节点失败: %v", err))
-	}
-
-	cmd := sentinelClient.Slaves(ctx, "mymaster")
-	res2, _ := cmd.Result()
-	slaveConfig := map[string]string{}
-	items := res2[0].([]interface{})
-	for i := 0; i < len(items)-1; i++ {
-		slaveConfig[items[i].(string)] = items[i+1].(string)
-		i++
-	}
-
-	masterClient := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%s", masterAddr[0], masterAddr[1]),
-		Password: "111111",
-	})
-
-	slaveClient := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%s", slaveConfig["name"], slaveConfig["port"]),
-		Password: "111111",
-	})
-
-	err = masterClient.Set(ctx, "key2", "value2", 0).Err()
 	if err != nil {
 		panic(err)
 	}
-
-	val, err := slaveClient.Get(ctx, "key2").Result()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("key2 的值为:", val)
 }
 
-func Check() {
+func MasterSlave() {
 	var (
 		ctx          = context.Background()
-		slaveAddrs   = []string{"172.17.0.3:6379"}
+		slaveAddrs   = []string{"192.168.100.102:6379"}
 		slaveClients []*redis.Client
 	)
 	var (
@@ -89,14 +58,14 @@ func Check() {
 	)
 
 	masterClient = redis.NewClient(&redis.Options{
-		Addr:     "172.17.0.2:6379",
+		Addr:     "192.168.100.101:6379",
 		Password: "111111",
 		DB:       0,
 	})
 
 	slaveClient = redis.NewClient(&redis.Options{
-		Addr:     "172.17.0.3:6379",
-		Password: "",
+		Addr:     "192.168.100.102:6379",
+		Password: "111111",
 		DB:       0,
 	})
 
@@ -122,7 +91,7 @@ func Check() {
 	for _, addr := range slaveAddrs {
 		client := redis.NewClient(&redis.Options{
 			Addr:     addr,
-			Password: "",
+			Password: "111111",
 			DB:       0,
 		})
 		if _, err := client.Ping(ctx).Result(); err != nil {
@@ -140,8 +109,8 @@ func Check() {
 	fmt.Println("key1 的值为:", val)
 
 	masterClient = redis.NewClient(&redis.Options{
-		Addr:         "172.17.0.2:6379",
-		Password:     "",
+		Addr:         "192.168.100.101:6379",
+		Password:     "111111",
 		DB:           0,
 		PoolSize:     20,
 		MinIdleConns: 5,
@@ -191,56 +160,62 @@ func ExecRedisScript() {
 	fmt.Printf("arr: %v\n", arr)
 }
 
-func ClusterRedis() {
+func Diagnosis() {
 	ctx := context.Background()
-	Cluster := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs: []string{
-			"192.168.100.101:6379",
-			"192.168.100.102:6379",
-			"192.168.100.103:6379",
-		},
-		Password:     "111111",
-		DialTimeout:  10 * time.Second,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+	sentinelClient := redis.NewSentinelClient(&redis.Options{
+		Addr:     "localhost:36379",
+		Password: "",
 	})
 
-	// Cluster.Set(context.TODO(), SampleDemoKey, "666", 10*time.Minute)
-	// cmd := Cluster.Get(context.TODO(), SampleDemoKey)
-	// result, err := cmd.Result()
-	// fmt.Println("err:", err)
-	// fmt.Println("result:", result)
-
-	err := Cluster.ForEachMaster(ctx, func(ctx context.Context, shard *redis.Client) error {
-		return shard.Ping(ctx).Err()
-	})
-	if err != nil {
-		panic(err)
+	for {
+		masterAddr, err := sentinelClient.GetMasterAddrByName(ctx, "mymaster").Result()
+		if err != nil {
+			panic(fmt.Sprintf("获取主节点失败: %v", err))
+		}
+		fmt.Printf("time: %v, masterAddr: %v\n", time.Now().Format("2006-01-02 15:04:05"), masterAddr)
+		time.Sleep(1 * time.Second)
 	}
 }
 
-func MasterSlave() {
+func Sentinel() {
 	ctx := context.Background()
-	masterClient := redis.NewClient(&redis.Options{
-		Addr:     "localhost:16379",
-		Password: "111111",
-		DB:       0,
-	})
-
-	replicaClient := redis.NewClient(&redis.Options{
-		Addr:     "localhost:26379",
+	sentinelClient := redis.NewSentinelClient(&redis.Options{
+		Addr:     "192.168.100.203:26379",
 		Password: "",
-		DB:       0,
 	})
 
-	err := masterClient.Set(ctx, "key", "value", 0).Err()
+	masterAddr, err := sentinelClient.GetMasterAddrByName(ctx, "mymaster").Result()
+	if err != nil {
+		panic(fmt.Sprintf("获取主节点失败: %v", err))
+	}
+
+	cmd := sentinelClient.Slaves(ctx, "mymaster")
+	res2, _ := cmd.Result()
+	slaveConfig := map[string]string{}
+	items := res2[0].([]interface{})
+	for i := 0; i < len(items)-1; i++ {
+		slaveConfig[items[i].(string)] = items[i+1].(string)
+		i++
+	}
+
+	masterClient := redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%s", masterAddr[0], masterAddr[1]),
+		Password: "111111",
+	})
+
+	slaveClient := redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%s", slaveConfig["ip"], slaveConfig["port"]),
+		Password: "111111",
+	})
+
+	err = masterClient.Set(ctx, "key2", "value2", 0).Err()
 	if err != nil {
 		panic(err)
 	}
 
-	val, err := replicaClient.Get(ctx, "key").Result()
+	val, err := slaveClient.Get(ctx, "key2").Result()
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("key", val)
+	fmt.Println("key2 的值为:", val)
 }
