@@ -1,3 +1,7 @@
+```shell
+# https://xiaomi-info.github.io/2020/01/02/distributed-transaction/
+```
+
 #### 创建子网
 ```shell
 docker network create --subnet=192.168.100.0/24 my-static-network
@@ -22,3 +26,4 @@ docker run --rm --name slave --network my-static-network --ip 192.168.100.102 -e
 ```sql
 CHANGE MASTER TO MASTER_HOST = '192.168.100.101',MASTER_USER = 'replica_test',MASTER_PASSWORD = '11111111',MASTER_LOG_FILE = 'mysql-bin.000001',  MASTER_LOG_POS = 0;
 ```
+
