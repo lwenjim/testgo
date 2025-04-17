@@ -59,14 +59,14 @@ docker run --rm -p 56379:26379 --name master-sentinel-003 -v ./sentinel:/data/ -
 
 ###### 集群(cluster)模式
 ```shell
-docker run --rm --name cluster001 -v ./cluster:/data --network my-static-network --ip 192.168.100.11 --cpus=2 --memory=500m redis redis-server redis-cluster-001.conf --loglevel verbose
-docker run --rm --name cluster002 -v ./cluster:/data --network my-static-network --ip 192.168.100.12 --cpus=2 --memory=500m redis redis-server redis-cluster-002.conf --loglevel verbose
-docker run --rm --name cluster003 -v ./cluster:/data --network my-static-network --ip 192.168.100.13 --cpus=2 --memory=500m redis redis-server redis-cluster-003.conf --loglevel verbose
-docker run --rm --name cluster004 -v ./cluster:/data --network my-static-network --ip 192.168.100.14 --cpus=2 --memory=500m redis redis-server redis-cluster-004.conf --loglevel verbose
-docker run --rm --name cluster005 -v ./cluster:/data --network my-static-network --ip 192.168.100.15 --cpus=2 --memory=500m redis redis-server redis-cluster-005.conf --loglevel verbose
-docker run --rm --name cluster006 -v ./cluster:/data --network my-static-network --ip 192.168.100.16 --cpus=2 --memory=500m redis redis-server redis-cluster-006.conf --loglevel verbose
-docker run --rm --name cluster007 -v ./cluster:/data --network my-static-network --ip 192.168.100.17 --cpus=2 --memory=500m redis redis-server redis-cluster-007.conf --loglevel verbose
-docker run --rm --name cluster008 -v ./cluster:/data --network my-static-network --ip 192.168.100.18 --cpus=2 --memory=500m redis redis-server redis-cluster-008.conf --loglevel verbose
+docker run --rm --name cluster001 -v ./cluster:/data --network my-static-network --ip 192.168.100.11 --cpus=2 --memory=500m redis:6.2.17 redis-server redis-cluster-001.conf --loglevel verbose
+docker run --rm --name cluster002 -v ./cluster:/data --network my-static-network --ip 192.168.100.12 --cpus=2 --memory=500m redis:6.2.17 redis-server redis-cluster-002.conf --loglevel verbose
+docker run --rm --name cluster003 -v ./cluster:/data --network my-static-network --ip 192.168.100.13 --cpus=2 --memory=500m redis:6.2.17 redis-server redis-cluster-003.conf --loglevel verbose
+docker run --rm --name cluster004 -v ./cluster:/data --network my-static-network --ip 192.168.100.14 --cpus=2 --memory=500m redis:6.2.17 redis-server redis-cluster-004.conf --loglevel verbose
+docker run --rm --name cluster005 -v ./cluster:/data --network my-static-network --ip 192.168.100.15 --cpus=2 --memory=500m redis:6.2.17 redis-server redis-cluster-005.conf --loglevel verbose
+docker run --rm --name cluster006 -v ./cluster:/data --network my-static-network --ip 192.168.100.16 --cpus=2 --memory=500m redis:6.2.17 redis-server redis-cluster-006.conf --loglevel verbose
+docker run --rm --name cluster007 -v ./cluster:/data --network my-static-network --ip 192.168.100.17 --cpus=2 --memory=500m redis:6.2.17 redis-server redis-cluster-007.conf --loglevel verbose
+docker run --rm --name cluster008 -v ./cluster:/data --network my-static-network --ip 192.168.100.18 --cpus=2 --memory=500m redis:6.2.17 redis-server redis-cluster-008.conf --loglevel verbose
 
 创建集群
 docker exec -it cluster001 redis-cli --cluster create \
@@ -79,6 +79,13 @@ docker exec -it cluster001 redis-cli --cluster create \
 192.168.100.17:6379  \
 192.168.100.18:6379  \
 --cluster-replicas 1  -a 111111
+
+redis-cli -a cc --cluster reshard 192.168.163.132:6379 --cluster-from 117457eab5071954faab5e81c3170600d5192270 --cluster-to 815da8448f5d5a304df0353ca10d8f9b77016b28 --cluster-slots 10 --cluster-yes --cluster-timeout 5000 --cluster-pipeline 10 --cluster-replace
+redis-cli -a cc --cluster rebalance --cluster-weight 117457eab5071954faab5e81c3170600d5192270=5 815da8448f5d5a304df0353ca10d8f9b77016b28=4 56005b9413cbf225783906307a2631109e753f8f=3 --cluster-simulate 192.168.163.132:6379
+redis-cli --cluster add-node 192.168.163.132:6382 192.168.163.132:6379 --cluster-slave --cluster-master-id 117457eab5071954faab5e81c3170600d5192270
+redis-cli --cluster del-node 192.168.163.132:6384 f6a6957421b80409106cb36be3c7ba41f3b603ff
+redis-cli --cluster fix 192.168.163.132:6384 --cluster-search-multiple-owners
+redis-cli --cluster call 192.168.163.132:6381 config set cluster-node-timeout 12000
 ```
 
 
@@ -158,4 +165,10 @@ tcpdump -i docker0 host 172.17.0.2 and port 6379
 
 # 另开终端执行访问测试
 redis-cli -h 172.17.0.2 PING
+```
+
+```conf
+# 禁用 flushall
+rename-command FLUSHALL ""
+protected-mode	yes	是否开启保护模式。若未设置密码且 bind 未指定 IP，禁止外部访问。
 ```
