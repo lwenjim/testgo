@@ -32,7 +32,7 @@ function GroupPublicApply() {
     {
       "judge_status":2,
       "group_ids":[497],
-      "reason":"abc" 
+      "reason":"abc"
     }
     ' -plaintext $domain rpc.Group.AuditGroupChatPublicApply)
     echo $addResp
@@ -126,11 +126,11 @@ function ss111(){
           "user_id": 22033
         }
       },
-      "verify_token": "A1-I4Kwe2xTFbJ7ZmWED52JlQ4u7jsGyTomDtuzMBadaIVy81QYX6SclioA8Q_-imvAsEDhS8NY6w-fPY_LyTZRxWAa9H-ZAdVLBAU0ibbRvFr4c1tFZYHm2_JwhGF6saLIv6Vhq7w70oMuswTTBPsz91xH1iDJhDJStb3bC8p7eGSKFo6GqgzbsAY9YYukf-3CRIecP47ERTM4th5aZAIJ2gZzZrbYJhraDkgsGFe3KJx4UVtohFVo7JqaqJmsgz9Vyojnf8xMNiW188-edqvBx4vJWL1PVrUDjMqClZXActuc0thK8N_L-wYYsx6SxYPYMA3Oc_kwvONfM2raB_VlXw==",
-      "channel": "1"
+      "member_group_type":1
     }
-    ' -H 'devid:8572' -H 'address:116.232.42.57' -plaintext authsv-svc:19090 rpc.Auth.OneClickLogin)
+    ' -H 'devid:8572' -H 'address:116.232.42.57' -plaintext squaresv:9090 rpc.Square.GetMemberPermission)
     echo $addResp
 }
 
 # 7837 android
+# squaresv-svc:9090/rpc.Square/GetMemberPermission

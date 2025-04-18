@@ -21,7 +21,7 @@ func ClusterRedis() {
 	ctx := context.Background()
 	cluster := redis.NewClusterClient(&redis.ClusterOptions{
 		Addrs: []string{
-			"192.168.100.11:6379",
+			"192.168.20.40:16372",
 		},
 		Password:     "111111",
 		DialTimeout:  10 * time.Second,
@@ -34,7 +34,7 @@ func ClusterRedis() {
 	}); err != nil {
 		panic(err)
 	}
-	for{
+	for {
 		demoKey := fmt.Sprintf("%d", time.Now().UnixMicro())
 		cluster.Set(ctx, demoKey, fmt.Sprintf("%d", time.Now().UnixMicro()), 10*time.Minute)
 		if result, err := cluster.Get(ctx, demoKey).Result(); err != nil {
@@ -48,9 +48,9 @@ func ClusterRedis() {
 
 func MasterSlave() {
 	var (
-		ctx          = context.Background()
-		slaveAddrs   = []string{"192.168.100.102:6379"}
-		slaves []*redis.Client
+		ctx        = context.Background()
+		slaveAddrs = []string{"192.168.100.102:6379"}
+		slaves     []*redis.Client
 	)
 	var (
 		master *redis.Client

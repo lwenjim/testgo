@@ -68,6 +68,8 @@ docker run --rm --name cluster006 -v ./cluster:/data --network my-static-network
 docker run --rm --name cluster007 -v ./cluster:/data --network my-static-network --ip 192.168.100.17 --cpus=2 --memory=500m redis:6.2.17 redis-server redis-cluster-007.conf --loglevel verbose
 docker run --rm --name cluster008 -v ./cluster:/data --network my-static-network --ip 192.168.100.18 --cpus=2 --memory=500m redis:6.2.17 redis-server redis-cluster-008.conf --loglevel verbose
 
+docker run --rm --name cluster011 -v ./cluster:/data --network host --cpus=2 --memory=500m redis:6.2.17 redis-server redis-cluster-001.conf --loglevel verbose
+
 创建集群
 docker exec -it cluster001 redis-cli --cluster create \
 192.168.100.11:6379  \

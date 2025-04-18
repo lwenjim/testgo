@@ -14,7 +14,7 @@ function PushMsg(){
                     "body": "xxxx",
                     "clickAction": {
                         "actionType": 0,
-                        "action":"com.app.action"                        
+                        "action":"com.app.action"
                     }
                 }
             },
@@ -24,9 +24,9 @@ function PushMsg(){
             "pushOptions": {
               "testMessage": true,
               "ttl": 86400
-            }            
+            }
     }
-    
+
     ' \
     "https://push-api.cloud.huawei.com/v3/388421841222065037/messages:send"
 }
