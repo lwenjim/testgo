@@ -531,7 +531,7 @@ function goshell() {
         removeFiles=("go.work" "go.work.sum" "go.work.bak")
         for item2 in "${removeFiles[@]}"; do
             if [[ -f "$item2" ]]; then
-                rm -rf $item2 
+                rm -rf $item2
             fi
         done
         cmd="$*"
