@@ -3,69 +3,133 @@ package redis
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/spf13/cobra"
 )
 
-var RedisCmd = &cobra.Command{
-	Use: "redis",
-	Run: func(cmd *cobra.Command, args []string) {
-		ClusterRedis()
-	},
-}
-
-func ClusterRedis() {
-	ctx := context.Background()
-	cluster := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs: []string{
-			"192.168.20.40:16372",
+var (
+	password   string = "111111"
+	masterName        = "mymaster"
+	RedisCmd          = &cobra.Command{
+		Use: "redis",
+		Run: func(cmd *cobra.Command, args []string) {
+			Sentinel()
 		},
-		Password:     "111111",
-		DialTimeout:  10 * time.Second,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+	}
+)
+
+func Sentinel() {
+	ctx := context.Background()
+	sentinel := redis.NewSentinelClient(&redis.Options{
+		Addr:     "localhost:15371",
+		Password: password,
 	})
 
-	if err := cluster.ForEachMaster(ctx, func(ctx context.Context, shard *redis.Client) error {
-		return shard.Ping(ctx).Err()
-	}); err != nil {
-		panic(err)
+	masterAddr, err := sentinel.GetMasterAddrByName(ctx, masterName).Result()
+	if err != nil {
+		panic(fmt.Sprintf("获取主节点失败: %v", err))
 	}
-	for {
-		demoKey := fmt.Sprintf("%d", time.Now().UnixMicro())
-		cluster.Set(ctx, demoKey, fmt.Sprintf("%d", time.Now().UnixMicro()), 10*time.Minute)
-		if result, err := cluster.Get(ctx, demoKey).Result(); err != nil {
-			fmt.Println("err:", err)
-		} else {
-			fmt.Println("result:", result)
+
+	master := redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%s", masterAddr[0], masterAddr[1]),
+		Password: password,
+	})
+
+	err = master.Set(ctx, "key2", "value2", 0).Err()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	masterInterfaces, err := sentinel.Masters(ctx).Result()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	masterCfgs, err := ParseResponse(masterInterfaces)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	printTable("Master配置", masterCfgs)
+
+	slaveCfgs, err := GetSlavesFromSentinel(sentinel, masterName)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	printTable("Slave配置", slaveCfgs)
+	for _, c := range slaveCfgs {
+		slave := redis.NewClient(&redis.Options{
+			Addr:     fmt.Sprintf("%s:%s", c["ip"], c["port"]),
+			Password: password,
+		})
+
+		_, err := slave.Get(ctx, "key2").Result()
+		if err != nil {
+			fmt.Println(err)
+			return
 		}
-		time.Sleep(time.Second)
 	}
+	_ = sentinel.Process(ctx, redis.NewStringCmd(ctx, "ping"))
+
+	ck, err := sentinel.CkQuorum(ctx, masterName).Result()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("ck: %v\n", ck)
+	sentinelInfos, err := sentinel.Sentinels(ctx, masterName).Result()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	sentinelCfgs, err := ParseResponse(sentinelInfos)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	printTable("Sentinel配置", sentinelCfgs)
+	res, err := sentinel.Ping(ctx).Result()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("ping: %s\n", res)
+}
+
+func printTable(title string, sentinelCfgs []map[string]string) {
+	maxKey := 0
+	maxValue := 0
+	for _, vs := range sentinelCfgs {
+		for k, v := range vs {
+			if len(k) > maxKey {
+				maxKey = len(k)
+			}
+			if len(v) > maxKey {
+				maxValue = len(v)
+			}
+		}
+	}
+	len := (maxValue + maxKey + 1 - len(title)) / 2
+	fmt.Printf("\n\n\n\n%s %s %s\n", strings.Repeat("<", len), title, strings.Repeat(">", len))
+	for _, vs := range sentinelCfgs {
+		for k, v := range vs {
+			fmt.Println(strings.Repeat("-", maxValue+maxKey+1))
+			fmt.Printf("%-"+fmt.Sprintf("%d", maxKey)+"s:%s\n", k, v)
+		}
+	}
+	fmt.Println(strings.Repeat("-", maxValue+maxKey+1))
 }
 
 func MasterSlave() {
-	var (
-		ctx        = context.Background()
-		slaveAddrs = []string{"192.168.100.102:6379"}
-		slaves     []*redis.Client
-	)
-	var (
-		master *redis.Client
-		slave  *redis.Client
-	)
-
-	master = redis.NewClient(&redis.Options{
-		Addr:     "192.168.100.101:6379",
-		Password: "111111",
-		DB:       0,
-	})
-
-	slave = redis.NewClient(&redis.Options{
-		Addr:     "192.168.100.102:6379",
-		Password: "111111",
+	ctx := context.Background()
+	master := redis.NewClient(&redis.Options{
+		Addr:     "localhost:14371",
+		Password: password,
 		DB:       0,
 	})
 
@@ -73,56 +137,32 @@ func MasterSlave() {
 		panic(fmt.Sprintf("主节点连接失败: %v", err))
 	}
 
-	if _, err := slave.Ping(ctx).Result(); err != nil {
-		panic(fmt.Sprintf("从节点连接失败: %v", err))
-	}
-
 	err := master.Set(ctx, "key1", "value1", 0).Err()
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		return
 	}
-
-	val, err := slave.Get(ctx, "key1").Result()
+	slavesCfg, err := GetReplicasUsingRole(master)
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		return
 	}
-	fmt.Println("key1 的值为:", val)
-
-	for _, addr := range slaveAddrs {
-		client := redis.NewClient(&redis.Options{
+	for _, addr := range slavesCfg {
+		slave := redis.NewClient(&redis.Options{
 			Addr:     addr,
-			Password: "111111",
+			Password: password,
 			DB:       0,
 		})
-		if _, err := client.Ping(ctx).Result(); err != nil {
-			panic(fmt.Sprintf("从节点 %s 连接失败: %v", addr, err))
+
+		if _, err := slave.Ping(ctx).Result(); err != nil {
+			panic(fmt.Sprintf("从节点连接失败: %v", err))
 		}
-		slaves = append(slaves, client)
-	}
 
-	r := rand.New(rand.NewSource(time.Now().UnixMicro()))
-	client := slaves[r.Intn(len(slaves))]
-	val, err = client.Get(ctx, "key1").Result()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("key1 的值为:", val)
-
-	master = redis.NewClient(&redis.Options{
-		Addr:         "192.168.100.101:6379",
-		Password:     "111111",
-		DB:           0,
-		PoolSize:     20,
-		MinIdleConns: 5,
-	})
-
-	maxRetries := 3
-	for i := 0; i < maxRetries; i++ {
-		err := master.Set(ctx, "key", "value", 0).Err()
-		if err == nil {
-			break
+		val, err := slave.Get(ctx, "key1").Result()
+		if err != nil {
+			panic(err)
 		}
-		time.Sleep(1 * time.Second)
+		fmt.Println("key1 的值为:", val)
 	}
 }
 
@@ -162,13 +202,13 @@ func ExecRedisScript() {
 
 func Diagnosis() {
 	ctx := context.Background()
-	sentinelClient := redis.NewSentinelClient(&redis.Options{
+	sentinel := redis.NewSentinelClient(&redis.Options{
 		Addr:     "localhost:36379",
 		Password: "",
 	})
 
 	for {
-		masterAddr, err := sentinelClient.GetMasterAddrByName(ctx, "mymaster").Result()
+		masterAddr, err := sentinel.GetMasterAddrByName(ctx, masterName).Result()
 		if err != nil {
 			panic(fmt.Sprintf("获取主节点失败: %v", err))
 		}
@@ -177,45 +217,119 @@ func Diagnosis() {
 	}
 }
 
-func Sentinel() {
+func ClusterRedis() {
 	ctx := context.Background()
-	sentinelClient := redis.NewSentinelClient(&redis.Options{
-		Addr:     "192.168.100.203:26379",
-		Password: "",
+	cluster := redis.NewClusterClient(&redis.ClusterOptions{
+		Addrs: []string{
+			"localhost:16372",
+		},
+		Password:     password,
+		DialTimeout:  10 * time.Second,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
 	})
 
-	masterAddr, err := sentinelClient.GetMasterAddrByName(ctx, "mymaster").Result()
-	if err != nil {
-		panic(fmt.Sprintf("获取主节点失败: %v", err))
-	}
-
-	cmd := sentinelClient.Slaves(ctx, "mymaster")
-	res2, _ := cmd.Result()
-	slaveConfig := map[string]string{}
-	items := res2[0].([]interface{})
-	for i := 0; i < len(items)-1; i++ {
-		slaveConfig[items[i].(string)] = items[i+1].(string)
-		i++
-	}
-
-	masterClient := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%s", masterAddr[0], masterAddr[1]),
-		Password: "111111",
-	})
-
-	slaveClient := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%s", slaveConfig["ip"], slaveConfig["port"]),
-		Password: "111111",
-	})
-
-	err = masterClient.Set(ctx, "key2", "value2", 0).Err()
-	if err != nil {
+	if err := cluster.ForEachMaster(ctx, func(ctx context.Context, shard *redis.Client) error {
+		return shard.Ping(ctx).Err()
+	}); err != nil {
 		panic(err)
 	}
-
-	val, err := slaveClient.Get(ctx, "key2").Result()
-	if err != nil {
-		panic(err)
+	for {
+		demoKey := fmt.Sprintf("%d", time.Now().UnixMicro())
+		cluster.Set(ctx, demoKey, fmt.Sprintf("%d", time.Now().UnixMicro()), 10*time.Minute)
+		if result, err := cluster.Get(ctx, demoKey).Result(); err != nil {
+			fmt.Println("err:", err)
+		} else {
+			fmt.Println("result:", result)
+		}
+		time.Sleep(time.Second)
 	}
-	fmt.Println("key2 的值为:", val)
+}
+
+func GetReplicasFromMaster(client *redis.Client) ([]string, error) {
+	info, err := client.Info(context.Background(), "replication").Result()
+	if err != nil {
+		return nil, err
+	}
+
+	var replicas []string
+	lines := strings.Split(info, "\r\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "slave") && strings.Contains(line, "ip=") {
+			parts := strings.Split(line, ",")
+			var ip, port string
+			for _, part := range parts {
+				if strings.HasPrefix(part, "ip=") {
+					ip = strings.TrimPrefix(part, "ip=")
+				} else if strings.HasPrefix(part, "port=") {
+					port = strings.TrimPrefix(part, "port=")
+				}
+			}
+			if ip != "" && port != "" {
+				replicas = append(replicas, fmt.Sprintf("%s:%s", ip, port))
+			}
+		}
+	}
+
+	return replicas, nil
+}
+
+func GetReplicasUsingRole(client *redis.Client) ([]string, error) {
+	roleInfo, err := client.Do(context.Background(), "ROLE").Result()
+	if err != nil {
+		return nil, err
+	}
+
+	roleSlice, ok := roleInfo.([]interface{})
+	if !ok || len(roleSlice) < 3 {
+		return nil, fmt.Errorf("invalid ROLE response")
+	}
+
+	if roleSlice[0].(string) != "master" {
+		return nil, fmt.Errorf("not a master node")
+	}
+
+	var replicas []string
+	replicasInfo := roleSlice[2].([]interface{})
+	for _, replica := range replicasInfo {
+		replicaInfo := replica.([]interface{})
+		if len(replicaInfo) >= 2 {
+			ip := replicaInfo[0].(string)
+			port := replicaInfo[1].(string)
+			replicas = append(replicas, fmt.Sprintf("%s:%s", ip, port))
+		}
+	}
+
+	return replicas, nil
+}
+func GetSlavesFromSentinel(client *redis.SentinelClient, masterName string) ([]map[string]string, error) {
+	slavesInfo, err := client.Slaves(context.Background(), masterName).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get slaves from sentinel: %v", err)
+	}
+	return ParseResponse(slavesInfo)
+}
+
+func ParseResponse(slavesInfo []interface{}) ([]map[string]string, error) {
+	var slaves []map[string]string
+	for _, slave := range slavesInfo {
+		slaveData, ok := slave.([]interface{})
+		if !ok {
+			continue
+		}
+
+		slaveMap := make(map[string]string)
+		for i := 0; i < len(slaveData); i += 2 {
+			if i+1 >= len(slaveData) {
+				break
+			}
+			key, ok1 := slaveData[i].(string)
+			value, ok2 := slaveData[i+1].(string)
+			if ok1 && ok2 {
+				slaveMap[key] = value
+			}
+		}
+		slaves = append(slaves, slaveMap)
+	}
+	return slaves, nil
 }

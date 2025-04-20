@@ -130,6 +130,43 @@ SENTINEL set mymaster failover-timeout 60000
 
 docker stop master
 
+# 查看QPS 指标 instantaneous_ops_per_sec
+redis-cli info stats | grep instantaneous_ops_per_sec  # 查看当前 QPS
+
+# 查看 master_repl_offset 和 slave_repl_offset 的差距。主从节点数据同步偏移量
+redis-cli info replication
+
+# 降低同步延迟
+# 增加复制缓冲区大小（默认 1MB，可适当调大）
+redis-cli config set repl-backlog-size 256mb
+# 限制主节点写入速度, 使用 pipeline 优化写入
+# 手动触发同步 如果从节点长时间落后，可以尝试：
+# 在从节点执行，重新同步数据（会清空从节点数据）
+redis-cli replicaof no one  # 先取消复制
+redis-cli flushall         # 清空数据（谨慎操作！）
+redis-cli replicaof <master-ip> <master-port>  # 重新同步
+# 监控复制状态
+# 查看主从复制状态
+redis-cli info replication
+# 重点关注：
+role:master/slave
+master_repl_offset:xxx  # 主节点 offset
+slave_repl_offset:xxx   # 从节点 offset
+slave_lag:xxx           # 延迟量（Redis 5.0+）slave_lag > 0 表示有延迟。
+
+#（连接是否正常）
+master_link_status:up
+
+#（是否和 Master 的 master_repl_offset 接近）
+slave_repl_offset
+
+# 查看 Sentinel 的 PING 频率
+redis-cli -p 26379 sentinel debug mymaster
+
+# 检查 PING 延迟
+redis-cli -p 15371 -a 111111 --no-auth-warning --json --latency
+
+
 ```
 
 网络测试工具
@@ -140,10 +177,7 @@ ping 172.17.0.2
 # 检查端口是否可达
 telnet 172.17.0.2 6379
 nc -zv 172.17.0.2 6379
-```
 
-诊断网络通畅问题
-```shell
 # 进入容器
 docker exec -it redis bash
 
