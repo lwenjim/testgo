@@ -1,19 +1,16 @@
--- -@class Redis
--- -@field call fun(command: string, ...): any
--- -@field pcall fun(command: string, ...): any, any
--- -@field log fun(level: string, message: string)
--- -@field sha1hex fun(input: string): string
+local data = {}
+local myData = redis.call("keys", "*")
 
--- -@type Redis
--- redis = {}
-
--- 现在可以正常使用 redis.call()，并享受代码补全
--- local value = redis.call("GET", "mykey")
-
--- return ARGS[1]
-
-local redis = require "resty.redis"
-local red = redis:new()
-red:connect("127.0.0.1", 6379)
-local res = red:get("mykey")
-error(res)
+for i, v in pairs(myData) do
+    local t = redis.call("type", v)["ok"]
+    if (t == "string") then
+        data[v] = redis.call("get", v)
+    elseif (t == "hash") then
+        local d = redis.call("hgetall", v)
+        for i, v in pairs(d) do
+            data[i] = v
+        end
+    else
+    end
+end
+return data
