@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -16,7 +17,26 @@ var (
 	RedisCmd          = &cobra.Command{
 		Use: "redis",
 		Run: func(cmd *cobra.Command, args []string) {
-			Sentinel()
+			master := redis.NewClient(&redis.Options{
+				Addr:     "localhost:6379",
+				Password: "",
+			})
+			wg := sync.WaitGroup{}
+			wg.Add(2)
+			go func() {
+				defer func() {
+					wg.Done()
+				}()
+				master.SetNX(context.Background(), "abc", 20, time.Second*90)
+			}()
+			go func() {
+				defer func() {
+					wg.Done()
+				}()
+				master.SetNX(context.Background(), "abc", 40, time.Second*90)
+			}()
+			wg.Wait()
+			fmt.Println(master.Get(context.Background(), "abc"))
 		},
 	}
 )
