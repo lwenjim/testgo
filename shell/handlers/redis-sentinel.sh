@@ -82,8 +82,8 @@ EOF
         dir=$(pwd)
         cd ${SHELL_FOLDER}/../docker/redis || exit 1
         read -r -d '' cmd <<EOF
-docker run -d --rm --name sentinel-$port --platform linux/amd64 -v ./sentinel:/data/ --network host \
---cpus=2 --memory=500m redis redis-sentinel $(basename $filename) --sentinel monitor mymaster $ip $masterPort 2 --loglevel verbose
+        docker run -d --rm --name sentinel-$port --platform linux/amd64 -v ./sentinel:/data/ --network host \
+            --cpus=2 --memory=500m redis redis-sentinel $(basename $filename) --sentinel monitor mymaster $ip $masterPort 2 --loglevel verbose
 EOF
         $cmd
         echo $cmd

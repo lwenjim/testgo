@@ -3,6 +3,8 @@ package redis
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,26 +19,83 @@ var (
 	RedisCmd          = &cobra.Command{
 		Use: "redis",
 		Run: func(cmd *cobra.Command, args []string) {
-			master := redis.NewClient(&redis.Options{
+			redis := redis.NewClient(&redis.Options{
 				Addr:     "localhost:6379",
 				Password: "",
 			})
 			wg := sync.WaitGroup{}
 			wg.Add(2)
+			expiration := time.Second * 9000
+			ctx := context.Background()
+			key := fmt.Sprintf("%d", rand.New(rand.NewSource(time.Now().UnixMicro())).Intn(1000))
 			go func() {
-				defer func() {
-					wg.Done()
-				}()
-				master.SetNX(context.Background(), "abc", 20, time.Second*90)
+				defer wg.Done()
+				val1 := 1
+				for {
+					b, err := redis.SetNX(ctx, key, val1, expiration).Result()
+					if err != nil {
+						fmt.Println(err)
+						return
+					}
+					if b {
+						break
+					}
+					time.Sleep(time.Second)
+				}
+				fmt.Println("a 已经持有锁")
+				time.Sleep(time.Second * 5)
+				newVal, err := redis.Get(ctx, key).Result()
+				if err != nil {
+					fmt.Println(err)
+					return
+				}
+				num, err := strconv.ParseInt(newVal, 10, 64)
+				if err != nil {
+					fmt.Println(err)
+					return
+				}
+				if num != int64(val1) {
+					fmt.Println("a 释放锁失败, 锁已经被修改")
+					return
+				}
+				redis.Del(ctx, key)
+				fmt.Println("a 释放锁完成")
 			}()
 			go func() {
-				defer func() {
-					wg.Done()
-				}()
-				master.SetNX(context.Background(), "abc", 40, time.Second*90)
+				defer wg.Done()
+				val1 := 1
+				for {
+					b, err := redis.SetNX(ctx, key, val1, expiration).Result()
+					if err != nil {
+						fmt.Println(err)
+						return
+					}
+					if b {
+						break
+					}
+					time.Sleep(time.Second)
+				}
+				fmt.Println("b 已经持有锁")
+				time.Sleep(time.Second * 5)
+				newVal, err := redis.Get(ctx, key).Result()
+				if err != nil {
+					fmt.Println(err)
+					return
+				}
+				num, err := strconv.ParseInt(newVal, 10, 64)
+				if err != nil {
+					fmt.Println(err)
+					return
+				}
+				if num != int64(val1) {
+					fmt.Println("b 释放锁失败, 锁已经被修改")
+					return
+				}
+				redis.Del(ctx, key)
+				fmt.Println("b 释放锁完成")
 			}()
 			wg.Wait()
-			fmt.Println(master.Get(context.Background(), "abc"))
+			fmt.Println(redis.Get(ctx, key).Int64())
 		},
 	}
 )

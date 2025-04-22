@@ -20,6 +20,14 @@ sureDir() {
     mkdir -p $dir
 }
 
+dd() {
+    name=123
+    read data <<EOF
+name: $name
+EOF
+    echo $data
+}
+
 ClearRedisMasterSlaveConf() {
     local index=1
     local port=14371
