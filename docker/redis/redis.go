@@ -28,20 +28,31 @@ var (
 			expiration := time.Second * 9000
 			ctx := context.Background()
 			key := fmt.Sprintf("%d", rand.New(rand.NewSource(time.Now().UnixMicro())).Intn(1000))
+			publishKey := "test:publish"
+			val1 := time.Now().UnixMilli()
+			val2 := time.Now().UnixMilli()
 			go func() {
 				defer wg.Done()
-				val1 := 1
-				for {
-					b, err := redis.SetNX(ctx, key, val1, expiration).Result()
+				b, err := redis.SetNX(ctx, key, val1, expiration).Result()
+				if err != nil {
+					fmt.Println(err)
+					return
+				}
+				if !b {
+					_, err := redis.Subscribe(ctx, publishKey).Receive(ctx)
 					if err != nil {
 						fmt.Println(err)
 						return
 					}
-					if b {
-						break
-					}
-					time.Sleep(time.Second)
 				}
+				go func() {
+					for {
+						if redis.TTL(ctx, key).Val() < time.Second*60 {
+							redis.Expire(ctx, key, time.Second*2)
+						}
+						time.Sleep(time.Millisecond * 100)
+					}
+				}()
 				fmt.Println("a 已经持有锁")
 				time.Sleep(time.Second * 5)
 				newVal, err := redis.Get(ctx, key).Result()
@@ -58,23 +69,32 @@ var (
 					fmt.Println("a 释放锁失败, 锁已经被修改")
 					return
 				}
-				redis.Del(ctx, key)
 				fmt.Println("a 释放锁完成")
+				redis.Del(ctx, key)
+				redis.Publish(ctx, publishKey, 123)
 			}()
 			go func() {
 				defer wg.Done()
-				val1 := 1
-				for {
-					b, err := redis.SetNX(ctx, key, val1, expiration).Result()
+				b, err := redis.SetNX(ctx, key, val2, expiration).Result()
+				if err != nil {
+					fmt.Println(err)
+					return
+				}
+				if !b {
+					_, err := redis.Subscribe(ctx, publishKey).Receive(ctx)
 					if err != nil {
 						fmt.Println(err)
 						return
 					}
-					if b {
-						break
-					}
-					time.Sleep(time.Second)
 				}
+				go func() {
+					for {
+						if redis.TTL(ctx, key).Val() < time.Second*60 {
+							redis.Expire(ctx, key, time.Second*2)
+						}
+						time.Sleep(time.Millisecond * 100)
+					}
+				}()
 				fmt.Println("b 已经持有锁")
 				time.Sleep(time.Second * 5)
 				newVal, err := redis.Get(ctx, key).Result()
@@ -87,15 +107,17 @@ var (
 					fmt.Println(err)
 					return
 				}
-				if num != int64(val1) {
+				if num != int64(val2) {
 					fmt.Println("b 释放锁失败, 锁已经被修改")
 					return
 				}
-				redis.Del(ctx, key)
 				fmt.Println("b 释放锁完成")
+				redis.Del(ctx, key)
+				redis.Publish(ctx, publishKey, 123)
 			}()
 			wg.Wait()
-			fmt.Println(redis.Get(ctx, key).Int64())
+			i, _ := redis.Get(ctx, key).Int64()
+			fmt.Println(i)
 		},
 	}
 )
@@ -381,6 +403,7 @@ func GetReplicasUsingRole(client *redis.Client) ([]string, error) {
 
 	return replicas, nil
 }
+
 func GetSlavesFromSentinel(client *redis.SentinelClient, masterName string) ([]map[string]string, error) {
 	slavesInfo, err := client.Slaves(context.Background(), masterName).Result()
 	if err != nil {
