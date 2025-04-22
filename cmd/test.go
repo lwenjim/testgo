@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -90,17 +88,23 @@ var testCmd = &cobra.Command{
 		// splits := strings.Split(data, ".(*Core).")
 		// splits = strings.Split(splits[1], "-")
 		// fmt.Printf("splits[1]: %v\n", splits[0])
-		buffer, err := os.ReadFile("data.json")
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		data := map[string]interface{}{}
-		_ = json.Unmarshal(buffer, &data)
-		arr := data["data"].([]interface{})
-		for _, v := range arr {
-			item := v.(map[string]interface{})
-			fmt.Printf("v: %v\n", item["parent_id"])
+		// buffer, err := os.ReadFile("data.json")
+		// if err != nil {
+		// 	fmt.Println(err)
+		// 	return
+		// }
+		// data := map[string]interface{}{}
+		// _ = json.Unmarshal(buffer, &data)
+		// arr := data["data"].([]interface{})
+		// for _, v := range arr {
+		// 	item := v.(map[string]interface{})
+		// 	fmt.Printf("v: %v\n", item["parent_id"])
+		// }
+		switch {
+		case true:
+			fmt.Println(123)
+		case true:
+			fmt.Println(456)
 		}
 	},
 }

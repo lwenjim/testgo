@@ -208,3 +208,8 @@ redis-cli -h 172.17.0.2 PING
 rename-command FLUSHALL ""
 protected-mode	yes	是否开启保护模式。若未设置密码且 bind 未指定 IP，禁止外部访问。
 ```
+
+分布式锁
+***发生异常锁得不到释放的场景
+***锁过期释放了，业务还没执行完
+***锁被别的线程误删

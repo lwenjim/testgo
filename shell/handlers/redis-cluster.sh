@@ -39,15 +39,16 @@ EOF
 StartRedisCluster() {
     local index=1
     local port=16371
-    readonly dockerNum=8
+    local dockerNum=8
     readonly requirepass=111111
+    readonly dockerNum
     InitRedisCliRc cluster
     local createCluster="docker exec -it cluster$port redis-cli -p $port -a 111111 --cluster-replicas 1 --no-auth-warning --cluster create --cluster-yes "
     ip=$(ifconfig en0 | grep "inet\b" | awk '{print $2}')
     if isUsed $port; then
         return
     fi
-    if isRunning; then
+    if ! isRunning; then
         return
     fi
     ClearRedisClusterConf
@@ -74,7 +75,10 @@ appendfilename appendonly$port.aof
 EOF
         dir=$(pwd)
         cd ${SHELL_FOLDER}/../docker/redis || exit 1
-        cmd="docker run -d --rm --name cluster$port --platform linux/amd64 -v ./cluster:/data --network host --cpus=2 --memory=500m redis:6.2.17 redis-server $(basename $filename)  --loglevel verbose"
+        read -r -d '' cmd<<EOF
+            docker run -d --rm --name cluster$port --platform linux/amd64 -v ./cluster:/data --network host --cpus=2
+                --memory=500m redis:6.2.17 redis-server $(basename $filename)  --loglevel verbose
+EOF
         echo $cmd
         $cmd
         cd $dir || exit 2
