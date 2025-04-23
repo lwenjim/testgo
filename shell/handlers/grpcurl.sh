@@ -1,4 +1,3 @@
-#! /usr/bin/env bash
 function GroupPublicApply() {
     domain=localhost:9090
     addResp=$(grpcurl -plaintext $domain rpc.Group.GetGroupChatCategorys)
@@ -118,7 +117,7 @@ function NetSecurityDataReport() {
     echo $addResp
 }
 
-function ss111(){
+function GetMemberPermission(){
     addResp=$(grpcurl -d '
     {
       "auth": {
@@ -128,7 +127,20 @@ function ss111(){
       },
       "member_group_type":1
     }
-    ' -H 'devid:8572' -H 'address:116.232.42.57' -plaintext squaresv:9090 rpc.Square.GetMemberPermission)
+    ' -H 'devid:8572' -H 'address:116.232.42.57' -plaintext squaresv-svc:9090 rpc.Square.GetMemberPermission)
+    echo $addResp
+}
+
+function QueryWishPayStatus(){
+    addResp=$(grpcurl -d '
+    {
+      "auth": {
+        "token": {
+          "user_id": 16704
+        }
+      }
+    }
+    ' -plaintext 0.0.0.0:19090 rpc.Square.QueryWishPayStatus)
     echo $addResp
 }
 

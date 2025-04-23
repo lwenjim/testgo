@@ -7,12 +7,6 @@ StopRedisSentinel() {
     ClearRedisSentinelConf
 }
 
-Test() {
-    cat >/tmp/a.txt <<EOF
-    hello world
-EOF
-}
-
 ClearRedisSentinelConf() {
     local index=1
     local port=15371

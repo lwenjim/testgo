@@ -1,6 +1,3 @@
-#! /usr/bin/env bash
-# shellcheck disable=SC2206,2068,2086,1091,2317,1090,2090,2089,2059,2046,2162,2236
-
 function PushMsg(){
     curl \
     -H "Content-Type: application/json" \

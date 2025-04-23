@@ -1,6 +1,3 @@
-#! /usr/bin/env bash
-# shellcheck disable=SC2206,2068,2086,1091,2317,1090,2090,2089,2059,2046,2184,2094,2128,2178,2030,2031,2129,2045
-
 declare -A ServiceServers=(
     ["mongo"]=27017
     ["mysql"]=3306
@@ -25,19 +22,49 @@ declare -A ServiceServers=(
 
 debug=false
 
+Test() {
+    if [[ ! $a ]] ;then
+        echo 123
+    else
+        echo 456
+    fi
+}
+ArrayMerge() {
+    arrayMerge $@
+}
+
+arrayMerge() {
+    if [[ ! $# -eq 4 ]];then
+        echo must num of param is 4
+        return
+    fi
+
+    IFS=$2
+    arr=(${3//IFS/ })
+    arr2=(${4//IFS/ })
+
+    declare -A res=()
+    local data=(${arr[@]} ${arr2[*]})
+    for item in ${data[@]}; do
+        res[$item]=$item
+    done
+    echo ${res["2045"]}
+    return ${res}
+}
+
 function SyncConfig() {
     cd ~ || exit 1
     cd $GO_JSPP_WORKSPACE || exit 1
     cd testgo || exit 1
     cp ~/.vimrc . &&
-    cp ~/.bashrc . &&
-    cp ~/.zshrc . &&
-    git add . &&
-    git commit -m "update config $(date +"%Y-%m-%d %H:%I:%S")" &&
-    git push
+        cp ~/.bashrc . &&
+        cp ~/.zshrc . &&
+        git add . &&
+        git commit -m "update config $(date +"%Y-%m-%d %H:%I:%S")" &&
+        git push
 }
 
-function main() {
+function Main() {
     cmd="${1//--/}"
     if [ "$cmd" = "" ]; then
         help
@@ -50,7 +77,7 @@ function main() {
     fi
 }
 
-function log() {
+function Log() {
     option=
     service=$2
     pipe=
@@ -86,8 +113,8 @@ function log() {
             ;;
         esac
     done
-    lprint $option
-    lprint $pipe
+    LogPrint $option
+    LogPrint $pipe
     logOption='--tail 20'
     if [ "$option" != "" ]; then
         logOption=$(echo "$option" | tr -d "\\")
@@ -97,7 +124,7 @@ function log() {
             continue
         fi
         awkString=" awk -F'[ -]()' "" '{print \"jspp-kubectl logs -c $service $logOption \"\$1\"-\"\$2\"-\"\$3}'"
-        lprint $awkString
+        LogPrint $awkString
         for i in $(jspp-kubectl get pods | grep "$service"); do
             result=$(echo "$i" | sed 's/(//' | sed 's/)//' | sed 's/\n\r//g')
             break
@@ -106,9 +133,9 @@ function log() {
             echo no launch for $service
             break
         fi
-        lprint $result
+        LogPrint $result
         result2=$(eval "echo $result|$awkString")
-        lprint $result2
+        LogPrint $result2
         filename=/tmp/a.exe
         if [ "$pipe" != "" ]; then
             echo "$result2 | $pipe" >/tmp/a.exe
@@ -120,35 +147,38 @@ function log() {
     done
 }
 
-function lprint() {
+function LogPrint() {
     echo "$1" >/dev/null 2>&1
 }
 
-function port-forward() {
-    arr=("$@")
+function PortForward() {
+    local arr=("$@")
     unset arr[0]
 
     ps aux | pgrep kube | awk '{print "kill -9 " $1}' | bash
-    template="%-19s %-30s %-10s\n"
-    printf "${template}" "服务名称" "环境变量" "    变量值"
+    local template="%-5s %-19s %-30s %-10s\n"
+    printf "${template}" "ID" "SERVICE NAME" "POD NAME" "STATUS"
+    local index=1
     if [[ ${#arr[@]} -gt 0 ]]; then
         for server in ${arr[@]}; do
-            port-forward-simple "$server" "${ServiceServers[$server]}"
+            PortForwardSimple "${server}" "${ServiceServers[$server]}" ${index}
+            ((index++))
         done
-        isReloadNginx=1
+        GeneralConfForNginx
+        if ps -ef | grep nginx >/dev/null; then
+            /usr/local/bin/openresty -s reload
+        else
+            brew services reload openresty
+        fi
     else
         for server in "${!ServiceServers[@]}"; do
-            port-forward-simple "$server" "${ServiceServers[$server]}"
+            PortForwardSimple "${server}" "${ServiceServers[$server]}" ${index}
+            ((index++))
         done
-    fi
-
-    if [[ $isReloadNginx != 1 ]]; then
-        general-conf-for-nginx
-        brew services reload openresty
     fi
 }
 
-function port-forward-simple() {
+function PortForwardSimple() {
     if [[ "mongo mysql redis" == *"${1}"* ]]; then
         name="${1}-0"
         jspp-kubectl port-forward --address 0.0.0.0 "${name}" "${2}:${2}" >"/tmp/$1.log" 2>&1 &
@@ -160,15 +190,15 @@ function port-forward-simple() {
             jspp-kubectl port-forward "${name}" "${2}:9090" >"/tmp/$1.log" 2>&1 &
         fi
     fi
-    template="%-15s %-30s %-10s\n"
+    local template="%-5s %-19s %-30s %-10s\n"
     if [ ! $? ]; then
-        printf "${template}" "$1" "$name" "启动失败"
+        printf "${template}" ${index} "${1}" "${name}" "failed"
     else
-        printf "${template}" "$1" "$name" "启动成功"
+        printf "${template}" ${index} "${1}" "${name}" "success"
     fi
 }
 
-function update-git-hook() {
+function UpdateGitHook() {
     cd /Users/jim/Workdata/goland/src/jspp/pushersv >/dev/null 2>&1 || exit 1
     for forService in "${!ServiceServers[@]}"; do
         cd "../$forService" >/dev/null 2>&1 || continue
@@ -176,61 +206,50 @@ function update-git-hook() {
     done
 }
 
-function ip() {
+function IP() {
     ifconfig | grep "inet " | grep -v '127.0.0.1' | awk -F "inet" '{print $2}' | awk -F "netmask" '{print $1}' | tr -d " "
 }
 
-function help() {
+function HELP() {
     echo "Automation Script"
     echo
     echo -e "    get log:               a log usersv [-p | --pipe pipe] [-o | --option option]"
-    echo -e "    sync config:           a update-git-hook"
-    echo -e "    show env path:         a print-env-path"
-    echo -e "    show env go:           a print-env-go"
-    echo -e "    show env:              a print-env"
-    echo -e "    forward port to local: a port-forward"
+    echo -e "    sync config:           a UpdateGitHook"
+    echo -e "    show env path:         a PrintEnvPath"
+    echo -e "    show env go:           a PrintEnvGo"
+    echo -e "    show env:              a PrintEnv"
+    echo -e "    forward port to local: a PortForward"
     echo -e "    show ip:               a ip"
     echo -e "    show help:             a help"
     echo
 }
 
-function general-conf-for-nginx() {
-    declare -A DebugServers=(
-        # ["authsv"]=19090
-        # ["usersv"]=19091
-        # ["paysv"]=19092
-        # ["edgesv"]=19093
-    )
+function GeneralConfForNginx() {
+    declare -A DebugServers=()
     filename=/usr/local/etc/openresty/servers/rpc.conf
-    if [[ "$debug" = "false" ]]; then
+    if [[ $debug ]]; then
         echo >$filename
     fi
     for server in "${!ServiceServers[@]}"; do
         if [ "$server" = 'mysql' ] || [ "$server" = "mongo" ] || [ "$server" = "redis" ]; then
             continue
         fi
-        read -r -d '' template <<-'EOF'
+        targetPort=${ServiceServers[$server]}
+        if [[ " ${!DebugServers[*]} " =~ $server ]]; then
+            targetPort=${DebugServers[$server]}
+        fi
+        read -r -d '' template <<EOF
         server {
-            server_name aaaaaa-svc;
+            server_name $server-svc;
             listen 9090 http2;
-            access_log /tmp/aaaaaa-svc_nginx.log combined;
+            access_log /tmp/$server-svc_nginx.log combined;
 
             location / {
-                grpc_pass grpc://127.0.0.1:77777;
+                grpc_pass grpc://127.0.0.1:$targetPort;
             }
         }
 EOF
-        finded=false
-        if [[ " ${!DebugServers[*]} " =~ $server ]]; then
-            finded=true
-        fi
-        template="${template//aaaaaa/$server}"
-        targetPort=${ServiceServers[$server]}
-        if $finded; then
-            targetPort=${DebugServers[$server]}
-        fi
-        template="${template//77777/$targetPort}"
-        if [[ "$debug" = "false" ]]; then
+        if [[ $debug ]]; then
             echo "$template" >>$filename
         else
             echo "$template"
@@ -238,29 +257,29 @@ EOF
     done
 }
 
-function print-env-path() {
+function PrintEnvPath() {
     IFS=":"
     paths=(${PATH})
     noExists=()
-    for i in "${paths[@]}"; do
-        if [ "$i" = "" ]; then
+    for path in "${paths[@]}"; do
+        if [ "$path" = "" ]; then
             continue
         fi
-        i=${i//\\/}
-        if [ -d "$i" ]; then
-            echo $i
+        path=${path//\\/}
+        if [ -d "$path" ]; then
+            echo $path
         else
-            noExists[${#noExists[@]}]=$i
+            noExists[${#noExists[@]}]=$path
         fi
     done
     echo
     echo
-    for i in "${noExists[@]}"; do
-        echo $i
+    for path in "${noExists[@]}"; do
+        echo $path
     done
 }
 
-function print-env() {
+function PrintEnv() {
     IFS=$'\n'
     data=$(env)
     arr=($data)
@@ -276,23 +295,23 @@ function print-env() {
     done
 }
 
-function print-env-go() {
+function PrintEnvGo() {
     IFS=$'\n'
     data=$(go env)
     arr=($data)
-    template="%-40s %-10s\n"
-    printf ${template} "环境变量" "    变量值"
+    template="%-15s %-10s\n"
+    printf ${template} "NAME" "VALUE"
     for variable in ${arr[@]}; do
         IFS="="
         item=($variable)
         if [ "${item[0]}" = "PATH" ] || [ "${item[1]}" = "" ]; then
             continue
         fi
-        printf ${template} "${item[0]}" "${item[1]}"
+        printf ${template} ${item[0]} ${item[1]}
     done
 }
 
-function workspace-gowork-sync() {
+function WorkspaceGoworkSync() {
     filename=/tmp/go.work
     rm -f $filename >/dev/null 2>&1
     data=(
@@ -361,9 +380,9 @@ function solitaire() {
         "user_qrcode": "'$userQrcode'",
         "topic_qrcode": "'$topicQrcode'",
         "content": [
-        {
-            "content": "'$(uuidgen)'"
-        }
+            {
+                "content": "'$(uuidgen)'"
+            }
         ]
     }' "$domain/solitaire/post")
     echo $postResp
@@ -441,7 +460,7 @@ function vote() {
     fi
 }
 
-function move-vsc-config() {
+function MoveVscConfig() {
     echo "mv ~/.vscode-bak                                                             ~/.vscode"
     echo "mv ~/Library/Application\\ Support/Code-bak                                  ~/Library/Application\\ Support/Code"
     echo "mv ~/Library/Caches/com.microsoft.VSCode-bak                                 ~/Library/Caches/com.microsoft.VSCode"
@@ -449,7 +468,7 @@ function move-vsc-config() {
     echo "mv ~/Library/Saved\\ Application\\ State/com.microsoft.VSCode.savedState-bak ~/Library/Saved\\ Application\\ State/com.microsoft.VSCode.savedState"
 }
 
-function checkout-go-mod-sum() {
+function CheckoutGoModSum() {
     cd /Users/jim/Workdata/goland/src/jspp || exit 1
     ll ./**/go.mod | awk -F' ' '{print $7}' | awk -F'/' '{print $1}' | xargs -I {} echo "cd {};git checkout go.mod go.sum" | xargs -I {} bash -c {}
 }
@@ -500,27 +519,26 @@ function insert1000000t_push() {
     done
 }
 
-function stockTrade() {
+function StockTrade() {
     echo $((6599 * 5 / 10 + 9600 * 2 / 10 + 400 * 5 + 300 * 3))
     echo
 }
 
-function goshell() {
+function GoShell() {
     shift
     path=/Users/jim/Workdata/goland/src/jspp/
     cd $path || exit
     for item in $(ls $path); do
         case $item in
-        "go.work.sum"|"go.work"|"testgo"|"pusher")
+        "go.work.sum" | "go.work" | "testgo" | "pusher")
             continue
             ;;
-        *)
-            ;;
+        *) ;;
         esac
         if [[ "$item" == "testgo" ]]; then
             continue
         fi
-        if [[ ! -d "$item" ]];then
+        if [[ ! -d "$item" ]]; then
             continue
         fi
         cd $item || exit
@@ -534,7 +552,7 @@ function goshell() {
                 rm -rf $item2
             fi
         done
-        cmd="$*"
+        cmd=$*
         $cmd
         cd ..
     done
