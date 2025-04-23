@@ -23,18 +23,11 @@ declare -A ServiceServers=(
 debug=false
 
 Test() {
-    if [[ ! $a ]] ;then
-        echo 123
-    else
-        echo 456
-    fi
-}
-ArrayMerge() {
-    arrayMerge $@
+    echo 123
 }
 
-arrayMerge() {
-    if [[ ! $# -eq 4 ]];then
+ArrayMerge() {
+    if [[ ! $# -eq 4 ]]; then
         echo must num of param is 4
         return
     fi
@@ -48,8 +41,9 @@ arrayMerge() {
     for item in ${data[@]}; do
         res[$item]=$item
     done
-    echo ${res["2045"]}
-    return ${res}
+    for item in ${res[@]}; do
+        echo $item
+    done
 }
 
 function SyncConfig() {
@@ -66,14 +60,12 @@ function SyncConfig() {
 
 function Main() {
     cmd="${1//--/}"
-    if [ "$cmd" = "" ]; then
+    if [[ ! -n $cmd ]]; then
         help
+    elif ! $cmd $@ 2>/dev/null; then
+        printf "Not Found '%s' \n" $cmd
     else
-        if $cmd "$@"; then
-            echo
-        else
-            echo failed to executed or no exists for $cmd
-        fi
+        echo
     fi
 }
 
@@ -211,7 +203,11 @@ function IP() {
 }
 
 function HELP() {
-    echo "Automation Script"
+    for path in "${SHELL_FOLDER}"/handlers/*.sh; do
+        cat $path|gawk '{
+            match($0, /((function){0,1}[A-Z][A-Za-z]+)\(\)/, a);if (length(a[1])>0) print a[1]
+        }'
+    done
     echo
     echo -e "    get log:               a log usersv [-p | --pipe pipe] [-o | --option option]"
     echo -e "    sync config:           a UpdateGitHook"
@@ -558,8 +554,13 @@ function GoShell() {
     done
 }
 
-dir=${SHELL_FOLDER}/handlers
-list=$(ls $dir)
-for i in ${list[@]}; do
-    source ${dir}/${i}
-done
+Include() {
+    for path in "${SHELL_FOLDER}"/handlers/*.sh; do
+        if [[ $(basename $path) == "index.sh" ]]; then
+            continue
+        fi
+        source $path
+    done
+}
+
+Include
