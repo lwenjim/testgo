@@ -32,7 +32,6 @@ appendfsync everysec
 # 配置重写触发机制
 auto-aof-rewrite-percentage 100
 auto-aof-rewrite-min-size 64m
-
 ```
 
 ###### 主从模式
