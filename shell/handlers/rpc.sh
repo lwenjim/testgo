@@ -1,4 +1,3 @@
-#!/bin/bash
 GenerateNginxRpcConf() {
     declare -A DebugServers=(
         # ["messagesv"]=54441

@@ -1,7 +1,3 @@
-#!/bin/bash
-shopt -s nullglob
-shopt -s dotglob
-
 isRunning() {
     if docker ps >/dev/null 2>&1; then
         return
@@ -37,6 +33,8 @@ EOF
 }
 
 StartRedisCluster() {
+    shopt -s nullglob
+    shopt -s dotglob
     local index=1
     local port=16371
     local dockerNum=8
@@ -75,7 +73,7 @@ appendfilename appendonly$port.aof
 EOF
         dir=$(pwd)
         cd ${SHELL_FOLDER}/../docker/redis || exit 1
-        read -r -d '' cmd<<EOF
+        read -r -d '' cmd <<EOF
             docker run -d --rm --name cluster$port --platform linux/amd64 -v ./cluster:/data --network host --cpus=2
                 --memory=500m redis:6.2.17 redis-server $(basename $filename)  --loglevel verbose
 EOF

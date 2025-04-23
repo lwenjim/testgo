@@ -1,5 +1,3 @@
-#! /usr/bin/env bash
-
 SyncWork() {
     cd /Users/jim/Workdata/goland/src/jspp || exit 1
     for i in edgesv pushersv smssv messagesv usersv paysv authsv deliversv adminsv momentsv; do

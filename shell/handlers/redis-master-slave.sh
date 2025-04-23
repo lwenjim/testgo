@@ -1,7 +1,3 @@
-#!/bin/bash
-shopt -s nullglob
-shopt -s dotglob
-
 StopRedisMasterSlave() {
     docker ps -f name=masterslave | awk '{
         if(NR>1) {
@@ -50,6 +46,8 @@ ClearRedisMasterSlaveConf() {
 }
 
 StartRedisMasterSlave() {
+    shopt -s nullglob
+    shopt -s dotglob
     local index=1
     local port=14371
     readonly dockerNum=3
