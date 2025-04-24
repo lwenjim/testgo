@@ -585,14 +585,16 @@ GoShell() {
 }
 
 Include() {
-    for path in "${1}"/*; do
-        if [[ $(basename $path) == "index.sh" ]]; then
+    for path in "${1}"/*.sh; do
+        filename=$(basename $path)
+        if [[ $filename == "index.sh" ]]; then
             continue
         fi
+        source $path
+    done
+    for path in "${1}"/*; do
         if [[ -d $path ]];then
             Include $path
-        else
-            source $path
         fi
     done
 }
