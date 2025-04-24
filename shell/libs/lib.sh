@@ -88,7 +88,7 @@ SyncConfig() {
 }
 
 Main() {
-    include
+    Include "${SHELL_FOLDER}"/libs
     cmd="${1//--/}"
     if [[ ! -n $cmd ]]; then
         Help
@@ -239,7 +239,7 @@ Help() {
 }
 
 List() {
-    for path in "${SHELL_FOLDER}"/handlers/*.sh; do
+    for path in "${SHELL_FOLDER}"/libs/*.sh; do
         if [[ ! -f $path ]]; then
             continue
         fi
@@ -584,11 +584,15 @@ GoShell() {
     done
 }
 
-include() {
-    for path in "${SHELL_FOLDER}"/handlers/*.sh; do
+Include() {
+    for path in "${1}"/*; do
         if [[ $(basename $path) == "index.sh" ]]; then
             continue
         fi
-        source $path
+        if [[ -d $path ]];then
+            Include $path
+        else
+            source $path
+        fi
     done
 }
