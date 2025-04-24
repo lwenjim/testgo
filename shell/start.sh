@@ -2,5 +2,5 @@
 SHELL_FOLDER=$(dirname $(readlink -f "$0"))
 shopt -s expand_aliases
 source /Users/jim/.bashrc
-source "$SHELL_FOLDER"/handlers/index.sh
+source "$SHELL_FOLDER"/libs/lib.sh
 Main "$@"

@@ -20,37 +20,62 @@ declare -A ServiceServers=(
     ["groupsv"]=64454
 )
 
+ServiceServersOrder=(
+    mongo
+    mysql
+    redis
+    pushersv
+    messagesv
+    squaresv
+    edgesv
+    usersv
+    authsv
+    uploadsv
+    deliversv
+    usergrowthsv
+    riskcontrolsv
+    paysv
+    connectorsv
+    favoritesv
+    openapi
+    groupsv
+)
+
 debug=false
+
+RemoveDuplicatePath() {
+    gawk 'BEGIN{FixedPath()}'
+}
 
 Test() {
     echo 123
 }
 
-
-ArrayMerge() {
-    if [[ ! $# -eq 4 ]]; then
-        echo must num of param is 4
-        return
-    fi
-
-    IFS=$2
-    arr=(${3//IFS/ })
-    arr2=(${4//IFS/ })
-
-    declare -A res=()
-    local data=(${arr[@]} ${arr2[*]})
-    for item in ${data[@]}; do
-        res[$item]=$item
+ArrayIntersect() {
+    arr=(${2//,/ })
+    arr2=(${3//,/ })
+    for out in ${arr[@]}; do
+        for iin in ${arr2[@]}; do
+            if [[ $out == $iin ]]; then
+                echo $out
+            fi
+        done
     done
-    for item in ${res[@]}; do
-        echo $item
+}
+
+ArrayUnique() {
+    shift
+    declare -A res=()
+    local data=($@)
+    for item in ${data[@]//,/ }; do
+        res[$item]=$item
     done
     for item in ${res[@]}; do
         echo $item
     done
 }
 
-function SyncConfig() {
+SyncConfig() {
     cd ~ || exit 1
     cd $GO_JSPP_WORKSPACE || exit 1
     cd testgo || exit 1
@@ -62,10 +87,11 @@ function SyncConfig() {
         git push
 }
 
-function Main() {
+Main() {
+    include
     cmd="${1//--/}"
     if [[ ! -n $cmd ]]; then
-        help
+        Help
     elif ! $cmd $@ 2>/dev/null; then
         printf "Not Found '%s' \n" $cmd
     else
@@ -73,7 +99,7 @@ function Main() {
     fi
 }
 
-function Log() {
+Log() {
     option=
     service=$2
     pipe=
@@ -82,7 +108,7 @@ function Log() {
     p:,pipe:
     "
     if [ "$service" = "" ]; then
-        help
+        Help
         return
     fi
     param=$(echo "$param" | tr -d '\n')
@@ -143,11 +169,11 @@ function Log() {
     done
 }
 
-function LogPrint() {
+LogPrint() {
     echo "$1" >/dev/null 2>&1
 }
 
-function PortForward() {
+PortForward() {
     local arr=("$@")
     unset arr[0]
 
@@ -167,14 +193,14 @@ function PortForward() {
             brew services reload openresty
         fi
     else
-        for server in "${!ServiceServers[@]}"; do
+        for server in "${ServiceServersOrder[@]}"; do
             PortForwardSimple "${server}" "${ServiceServers[$server]}" ${index}
             ((index++))
         done
     fi
 }
 
-function PortForwardSimple() {
+PortForwardSimple() {
     if [[ "mongo mysql redis" == *"${1}"* ]]; then
         name="${1}-0"
         jspp-kubectl port-forward --address 0.0.0.0 "${name}" "${2}:${2}" >"/tmp/$1.log" 2>&1 &
@@ -194,7 +220,7 @@ function PortForwardSimple() {
     fi
 }
 
-function UpdateGitHook() {
+UpdateGitHook() {
     cd /Users/jim/Workdata/goland/src/jspp/pushersv >/dev/null 2>&1 || exit 1
     for forService in "${!ServiceServers[@]}"; do
         cd "../$forService" >/dev/null 2>&1 || continue
@@ -202,36 +228,36 @@ function UpdateGitHook() {
     done
 }
 
-function IP() {
+IP() {
     ifconfig | grep "inet " | grep -v '127.0.0.1' | awk -F "inet" '{print $2}' | awk -F "netmask" '{print $1}' | tr -d " "
 }
 
-function HELP() {
+Help() {
+    for item in $(List); do
+        echo $item
+    done
+}
+
+List() {
     for path in "${SHELL_FOLDER}"/handlers/*.sh; do
-        cat $path|gawk '{
+        if [[ ! -f $path ]]; then
+            continue
+        fi
+        cat $path | gawk '{
             match($0, /((function){0,1}[A-Z][A-Za-z]+)\(\)/, a);if (length(a[1])>0) print a[1]
         }'
     done
     echo
-    echo -e "    get log:               a log usersv [-p | --pipe pipe] [-o | --option option]"
-    echo -e "    sync config:           a UpdateGitHook"
-    echo -e "    show env path:         a PrintEnvPath"
-    echo -e "    show env go:           a PrintEnvGo"
-    echo -e "    show env:              a PrintEnv"
-    echo -e "    forward port to local: a PortForward"
-    echo -e "    show ip:               a ip"
-    echo -e "    show help:             a help"
-    echo
 }
 
-function GeneralConfForNginx() {
+GeneralConfForNginx() {
     declare -A DebugServers=()
     filename=/usr/local/etc/openresty/servers/rpc.conf
     if [[ $debug ]]; then
         echo >$filename
     fi
     for server in "${!ServiceServers[@]}"; do
-        if [ "$server" = 'mysql' ] || [ "$server" = "mongo" ] || [ "$server" = "redis" ]; then
+        if [[ "$server" = 'mysql' || "$server" = "mongo" || "$server" = "redis" ]]; then
             continue
         fi
         targetPort=${ServiceServers[$server]}
@@ -257,7 +283,7 @@ EOF
     done
 }
 
-function PrintEnvPath() {
+PrintEnvPath() {
     IFS=":"
     paths=(${PATH})
     noExists=()
@@ -279,7 +305,7 @@ function PrintEnvPath() {
     done
 }
 
-function PrintEnv() {
+PrintEnv() {
     IFS=$'\n'
     data=$(env)
     arr=($data)
@@ -295,7 +321,7 @@ function PrintEnv() {
     done
 }
 
-function PrintEnvGo() {
+PrintEnvGo() {
     IFS=$'\n'
     data=$(go env)
     arr=($data)
@@ -311,7 +337,7 @@ function PrintEnvGo() {
     done
 }
 
-function WorkspaceGoworkSync() {
+WorkspaceGoworkSync() {
     filename=/tmp/go.work
     rm -f $filename >/dev/null 2>&1
     data=(
@@ -334,7 +360,7 @@ function WorkspaceGoworkSync() {
     echo "sync go.work done"
 }
 
-function solitaire() {
+solitaire() {
     userQrcode=MAlHDK5Sg
     groupQrcode=O4W1DKcSg
     domain=https://devwww.jspp.com
@@ -393,7 +419,7 @@ function solitaire() {
     fi
 }
 
-function vote() {
+vote() {
     userQrcode=MAlHDK5Sg
     groupQrcode=O4W1DKcSg
     domain=https://devwww.jspp.com
@@ -460,7 +486,7 @@ function vote() {
     fi
 }
 
-function MoveVscConfig() {
+MoveVscConfig() {
     echo "mv ~/.vscode-bak                                                             ~/.vscode"
     echo "mv ~/Library/Application\\ Support/Code-bak                                  ~/Library/Application\\ Support/Code"
     echo "mv ~/Library/Caches/com.microsoft.VSCode-bak                                 ~/Library/Caches/com.microsoft.VSCode"
@@ -468,12 +494,12 @@ function MoveVscConfig() {
     echo "mv ~/Library/Saved\\ Application\\ State/com.microsoft.VSCode.savedState-bak ~/Library/Saved\\ Application\\ State/com.microsoft.VSCode.savedState"
 }
 
-function CheckoutGoModSum() {
+CheckoutGoModSum() {
     cd /Users/jim/Workdata/goland/src/jspp || exit 1
     ll ./**/go.mod | awk -F' ' '{print $7}' | awk -F'/' '{print $1}' | xargs -I {} echo "cd {};git checkout go.mod go.sum" | xargs -I {} bash -c {}
 }
 
-function CommitTimes() {
+CommitTimes() {
     commitTimes=/tmp/commitTimes.log
     author=hewen@jspp.cn
     echo "" >$commitTimes
@@ -489,7 +515,7 @@ function CommitTimes() {
     cat $commitTimes | awk -F' ' '{ if($2 in num == 0) {num[$2]=0}; num[$2] += $1 } END{for(key in num){ if(num[key]==0) continue; else if (key=="liuwenjin")print key"@jspp.com"; else print key"@jspp.cn"}}' | xargs -I {} bash -c 'source ~/.zshrc 2>/dev/null; a ChangeLineNum "$*"' _ {}
 }
 
-function ChangeLineNum() {
+ChangeLineNum() {
     filename=/tmp/countLine.log
     author=$2
     echo "" >$filename
@@ -505,7 +531,7 @@ function ChangeLineNum() {
     cat $filename
 }
 
-function insert1000000t_push() {
+insert1000000t_push() {
     num=0
     mysql -uroot -P3306 -p123456789 -h127.0.0.1 jspp -e 'TRUNCATE t_push'
     for _ in $(seq 1 100); do
@@ -519,12 +545,12 @@ function insert1000000t_push() {
     done
 }
 
-function StockTrade() {
+StockTrade() {
     echo $((6599 * 5 / 10 + 9600 * 2 / 10 + 400 * 5 + 300 * 3))
     echo
 }
 
-function GoShell() {
+GoShell() {
     shift
     path=/Users/jim/Workdata/goland/src/jspp/
     cd $path || exit
@@ -558,7 +584,7 @@ function GoShell() {
     done
 }
 
-Include() {
+include() {
     for path in "${SHELL_FOLDER}"/handlers/*.sh; do
         if [[ $(basename $path) == "index.sh" ]]; then
             continue
@@ -566,5 +592,3 @@ Include() {
         source $path
     done
 }
-
-Include
