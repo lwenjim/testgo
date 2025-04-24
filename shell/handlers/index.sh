@@ -26,6 +26,7 @@ Test() {
     echo 123
 }
 
+
 ArrayMerge() {
     if [[ ! $# -eq 4 ]]; then
         echo must num of param is 4
@@ -40,6 +41,9 @@ ArrayMerge() {
     local data=(${arr[@]} ${arr2[*]})
     for item in ${data[@]}; do
         res[$item]=$item
+    done
+    for item in ${res[@]}; do
+        echo $item
     done
     for item in ${res[@]}; do
         echo $item
