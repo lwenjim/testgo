@@ -50,7 +50,7 @@ nnoremap <s-f6> :GoRename<cr>
 let g:go_imports_autosave = 1
 let g:go_debug_windows = {'vars':'rightbelow 60vnew','stack':'rightbelow 10new'}
 let g:lightline = {'colorscheme': 'molokai'}
-let g:onedark_termcolors=256  
+let g:onedark_termcolors=256
 let g:rehash256 = 1
 let g:go_auto_type_info = 1
 let g:go_auto_use_cmpfunc = 1
@@ -148,8 +148,8 @@ let g:ctrlp_map = '<c-p>'
 let g:ctrlp_cmd = 'CtrlP /Users/jim/Workdata/goland/src/jspp'
 let g:ctrlp_working_path_mode = 'w'
 let g:ctrlp_root_markers = ['pom.xml', '.p4ignore']
-let g:ctrlp_user_command = 'find %s -type f'        
-let g:ctrlp_user_command = 'dir %s /-n /b /s /a-d'  
+let g:ctrlp_user_command = 'find %s -type f'
+let g:ctrlp_user_command = 'dir %s /-n /b /s /a-d'
 let g:ctrlp_user_command = ['.git', 'cd %s && git ls-files -co --exclude-standard']
 set wildignore+="*/tmp/*,*.so,*.swp,*.zip"
 let g:ctrlp_switch_buffer = 'et'
@@ -159,12 +159,12 @@ let g:ctrlp_custom_ignore = {'dir':  '\v[\/]\.(git|hg|svn)$','file': '\v\.(exe|s
 "--------------
 " LeaderF start
 "--------------
-let mapleader=";" 
+let mapleader=";"
 let g:Lf_CommandMap = {'<C-K>': ['<Up>'], '<C-J>': ['<Down>']}
 let g:Lf_ShowDevIcons = 0
 let g:Lf_WorkingDirectoryMode = 'a'
 let g:Lf_RootMarkers = ['.workspace_root']
-let g:Lf_UseVersionControlTool=0 
+let g:Lf_UseVersionControlTool=0
 let g:Lf_DefaultExternalTool='rg'
 let g:Lf_ExternalCommand = 'fd --ignore-file  /Users/jim/.ignore.ag.rg "%s"'
 let g:Lf_PreviewInPopup = 0
@@ -212,13 +212,13 @@ noremap <leader>fgg <Plug>LeaderfGtagsGrep
 let g:rooter_targets = '/,*.yml,*.yaml,*.go,*.proto,*.js'
 let g:rooter_patterns = ['.workspace_root']
 let g:eleline_slim = 1
-let g:onedark_config = {'style': 'deep','toggle_style_key': '<leader>ts','ending_tildes': v:true,'diagnostics': {  'darker': v:false,  'background': v:false,},} 
+let g:onedark_config = {'style': 'deep','toggle_style_key': '<leader>ts','ending_tildes': v:true,'diagnostics': {  'darker': v:false,  'background': v:false,},}
 
 ""--------------
 "" airline配置
-""-------------- 
+""--------------
 let g:airline_theme='molokai'
-let g:airline#extensions#ale#enabled = 1 
+let g:airline#extensions#ale#enabled = 1
 let g:airline#extensions#tabline#enabled = 1
 let g:airline#extensions#tabline#left_sep = ''
 let g:airline#extensions#tabline#left_alt_sep = ''
@@ -227,15 +227,15 @@ let g:airline#extensions#tabline#formatter = 'unique_tail'
 "--------------
 " vim基本属性配置
 "--------------
-set nu 
+set nu
 set nowrap
-set showmatch 
+set showmatch
 set number
 set cul
 set mouse=a
 set showmode
 set showcmd
-set encoding=utf-8  
+set encoding=utf-8
 set t_Co=256
 set autoindent
 set tabstop=4
@@ -264,35 +264,35 @@ set wildmenu
 set wildmode=longest:list,full
 set backspace=2
 set exrc
-set confirm      
-set fileencodings=utf-8,ucs-bom,shift-jis,gb18030,gbk,gb2312,cp936,utf-16,big5,euc-jp,latin1      
-set splitbelow      
-set splitright     
+set confirm
+set fileencodings=utf-8,ucs-bom,shift-jis,gb18030,gbk,gb2312,cp936,utf-16,big5,euc-jp,latin1
+set splitbelow
+set splitright
 set noundofile
 set hidden
 set shortmess+=c
 set updatetime=100
 set laststatus=2
 set tags=./.tags;,.tags
-set fileencoding=utf-8                                             
-set termencoding=utf-8                                             
+set fileencoding=utf-8
+set termencoding=utf-8
 set nocompatible
-set smartindent                                                    
-set cindent                                                        
+set smartindent
+set cindent
 set termguicolors
 set autowrite
 set nospell
 set foldmethod=indent
-set foldenable              
-set foldcolumn=0            
-set foldlevel=1        
-set foldlevelstart=99       
+set foldenable
+set foldcolumn=0
+set foldlevel=1
+set foldlevelstart=99
 set updatetime=100
 set cursorline
 set clipboard=unnamed
 
-syntax on                                                                                                            
-filetype plugin indent on 
+syntax on
+filetype plugin indent on
 
 let g:vim_fold_background = 0
 let g:netrw_winsize = 25
