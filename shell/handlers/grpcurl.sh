@@ -136,7 +136,7 @@ function QueryWishPayStatus(){
     {
       "auth": {
         "token": {
-          "user_id": 16704
+          "user_id": 16720
         }
       }
     }
