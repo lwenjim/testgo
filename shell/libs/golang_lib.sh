@@ -1,4 +1,4 @@
-function icurl() {
+function ICurl() {
     param="
     t:,content-type:,
     "
