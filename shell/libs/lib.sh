@@ -47,10 +47,6 @@ RemoveDuplicatePath() {
     gawk 'BEGIN{FixedPath()}'
 }
 
-Test() {
-    echo 123
-}
-
 ArrayIntersect() {
     arr=(${2//,/ })
     arr2=(${3//,/ })
@@ -221,7 +217,7 @@ PortForwardSimple() {
 }
 
 UpdateGitHook() {
-    cd /Users/jim/Workdata/goland/src/jspp/pushersv >/dev/null 2>&1 || exit 1
+    cd $HOME/Workdata/goland/src/jspp/pushersv >/dev/null 2>&1 || exit 1
     for forService in "${!ServiceServers[@]}"; do
         cd "../$forService" >/dev/null 2>&1 || continue
         cp -rf .git/hooks/{commit-msg,pre-commit} ".git/hooks" >/dev/null
@@ -360,132 +356,6 @@ WorkspaceGoworkSync() {
     echo "sync go.work done"
 }
 
-solitaire() {
-    userQrcode=MAlHDK5Sg
-    groupQrcode=O4W1DKcSg
-    domain=https://devwww.jspp.com
-    getinfoResp=$(curl --silent "$domain/solitaire/getinfo?user_qrcode=$userQrcode")
-    echo $getinfoResp
-    code=$(echo $getinfoResp | jq '.res')
-    if [[ "$code" != "200" ]]; then
-        echo "failed for /solitaire/getinfo"
-        return
-    fi
-
-    addResp=$(curl --silent -d '
-    {
-        "title": "abc",
-        "user_qrcode": "'$userQrcode'",
-        "group_qrcode": "'$groupQrcode'",
-        "content": [
-        {
-            "content": "abc"
-        }
-        ],
-        "example": "abc",
-        "extra_info": "abc"
-    }' "$domain/solitaire/add")
-    echo $addResp
-    code=$(echo $addResp | jq '.res')
-    if [[ "$code" != "200" ]]; then
-        echo "failed for /solitaire/add"
-        return
-    fi
-    topicQrcode=$(echo $addResp | jq '.data' | tr -d '"')
-
-    detailResp=$(curl --silent "$domain/solitaire/detail?user_qrcode=$userQrcode&topic_qrcode=$topicQrcode")
-    echo $detailResp
-    code=$(echo $detailResp | jq '.res')
-    if [[ "$code" != "200" ]]; then
-        echo "failed for /solitaire/detail"
-        return
-    fi
-
-    postResp=$(curl --silent -d '
-    {
-        "user_qrcode": "'$userQrcode'",
-        "topic_qrcode": "'$topicQrcode'",
-        "content": [
-            {
-                "content": "'$(uuidgen)'"
-            }
-        ]
-    }' "$domain/solitaire/post")
-    echo $postResp
-    code=$(echo $postResp | jq '.res')
-    if [[ "$code" != "200" ]]; then
-        echo "failed for /solitaire/post"
-        return
-    fi
-}
-
-vote() {
-    userQrcode=MAlHDK5Sg
-    groupQrcode=O4W1DKcSg
-    domain=https://devwww.jspp.com
-    # domain=http://localhost:18083
-    addResp=$(curl --silent -d '{
-        "name": "'$(openssl rand -base64 8)'",
-        "user_qrcode": "'$userQrcode'",
-        "group_qrcode": "'$groupQrcode'",
-        "end_time": '$(date -v+5d +"%s")',
-        "is_multi_select": true,
-        "is_anonymous": true,
-        "option": [
-        {
-            "name": "中国队",
-            "image": "https://img.jspp.com/xxx/xxx.png"
-        },
-        {
-            "name": "美国队",
-            "image": "https://img.jspp.com/xxx/xxx222.png"
-        }
-        ]
-    }' $domain/vote/add)
-    echo $addResp
-    code=$(echo $addResp | jq '.res')
-    if [[ "$code" != "200" ]]; then
-        echo "failed for /vote/add"
-        return
-    fi
-    topicQrcode=$(echo $addResp | jq '.data' | tr -d '"')
-
-    listResp=$(curl -d '{"user_qrcode":"'$userQrcode'","group_qrcode":"'$groupQrcode'"}' --silent $domain/vote/list)
-    echo $listResp
-    code=$(echo $listResp | jq '.res')
-    if [[ "$code" != "200" ]]; then
-        echo "failed for /vote/list"
-        return
-    fi
-
-    recordResp=$(curl --silent -d '
-        {
-            "user_qrcode": "'$userQrcode'",
-            "topic_qrcode": "'$topicQrcode'"
-        }' "$domain/vote/record")
-    echo $recordResp
-    code=$(echo $recordResp | jq '.res')
-    if [[ "$code" != "200" ]]; then
-        echo "failed for /vote/record"
-        return
-    fi
-
-    postResp=$(curl --silent -d '
-    {
-        "user_qrcode": "'$userQrcode'",
-        "topic_qrcode": "'$topicQrcode'",
-        "option_id": [
-        '$(echo $recordResp | jq ".data.options.[0].option.id")'
-        ]
-    }' "$domain/vote/post")
-    echo $postResp
-    code=$(echo $postResp | jq '.res')
-    if [[ "$code" != "200" ]]; then
-        echo "failed for /vote/post"
-        return
-    fi
-}
-
 MoveVscConfig() {
     echo "mv ~/.vscode-bak                                                             ~/.vscode"
     echo "mv ~/Library/Application\\ Support/Code-bak                                  ~/Library/Application\\ Support/Code"
@@ -495,7 +365,7 @@ MoveVscConfig() {
 }
 
 CheckoutGoModSum() {
-    cd /Users/jim/Workdata/goland/src/jspp || exit 1
+    cd $HOME/Workdata/goland/src/jspp || exit 1
     ll ./**/go.mod | awk -F' ' '{print $7}' | awk -F'/' '{print $1}' | xargs -I {} echo "cd {};git checkout go.mod go.sum" | xargs -I {} bash -c {}
 }
 
@@ -504,7 +374,7 @@ CommitTimes() {
     author=hewen@jspp.cn
     echo "" >$commitTimes
     for server in "${!ServiceServers[@]}"; do
-        cd /Users/jim/Workdata/goland/src/jspp/$server 2>/dev/null || continue
+        cd $HOME/Workdata/goland/src/jspp/$server 2>/dev/null || continue
         git log --pretty='%aN' | sort | uniq -c | sort -k1 -n -r | head -n 3 1>>$commitTimes
     done
 
@@ -520,7 +390,7 @@ ChangeLineNum() {
     author=$2
     echo "" >$filename
     for server in "${!ServiceServers[@]}"; do
-        cd /Users/jim/Workdata/goland/src/jspp/$server 2>/dev/null || continue
+        cd $HOME/Workdata/goland/src/jspp/$server 2>/dev/null || continue
         git log --author="$author" --pretty=tformat: --numstat | awk '{ add += $1; subs += $2; loc += $1 - $2 } END { if (add > 0) {printf "%s,%s,%s\n", add, subs, loc }}' - 1>>$filename
     done
 
@@ -531,20 +401,6 @@ ChangeLineNum() {
     cat $filename
 }
 
-insert1000000t_push() {
-    num=0
-    mysql -uroot -P3306 -p123456789 -h127.0.0.1 jspp -e 'TRUNCATE t_push'
-    for _ in $(seq 1 100); do
-        num=$((num + 1))
-        echo 'insert into t_push(id, app_id, device_id, device_token,channel_type, ringtone_sound, text_message_sound) values (null, 0, ' $num ', "b44aba24fbcc24e07af700314eb41438f43424895a916f9a9e7d8b818905684f", 1, null, null)' >/tmp/t_push_test.sql
-        for item in $(seq 1 10000); do
-            num=$((num + 1))
-            echo ',(null, 0, '$num', "b44aba24fbcc24e07af700314eb41438f43424895a916f9a9e7d8b818905684f", 1, null, null)' >>/tmp/t_push_test.sql
-        done
-        mysql -uroot -P3306 -p123456789 -h127.0.0.1 jspp -e 'source /tmp/t_push_test.sql'
-    done
-}
-
 StockTrade() {
     echo $((6599 * 5 / 10 + 9600 * 2 / 10 + 400 * 5 + 300 * 3))
     echo
@@ -552,7 +408,7 @@ StockTrade() {
 
 GoShell() {
     shift
-    path=/Users/jim/Workdata/goland/src/jspp/
+    path=$HOME/Workdata/goland/src/jspp/
     cd $path || exit
     for item in $(ls $path); do
         case $item in
@@ -585,16 +441,26 @@ GoShell() {
 }
 
 Include() {
-    for path in "${1}"/*.sh; do
-        filename=$(basename $path)
-        if [[ $filename == "index.sh" ]]; then
+    shopt -s globstar
+    for path in "${SHELL_FOLDER}"/libs/**/*.sh; do
+        if [[ $(basename $path) == "index.sh" ]]; then
             continue
         fi
         source $path
     done
-    for path in "${1}"/*; do
-        if [[ -d $path ]];then
-            Include $path
-        fi
-    done
+    shopt -u globstar
+}
+
+rand() {
+    if [[ "$1" == "" ]]; then
+        return
+    fi
+    min=$1
+    max=$((2 - min + 1))
+    num=$((RANDOM + 1000000000))
+    echo $((num % max + min))
+}
+
+UniquePATH() {
+    export PATH=$(gawk 'BEGIN{UniquePATH()}')
 }
