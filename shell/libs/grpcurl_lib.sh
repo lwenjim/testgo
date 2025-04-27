@@ -1,4 +1,4 @@
-function GroupPublicApply() {
+GroupPublicApply() {
   domain=localhost:9090
   addResp=$(grpcurl -plaintext $domain rpc.Group.GetGroupChatCategorys)
   echo $addResp

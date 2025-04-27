@@ -1,16 +1,18 @@
 [core]
 	excludesfile = /Users/jim/.gitignore_global
+	excludesfile = /Users/jim/.gitignore
 	autocrlf = input
-    pager = delta 
+	ignoreCase = false
+#    pager = delta --features calochortus-lyallii
 [difftool "sourcetree"]
-	cmd = opendiff \"$LOCAL\" \"$REMOTE\"
-	path = 
+	cmd = /usr/local/bin/bcomp \"$LOCAL\" \"$REMOTE\"
+	path = -ro
 [mergetool "sourcetree"]
-	cmd = /Applications/Sourcetree.app/Contents/Resources/opendiff-w.sh \"$LOCAL\" \"$REMOTE\" -ancestor \"$BASE\" -merge \"$MERGED\"
+	cmd = /usr/local/bin/bcomp \"$LOCAL\" \"$REMOTE\" \"$BASE\" \"$MERGED\"
 	trustExitCode = true
 [user]
 	name = liuwenjin
-	email = liuwenjin@jspp.com
+	email = liuwenjin@jspp.cn
 [commit]
 	template = /Users/jim/.stCommitMsg
 [filesystem "Oracle Corporation|13|/dev/disk1s5"]
@@ -48,23 +50,26 @@
     br = branch
     st = status
     flow = flow
-[https]
+[https2]
 	proxy = https://127.0.0.1:33210
-[http]
+[http2]
 	sslVerify = false
 	proxy = http://127.0.0.1:33210
 [url "git@github.com:"]
 	insteadOf = https://github.com/
 
 
+[include]
+    path = ~/.themes.gitconfig
 [interactive]
     diffFilter = delta --color-only
 [color]
 	ui = true
 [delta]
-    syntax-theme = 1337
-    plus-style = bold syntax "#002800"
+    line-numbers=false
 [merge]
     conflictstyle = diff3
-[diff]
-    colorMoved = default
+#[diff]
+#    colorMoved = default
+[http]
+	sslBackend = openssl
