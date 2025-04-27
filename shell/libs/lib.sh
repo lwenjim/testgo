@@ -47,6 +47,22 @@ RemoveDuplicatePath() {
     gawk 'BEGIN{FixedPath()}'
 }
 
+UrlEncode() {
+    shift
+    if [[ $# == 0 ]];then
+        return
+    fi
+    gawk 'BEGIN{print UrlEncode("'$1'")}'
+}
+
+UrlDecode() {
+    shift
+    if [[ $# == 0 ]];then
+        return
+    fi
+    gawk 'BEGIN{print UrlDecode("'$1'")}'
+}
+
 ArrayIntersect() {
     arr=(${2//,/ })
     arr2=(${3//,/ })
@@ -88,8 +104,8 @@ Main() {
     cmd="${1//--/}"
     if [[ ! -n $cmd ]]; then
         Help
-    elif ! $cmd $@ 2>/dev/null; then
-        printf "Not Found '%s' \n" $cmd
+    elif ! $cmd $@ 2>/tmp/a.log; then
+        cat /tmp/a.log
     else
         echo
     fi
