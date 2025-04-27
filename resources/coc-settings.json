@@ -6,7 +6,7 @@
             "filetypes": ["ruby"]
         },
         "dart": {
-            "command": "dart_language_server", 
+            "command": "dart_language_server",
             "args": [],
             "filetypes": ["dart"],
             "initializationOptions": {},
@@ -17,20 +17,26 @@
                 }
             }
         },
+        "golang": {
+            "command": "/Users/jim/Workdata/goland/bin/gopls",
+            "rootPatterns": ["go.mod", "go.work", ".git"],
+            "filetypes": ["go"],
+            "initializationOptions": {
+                "usePlaceholders": true,
+                "analyses": {
+                    "unreachable": false,
+                    "unusedvariable": true
+                }
+            },
+            "args": ["-remote", "127.0.0.1:39999"]
+        },
         "kotlin": {
             "command": "kotlin-language-server",
             "filetypes": ["kotlin"]
         },
         "rust-analyzer":{
-            "enable":true
-        },
-        "golang": {
-            "command": "gopls",
-            "rootPatterns": ["go.mod", "go.work", ".git"],
-            "filetypes": ["go"],
-            "initializationOptions": {
-                "usePlaceholders": true
-            }
+            "enable":true,
+            "filetypes":["rs"]
         },
         "clangd": {
             "command": "clangd",
@@ -49,6 +55,12 @@
             "initializationOptions": {
                 "storagePath": "/tmp/intelephense"
             }
+        },
+        "lua": {
+            "command": "/Users/jim/.vscode/extensions/sumneko.lua-3.10.6-darwin-x64/server/bin/lua-language-server",
+            "args": ["-E", "/Users/jim/.vscode/extensions/sumneko.lua-3.10.6-darwin-x64/server/main.lua"],
+            "rootPatterns": [".git"],
+            "filetypes": ["lua"]
         }
     },
     "diagnostic.refreshOnInsertMode":true,
@@ -60,8 +72,20 @@
     "inlayHint.enable": false,
     "inlayHint.enableParameter": false,
     "java.jdt.ls.java.home":"/Users/jim/Library/Java/JavaVirtualMachines/openjdk-22.0.1/Contents/Home",
-    "java.jdt.ls.vmargs": "-Xmx1G", 
-    "java.configuration.maven.userSettings": "", 
-    "java.format.enabled": true, 
-    "java.completion.guessMethodArguments": true
+    "java.jdt.ls.vmargs": "-Xmx1G",
+    "java.configuration.maven.userSettings": "",
+    "java.format.enabled": true,
+    "java.completion.guessMethodArguments": true,
+    "java.saveActions.organizeImports": true,
+    "java.referencesCodeLens.enabled": true,
+    "java.configuration.runtimes": [
+        {
+            "name": "JavaSE-20",
+            "path": "/Users/jim/Library/Java/JavaVirtualMachines/openjdk-22.0.1/Contents/Home",
+            "default": true
+        }
+    ],
+    "[java]": {
+        "semanticTokens.enable": true
+    }
 }

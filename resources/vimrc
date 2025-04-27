@@ -1,5 +1,5 @@
 call plug#begin()
- Plug 'rhysd/vim-clang-format'
+" Plug 'rhysd/vim-clang-format'
  Plug 'neoclide/coc.nvim', {'branch': 'release'}
  Plug 'SirVer/ultisnips'
  Plug 'vim-airline/vim-airline'
@@ -9,7 +9,7 @@ call plug#begin()
  Plug 'tomasr/molokai'
  Plug 'Yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
  Plug 'airblade/vim-rooter'
- Plug 'fatih/vim-go'
+ Plug 'fatih/vim-go', { 'for' : ['go'] }
  Plug 'mattn/webapi-vim'
  Plug 'rust-lang/rust.vim'
  Plug 'kana/vim-operator-user'
@@ -19,6 +19,8 @@ call plug#begin()
  Plug 'leafOfTree/vim-matchtag'
  Plug 'tpope/vim-commentary'
  Plug 'mhinz/vim-startify'
+ Plug 'morhetz/gruvbox'
+ Plug 'neoclide/jsonc.vim'
 call plug#end()
 
 ""--------------
@@ -78,13 +80,18 @@ let g:go_highlight_extra_types = 1
 let g:go_highlight_build_constraints = 1
 let g:go_highlight_generate_tags = 1
 let g:go_fmt_autosave = 1
-let g:go_gopls_options = ['-remote=unix;/tmp/gopls-daemon-socket']
+let g:go_gopls_options = ['-remote', "127.0.0.1:39999"]
 let g:go_completion_enabled = 1
 let g:coc_disable_transparent_cursor = 1
 
 "--------------
 " coc.nvim推荐的配置--------------------
 "--------------
+"
+
+" set colorcolumn=200
+set cursorline
+set cursorcolumn
 set hidden
 set nobackup
 set nowritebackup
@@ -289,7 +296,9 @@ set foldlevel=1
 set foldlevelstart=99
 set updatetime=100
 set cursorline
-set clipboard=unnamed
+set fileformats=unix,dos,mac
+set list
+set listchars=tab:→\ ,space:·
 
 syntax on
 filetype plugin indent on
@@ -304,15 +313,32 @@ let g:syntastic_mode_map = {'mode': 'active', 'passive_filetypes': ['go', 'java'
 let g:node_client_debug = 0
 
 nnoremap <tab>   :bnext<Return>
-nnoremap <s-tab> :bprev<Return>
+nnoremap <c-tab> :bprev<Return>
 vnoremap <c-c>   "+y
 nnoremap <esc>   :noh<return>
+
+set background=dark
+"colorscheme codedark
+colorscheme  gruvbox
+"colorscheme molokai
+"colorscheme onedark
 
 highlight clear CursorLine
 highlight Folded ctermfg=NONE ctermbg=NONE guibg=NONE guifg=NONE
 highlight Folded guibg=NONE guifg=NONE
 highlight FoldColumn guibg=NONE guifg=NONE
 
+" 显示特殊字符
+set list
+set listchars=tab:→\ ,trail:·,nbsp:␣,eol:↵
 
-colorscheme codedark
-"colorscheme molokai
+" 高亮尾随空格
+highlight ExtraWhitespace ctermbg=red guibg=red
+match ExtraWhitespace /\s\+$/
+
+" 编码设置
+set encoding=utf-8
+set fileencoding=utf-8
+
+" 自动检测文件换行符类型
+set fileformats=unix,dos,mac

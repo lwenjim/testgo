@@ -1,4 +1,4 @@
-function PushMsg(){
+PushMsg(){
     curl \
     -H "Content-Type: application/json" \
     -H "push-type: 0" \

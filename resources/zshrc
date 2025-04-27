@@ -18,22 +18,24 @@ plugins=(
     zsh-syntax-highlighting
     golang
     zsh-autopair
+    autojump
 )
 
 fpath=($HOME/.docker/completions $fpath)
-
 source $ZSH/oh-my-zsh.sh
 source $HOME/.bashrc
 source $HOME/.fzf.zsh
 source $HOME/.cargo/env
-source ${HOME}/.iterm2_shell_integration.zsh
+source $HOME/.iterm2_shell_integration.zsh
 source /usr/local/etc/profile.d/z.sh
 source /usr/local/etc/profile.d/bash_completion.sh
 source /usr/local/opt/nvm/nvm.sh
 source /usr/local/opt/nvm/etc/bash_completion.d/nvm
-source /usr/local/etc/profile.d/autojump.sh
+#source $(brew --prefix)/etc/profile.d/autojump.sh
 source <(kubectl completion zsh)
+source /Users/jim/.autojump/etc/profile.d/autojump.sh
 
+autoload -U compinit && compinit -u
 setopt APPEND_HISTORY
 setopt HIST_IGNORE_DUPS
 setopt SHARE_HISTORY
