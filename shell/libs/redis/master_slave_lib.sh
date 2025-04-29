@@ -7,7 +7,7 @@ StopRedisMasterSlave() {
     ClearRedisMasterSlaveConf
 }
 
-sureDir() {
+SureDir() {
     local filename=$1
     dir=$(dirname $filename)
     if [[ -d $dir ]]; then
@@ -56,7 +56,7 @@ StartRedisMasterSlave() {
     InitRedisCliRc masterslave
     workDir="${SHELL_FOLDER}"/../docker/redis
     filename=${workDir}/masterslave/redis-master$masterPort.conf
-    sureDir $filename
+    SureDir $filename
     cat >$filename <<EOF
 bind 0.0.0.0
 port $masterPort
@@ -70,7 +70,8 @@ dbfilename "master$masterPort.rdb"
 EOF
     cd ${SHELL_FOLDER}/../docker/redis || exit 1
     read -r -d '' cmd <<EOF
-    docker run -d --rm --name masterslave-master$port --platform linux/amd64 -v ./masterslave:/data --network host --cpus=2 \
+    docker run -d --rm --name masterslave-master$port --platform linux/amd64 \
+    -v ./masterslave:/data --network host --cpus=2 \
     --memory=500m redis redis-server $(basename $filename) --loglevel verbose
 EOF
     $cmd

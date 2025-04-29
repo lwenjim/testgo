@@ -6,37 +6,55 @@ export PATH=$HOME/.tiup/bin:$PATH
 export NVM_DIR=$HOME/.nvm
 
 ZSH_THEME="amuse"
-
 autoload -Uz compinit
 compinit
 
 plugins=(
     git
+    golang
     extract
+    autojump
+    iterm2
+    brew
+    command-not-found
+    encode64
+    fzf
+    gnu-utils
+    vscode
+
     zsh-completions
     zsh-autosuggestions
     zsh-syntax-highlighting
-    golang
     zsh-autopair
-    autojump
 )
 
+zstyle :omz:plugins:iterm2 shell-integration yes
+
 fpath=($HOME/.docker/completions $fpath)
-source $ZSH/oh-my-zsh.sh
-source $HOME/.bashrc
+source $(brew --prefix)/etc/profile.d/z.sh
+source $(brew --prefix)/etc/profile.d/bash_completion.sh
+source $(brew --prefix)/opt/nvm/nvm.sh
+source $(brew --prefix)/opt/nvm/etc/bash_completion.d/nvm
+
+HB_CNF_HANDLER="$(brew --repository)/Library/Taps/homebrew/homebrew-command-not-found/handler.sh"
+if [ -f "$HB_CNF_HANDLER" ]; then
+    source "$HB_CNF_HANDLER";
+fi
+export WORDCHARS='*?_-.[]~=&;!#$%^(){}<>'
 source $HOME/.fzf.zsh
 source $HOME/.cargo/env
 source $HOME/.iterm2_shell_integration.zsh
-source /usr/local/etc/profile.d/z.sh
-source /usr/local/etc/profile.d/bash_completion.sh
-source /usr/local/opt/nvm/nvm.sh
-source /usr/local/opt/nvm/etc/bash_completion.d/nvm
-#source $(brew --prefix)/etc/profile.d/autojump.sh
-source <(kubectl completion zsh)
-source /Users/jim/.autojump/etc/profile.d/autojump.sh
+source $ZSH/oh-my-zsh.sh
+source $HOME/.bashrc
 
-autoload -U compinit && compinit -u
+source <(kubectl completion zsh)
+
 setopt APPEND_HISTORY
 setopt HIST_IGNORE_DUPS
 setopt SHARE_HISTORY
 setopt EXTENDED_HISTORY
+# The following lines have been added by Docker Desktop to enable Docker CLI completions.
+fpath=(/Users/jim/.docker/completions $fpath)
+autoload -Uz compinit
+compinit
+# End of Docker CLI completions
