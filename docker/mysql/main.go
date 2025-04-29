@@ -25,7 +25,7 @@ func main() {
 	data := []string{}
 	for row.Next() {
 		name := ""
-		row.Scan(&name)
+		_ = row.Scan(&name)
 		data = append(data, name)
 	}
 	buffer, err := json.Marshal(data)

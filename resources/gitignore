@@ -32,3 +32,4 @@ permissions.sql
 permissions.csv
 .vim
 sql.sql
+debug.go

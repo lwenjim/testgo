@@ -25,7 +25,7 @@ InitRedisCliRc() {
 EOF
     workDir="${SHELL_FOLDER}"/../docker/redis
     filename=${workDir}/$dir/.redisclirc
-    sureDir $filename
+    SureDir $filename
     if [ -f filename ]; then
         return
     fi

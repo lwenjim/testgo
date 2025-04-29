@@ -43,13 +43,65 @@ ServiceServersOrder=(
 
 debug=false
 
+SearchServerByBranchName() {
+    shift
+    if [[ $# == 0 ]]; then
+        return
+    fi
+    searchBranchName=$1
+    for servicePath in "$GOPATH"/src/jspp/*; do
+        if [[ -f $servicePath ]];then
+            continue
+        fi
+        cd $servicePath || continue
+        if ! git status >/dev/null 2>&1;then
+            continue
+        fi
+        local exists=0
+        for branchName in $(git --no-pager branch|gawk '{gsub(/(*|\s)/,"",$0);print $0;}'); do
+            if [[ $branchName == $searchBranchName ]]; then
+                exists=1
+                break
+            fi
+        done
+        if [[ $exists == "1" ]]; then
+            printf "%s\n" $(basename $servicePath)
+            ((index++))
+        fi
+    done
+}
+
+Setup() {
+    for sourceFilename in "$SHELL_FOLDER"/../resources/*; do
+        sourceFilename=$(realpath $sourceFilename)
+        filename=$HOME/.$(basename $(realpath $sourceFilename))
+        if [[ -f $filename ]]; then
+            if [[ $sourceFilename != $(readlink -f $filename) ]]; then
+                echo $filename
+            fi
+        else
+            echo ln -sf $sourceFilename $filename';'
+        fi
+    done
+}
+
+Add() {
+    shift
+    if [[ ! -f $1 ]] && [[ ! -d $1 ]]; then
+        echo param error!
+        return
+    fi
+    mv $1 "$SHELL_FOLDER"/../resources/
+    Setup
+}
+
 RemoveDuplicatePath() {
     gawk 'BEGIN{FixedPath()}'
 }
 
 UrlEncode() {
     shift
-    if [[ $# == 0 ]];then
+    if [[ $# == 0 ]]; then
         return
     fi
     gawk 'BEGIN{print UrlEncode("'$1'")}'
@@ -57,7 +109,7 @@ UrlEncode() {
 
 UrlDecode() {
     shift
-    if [[ $# == 0 ]];then
+    if [[ $# == 0 ]]; then
         return
     fi
     gawk 'BEGIN{print UrlDecode("'$1'")}'
@@ -70,8 +122,28 @@ ArrayIntersect() {
         for iin in ${arr2[@]}; do
             if [[ $out == $iin ]]; then
                 echo $out
+                break
             fi
         done
+    done
+}
+
+ArrayIntersectNot() {
+    echo
+    arr=(${2//,/ })
+    arr2=(${3//,/ })
+    for out in ${arr[@]}; do
+        out=$(echo $out|gawk '{print Trim($0)}')
+        local isFind=0
+        for iin in ${arr2[@]}; do
+            if [[ $out == $iin ]]; then
+                isFind=1
+                break
+            fi
+        done
+        if [[ $isFind == "0" ]];then
+            echo $out
+        fi
     done
 }
 
@@ -147,8 +219,6 @@ Log() {
             ;;
         esac
     done
-    LogPrint $option
-    LogPrint $pipe
     logOption='--tail 20'
     if [ "$option" != "" ]; then
         logOption=$(echo "$option" | tr -d "\\")
@@ -158,7 +228,6 @@ Log() {
             continue
         fi
         awkString=" awk -F'[ -]()' "" '{print \"jspp-kubectl logs -c $service $logOption \"\$1\"-\"\$2\"-\"\$3}'"
-        LogPrint $awkString
         for i in $(jspp-kubectl get pods | grep "$service"); do
             result=$(echo "$i" | sed 's/(//' | sed 's/)//' | sed 's/\n\r//g')
             break
@@ -167,9 +236,7 @@ Log() {
             echo no launch for $service
             break
         fi
-        LogPrint $result
         result2=$(eval "echo $result|$awkString")
-        LogPrint $result2
         filename=/tmp/a.exe
         if [ "$pipe" != "" ]; then
             echo "$result2 | $pipe" >/tmp/a.exe
@@ -181,16 +248,12 @@ Log() {
     done
 }
 
-LogPrint() {
-    echo "$1" >/dev/null 2>&1
-}
-
 PortForward() {
     local arr=("$@")
     unset arr[0]
 
     ps aux | pgrep kube | awk '{print "kill -9 " $1}' | bash
-    local template="%-5s %-19s %-30s %-10s\n"
+    local template="%2s %-19s %-30s %-10s\n"
     printf "${template}" "ID" "SERVICE NAME" "POD NAME" "STATUS"
     local index=1
     if [[ ${#arr[@]} -gt 0 ]]; then
@@ -224,7 +287,7 @@ PortForwardSimple() {
             jspp-kubectl port-forward "${name}" "${2}:9090" >"/tmp/$1.log" 2>&1 &
         fi
     fi
-    local template="%-5s %-19s %-30s %-10s\n"
+    local template="%2s %-19s %-30s %-10s\n"
     if [ ! $? ]; then
         printf "${template}" ${index} "${1}" "${name}" "failed"
     else
@@ -240,7 +303,7 @@ UpdateGitHook() {
     done
 }
 
-IP() {
+Ip() {
     ifconfig | grep "inet " | grep -v '127.0.0.1' | awk -F "inet" '{print $2}' | awk -F "netmask" '{print $1}' | tr -d " "
 }
 
@@ -467,7 +530,7 @@ Include() {
     shopt -u globstar
 }
 
-rand() {
+Rand() {
     if [[ "$1" == "" ]]; then
         return
     fi
