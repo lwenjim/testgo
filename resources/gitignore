@@ -33,3 +33,6 @@ permissions.csv
 .vim
 sql.sql
 debug.go
+menus.txt
+test.json
+test.tsx
