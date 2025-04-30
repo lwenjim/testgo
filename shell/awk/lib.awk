@@ -98,6 +98,6 @@ function UrlEncode(str) {
 }
 
 function Trim(val) {
-    gsub(/\s/, "", val);
+    gsub(/(^\s|\s$)/, "", val);
     return val
 }
