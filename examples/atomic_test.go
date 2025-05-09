@@ -7,7 +7,7 @@ import (
 )
 
 func TestAtomic(t *testing.T) {
-	var count = 0	
+	var count = 0
 	var count2 atomic.Int32
 	var wg sync.WaitGroup
 
