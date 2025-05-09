@@ -6,13 +6,13 @@ alias cat='bat --tabs 4 --theme gruvbox-dark -p --paging=never '
 alias nocat='bat --tabs 4 --theme gruvbox-dark -p -n --paging=never'
 alias python='/usr/local/bin/python3.7'
 alias pip='/usr/local/bin/pip3.7'
-alias ag='/usr/local/bin/ag --color-match 35:48 --color-path 6:37 '
-alias rg=$HOME'/.cargo/bin/rg --ignore-file=$HOME/.gitignore --colors "match:fg:magenta" --colors "line:bg:black" '
 alias fd='/usr/local/bin/fd --ignore-file=$HOME/.gitignore '
 alias ifd='/usr/local/bin/fd'
 alias code='/usr/local/bin/code 2>/dev/null '
 alias ls=$HOME'/.cargo/bin/exa -s modified'
 alias gawk='/usr/local/bin/gawk -i $HOME/Workdata/goland/src/jspp/testgo/shell/awk/lib.awk '
+alias ag='ag --color-match 35:48 --color-path 6:37 '
+alias rg='rg --ignore-file=$HOME/.gitignore --colors "match:fg:magenta" --colors "line:bg:black" '
 
 export WORDCHARS='*?_-.[]~=&;!#$%^(){}<>'
 export FZF_DEFAULT_COMMAND='rg'
@@ -73,8 +73,9 @@ export JMETER_HOME=/usr/local/apache-jmeter-5.1.1
 #export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=
 export PYTHONDONTWRITEBYTECODE=1
 export CLASSPAHT=".:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar"
-export SDKROOT=$(xcrun --show-sdk-path)
+export WORDCHARS='*?_-.[]~=&;!#$%^(){}<>'
 
+export PATH="$HOME/.linuxbrew/opt:$PATH"
 export PATH="/usr/local/opt/protobuf@29/bin:$PATH"
 export PATH="$HOME/.yarn/bin":$PATH
 export PATH="$HOME/.config/yarn/global/node_modules/.bin":$PATH
@@ -108,6 +109,7 @@ export PATH="/usr/local/Cellar/bash/5.2.15/bin":$PATH
 export PATH="/usr/local/Cellar/cocoapods/1.14.3/bin":$PATH
 export PATH="/usr/local/Cellar/ruby/3.3.4/bin:$PATH"
 export PATH="/usr/local/lib/ruby/gems/3.3.0/bin:$PATH"
+export PATH="/home/linuxbrew/.linuxbrew/bin":$PATH
 
 export ZSH_THEME_GIT_PROMPT_PREFIX="%{$reset_color%}%{$fg[green]%}["
 export ZSH_THEME_GIT_PROMPT_SUFFIX="]%{$reset_color%}"
@@ -122,7 +124,9 @@ a() {
   $TESTGOPATH/shell/start.sh "$@"
 }
 
+if [[ $(uname) == 'Darwin' ]];then
+  export SDKROOT=$(xcrun --show-sdk-path)
+fi
 export WORDCHARS='*?_-[]~&;!#$%^(){}<>'
 
-source $HOME/.cargo/env
 source $HOME/.local_config

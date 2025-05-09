@@ -42,3 +42,4 @@ coverage.out
 main.coverprofile
 trace.out
 *coverprofile
+.history

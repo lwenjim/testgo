@@ -550,5 +550,23 @@ Rand() {
 }
 
 UniquePATH() {
+    if [[ IsLinux ]];then
+        return
+    fi
     export PATH=$(gawk 'BEGIN{UniquePATH()}')
+}
+
+StartClash() {
+    /usr/local/bin/clash 2>&1 >/tmp/clash.log &
+    port=$(netstat -natp 2>/dev/null|grep -i listen|grep "9090"|awk  'BEGIN{FS="[ /]+"}{print $7}')
+    if [[ $port != "" && $port -gt 0 ]];then
+        echo $port>/var/run/clash-service.pid
+    fi
+}
+
+IsLinux () {
+    if [[ $(uname) == 'Linux' ]];then
+        return 0
+    fi
+    return 1
 }

@@ -20,6 +20,8 @@ call plug#begin()
  Plug 'mhinz/vim-startify'
  Plug 'morhetz/gruvbox'
  Plug 'neoclide/jsonc.vim'
+ Plug 'junegunn/fzf.vim'
+ Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 call plug#end()
 
 ""--------------
@@ -342,3 +344,5 @@ set fileencoding=utf-8
 
 " 自动检测文件换行符类型
 set fileformats=unix,dos,mac
+
+set rtp+=$HOME/.linuxbrew/opt/fzf
