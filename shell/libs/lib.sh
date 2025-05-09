@@ -296,10 +296,17 @@ PortForwardSimple() {
 }
 
 UpdateGitHook() {
-    cd $HOME/Workdata/goland/src/jspp/pushersv >/dev/null 2>&1 || exit 1
-    for forService in "${!ServiceServers[@]}"; do
-        cd "../$forService" >/dev/null 2>&1 || continue
-        cp -rf .git/hooks/{commit-msg,pre-commit} ".git/hooks" >/dev/null
+    cd $GOPATH/src/jspp || exit 1
+    for forService in "$GOPATH"/src/jspp/**; do
+        if [ ! -d $forService ] || [ ! -d "$forService/.git/hooks" ] || [ ! -f "$forService/Makefile" ];then
+            printf "%-12s %s\n" $forService "failed"
+            continue
+        fi
+        if cp -rf $SHELL_FOLDER/../resources/{commit-msg,pre-commit} "$forService/.git/hooks" >/dev/null;then
+            printf "%-12s %s\n" $forService "success"
+        else
+            printf "%-12s %s\n" $forService "failed"
+        fi
     done
 }
 
@@ -326,7 +333,9 @@ List() {
 }
 
 GeneralConfForNginx() {
-    declare -A DebugServers=()
+    declare -A DebugServers=(
+    #    ["paysv"]=19092
+    )
     filename=/usr/local/etc/openresty/servers/rpc.conf
     if [[ $debug ]]; then
         echo >$filename

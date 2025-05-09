@@ -8,7 +8,7 @@ import (
 )
 
 func TestProgressBar(t *testing.T) {
-	count := 1000
+	count := 100
 	bar := pb.StartNew(count)
 	for i := 0; i < count; i++ {
 		time.Sleep(time.Millisecond * 50)

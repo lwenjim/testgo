@@ -36,3 +36,9 @@ debug.go
 menus.txt
 test.json
 test.tsx
+config.ts
+debug.go.bak
+coverage.out
+main.coverprofile
+trace.out
+*coverprofile

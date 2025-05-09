@@ -1,0 +1,22 @@
+GOWORK=off
+make clean
+export EDITOR=""
+GOWORK=off make test
+RESULT=$?
+
+if [[ $RESULT != 0 ]]; then
+    printf "TEST FAILED\n"
+    exit $RESULT
+else
+    printf "TEST SUCCEEDED\n"
+fi
+
+make lint
+RESULT=$?
+
+if [[ $RESULT != 0 ]]; then
+    printf "LINT FAILED\n"
+    exit $RESULT
+fi
+
+exit $RESULT
