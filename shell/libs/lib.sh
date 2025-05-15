@@ -43,22 +43,60 @@ ServiceServersOrder=(
 
 debug=false
 
+Co() {
+    shift
+    local branchName=$1
+    shift
+    if [[ "" == "$*" ]]; then
+        return
+    fi
+
+    local isChange=
+    for item in $@; do
+        if [ ! -d $GOPATH/src/jspp/$item ]; then
+            echo not exists $item
+            isChange=on
+            continue
+        fi
+        cd $GOPATH/src/jspp/$item
+        if [[ $(git status --short 2>/dev/null) != "" ]]; then
+            isChange=on
+            echo $item:
+            git status --short 2>/dev/null
+            echo
+        fi
+    done
+
+    if [[ $isChange != "" ]]; then
+        return
+    fi
+    local index=1
+    for item in $@; do
+        cd $GOPATH/src/jspp/$item || continue
+        if git co $branchName >/dev/null 2>&1; then
+            printf "%d %-20s %-30s\n" $index $item $branchName
+        fi
+        ((index++))
+    done
+}
+
 SearchServerByBranchName() {
     shift
     if [[ $# == 0 ]]; then
         return
     fi
+    echo
     searchBranchName=$1
     for servicePath in "$GOPATH"/src/jspp/*; do
-        if [[ -f $servicePath ]];then
+        if [[ -f $servicePath ]]; then
             continue
         fi
         cd $servicePath || continue
-        if ! git status >/dev/null 2>&1;then
+        if ! git status >/dev/null 2>&1; then
             continue
         fi
         local exists=0
-        for branchName in $(git --no-pager branch|gawk '{gsub(/(*|\s)/,"",$0);print $0;}'); do
+        for branchName in $(git --no-pager branch | gawk '{gsub(/(*|\s)/,"",$0);print $0;}'); do
             if [[ $branchName == $searchBranchName ]]; then
                 exists=1
                 break
@@ -133,7 +171,7 @@ ArrayIntersectNot() {
     arr=(${2//,/ })
     arr2=(${3//,/ })
     for out in ${arr[@]}; do
-        out=$(echo $out|gawk '{print Trim($0)}')
+        out=$(echo $out | gawk '{print Trim($0)}')
         local isFind=0
         for iin in ${arr2[@]}; do
             if [[ $out == $iin ]]; then
@@ -141,7 +179,7 @@ ArrayIntersectNot() {
                 break
             fi
         done
-        if [[ $isFind == "0" ]];then
+        if [[ $isFind == "0" ]]; then
             echo $out
         fi
     done
@@ -298,11 +336,11 @@ PortForwardSimple() {
 UpdateGitHook() {
     cd $GOPATH/src/jspp || exit 1
     for forService in "$GOPATH"/src/jspp/**; do
-        if [ ! -d $forService ] || [ ! -d "$forService/.git/hooks" ] || [ ! -f "$forService/Makefile" ];then
+        if [ ! -d $forService ] || [ ! -d "$forService/.git/hooks" ] || [ ! -f "$forService/Makefile" ]; then
             printf "%-12s %s\n" $forService "failed"
             continue
         fi
-        if cp -rf $SHELL_FOLDER/../resources/{commit-msg,pre-commit} "$forService/.git/hooks" >/dev/null;then
+        if cp -rf $SHELL_FOLDER/../resources/{commit-msg,pre-commit} "$forService/.git/hooks" >/dev/null; then
             printf "%-12s %s\n" $forService "success"
         else
             printf "%-12s %s\n" $forService "failed"
@@ -334,7 +372,7 @@ List() {
 
 GeneralConfForNginx() {
     declare -A DebugServers=(
-    #    ["paysv"]=19092
+        ["paysv"]=19092
     )
     filename=/usr/local/etc/openresty/servers/rpc.conf
     if [[ $debug ]]; then
@@ -550,22 +588,22 @@ Rand() {
 }
 
 UniquePATH() {
-    if [[ IsLinux ]];then
+    if [[ $(IsLinux) ]]; then
         return
     fi
     export PATH=$(gawk 'BEGIN{UniquePATH()}')
 }
 
 StartClash() {
-    /usr/local/bin/clash 2>&1 >/tmp/clash.log &
-    port=$(netstat -natp 2>/dev/null|grep -i listen|grep "9090"|awk  'BEGIN{FS="[ /]+"}{print $7}')
-    if [[ $port != "" && $port -gt 0 ]];then
-        echo $port>/var/run/clash-service.pid
+    /usr/local/bin/clash >/tmp/clash.log 2>&1 &
+    port=$(netstat -natp 2>/dev/null | grep -i listen | grep "9090" | awk 'BEGIN{FS="[ /]+"}{print $7}')
+    if [[ $port != "" && $port -gt 0 ]]; then
+        echo $port >/var/run/clash-service.pid
     fi
 }
 
-IsLinux () {
-    if [[ $(uname) == 'Linux' ]];then
+IsLinux() {
+    if [[ $(uname) == 'Linux' ]]; then
         return 0
     fi
     return 1
