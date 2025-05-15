@@ -31,9 +31,14 @@ fpath=($HOME/.docker/completions $fpath)
 
 zstyle :omz:plugins:iterm2 shell-integration yes
 
+source $(brew --prefix)/etc/profile.d/autojump.sh
+source $ZSH/oh-my-zsh.sh
+source $HOME/.bashrc
+
 if [[ $(uname) == 'Darwin' ]];then
     source $(brew --prefix)/etc/profile.d/z.sh
     source $(brew --prefix)/etc/profile.d/bash_completion.sh
+
     source $(brew --prefix)/opt/nvm/nvm.sh
     source $(brew --prefix)/opt/nvm/etc/bash_completion.d/nvm
 
@@ -45,14 +50,8 @@ if [[ $(uname) == 'Darwin' ]];then
     source $HOME/.fzf.zsh
     source $HOME/.cargo/env
     source $HOME/.iterm2_shell_integration.zsh
-
     source <(kubectl completion zsh)
-    return 0
 fi
-source $(brew --prefix)/etc/profile.d/autojump.sh
-source $HOME/.bashrc
-source $ZSH/oh-my-zsh.sh
-
 
 setopt APPEND_HISTORY
 setopt HIST_IGNORE_DUPS
@@ -61,5 +60,3 @@ setopt EXTENDED_HISTORY
 
 autoload -Uz compinit
 compinit
-
-

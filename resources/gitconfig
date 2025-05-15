@@ -4,6 +4,7 @@
 	autocrlf = input
 	ignoreCase = false
 	editor = vim
+	pager = 
 #    pager = delta --features calochortus-lyallii
 [difftool "sourcetree"]
 	cmd = /usr/local/bin/bcomp \"$LOCAL\" \"$REMOTE\"
@@ -12,7 +13,7 @@
 	cmd = /usr/local/bin/bcomp \"$LOCAL\" \"$REMOTE\" \"$BASE\" \"$MERGED\"
 	trustExitCode = true
 [user]
-	name = liuwenjin
+	name = jim
 	email = liuwenjin@jspp.cn
 [commit]
 	template = /Users/jim/.stCommitMsg
