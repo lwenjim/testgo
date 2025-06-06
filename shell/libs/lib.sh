@@ -325,7 +325,7 @@ PortForwardSimple() {
             jspp-kubectl port-forward "${name}" "${2}:9090" >"/tmp/$1.log" 2>&1 &
         fi
     fi
-    local template="%2s %-19s %-30s %-10s\n"
+    local template="%-2s %-19s %-30s %-10s\n"
     if [ ! $? ]; then
         printf "${template}" ${index} "${1}" "${name}" "failed"
     else
