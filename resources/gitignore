@@ -43,3 +43,4 @@ main.coverprofile
 trace.out
 *coverprofile
 .history
+.idea
