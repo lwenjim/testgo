@@ -1,3 +1,5 @@
+#!/bin/bash
+#shellcheck disable=2096,2086,2162,2068
 StopRedisMasterSlave() {
     docker ps -f name=masterslave | awk '{
         if(NR>1) {

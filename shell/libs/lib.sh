@@ -43,6 +43,21 @@ ServiceServersOrder=(
 
 debug=false
 
+PullAll(){
+    cd $GOPATH/src/jspp/testgo
+    for i in $(ls ..)
+    do
+        cd ../$i
+        if [ ! -f .git/config ];then
+            continue
+        fi
+        if [ $(git status -s|wc -l) == "1" ];then
+            continue
+        fi
+        git pull
+    done;
+}
+
 Co() {
     shift
     local branchName=$1

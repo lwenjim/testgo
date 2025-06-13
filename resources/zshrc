@@ -57,6 +57,6 @@ setopt APPEND_HISTORY
 setopt HIST_IGNORE_DUPS
 setopt SHARE_HISTORY
 setopt EXTENDED_HISTORY
-
+set rtp+=/usr/local/opt/fzf
 autoload -Uz compinit
 compinit
