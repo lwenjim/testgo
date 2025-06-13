@@ -46,8 +46,8 @@ export MANPAGER="sh -c 'col -bx | bat -l man -p'"
 export FZF_DEFAULT_COMMAND="fd --exclude={.git,.idea,.vscode,.sass-cache,node_modules,build} --type file"
 export FZF_DEFAULT_OPTS="--height 40% --layout=reverse "
 export FZF_CTRL_R_OPTS="--bind 'ctrl-y:execute-silent(echo -n {2..} | pbcopy)+abort' --color header:italic --header 'Press CTRL-Y to copy command into clipboard'"
-export FZF_ALT_C_OPTS=" --walker-skip .git,node_modules,target --preview 'tree -C {}'"
-export FZF_CTRL_T_OPTS=" --walker-skip .git,node_modules,target  --preview 'bat -n --color=always {}' --bind 'ctrl-/:change-preview-window(down|hidden|)'"
+# export FZF_ALT_C_OPTS=" .git,node_modules,target --preview 'tree -C {}'"
+# export FZF_CTRL_T_OPTS=" .git,node_modules,target  --preview 'bat -n --color=always {}' --bind 'ctrl-/:change-preview-window(down|hidden|)'"
 export KUBEBUILDER_ASSETS="$HOME/Library/Application Support/io.kubebuilder.envtest/k8s/1.22.1-darwin-amd64"
 export VIMCONFIG=$HOME/Workdata/nvim-config
 export VIMDATA=$HOME/.local/share/nvim
