@@ -1,4 +1,3 @@
-
 Test() {
     echo 123
 }
@@ -140,5 +139,11 @@ insert1000000t_push() {
             echo ',(null, 0, '$num', "b44aba24fbcc24e07af700314eb41438f43424895a916f9a9e7d8b818905684f", 1, null, null)' >>/tmp/t_push_test.sql
         done
         mysql -uroot -P3306 -p123456789 -h127.0.0.1 jspp -e 'source /tmp/t_push_test.sql'
+    done
+}
+
+insert1000avatar() {
+    for item in $(mysql 2>/dev/null -uroot -P3306 -p123456789 -h127.0.0.1 jspp -e 'select id, avatar from t_user limit 150'); do
+        echo mysql -uroot -P3306 -p123456789 -h127.0.0.1 jspp -e 'insert into t_user_examine_name_avatar(user_id, user_name, avatar, event_id) values('${item}', "jspp'${item}'", "/6b120d/image/6b120d9ea5250c8bf854953db017153586e896fe-1080x1920", '${item}')'
     done
 }

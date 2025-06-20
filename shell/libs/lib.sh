@@ -58,6 +58,16 @@ PullAll(){
     done;
 }
 
+loadnvm() {
+    source $(brew --prefix)/opt/nvm/nvm.sh
+    source $(brew --prefix)/opt/nvm/etc/bash_completion.d/nvm
+}
+
+mysqleval() {
+    shift
+    mysql -uroot -P3306 -p123456789 -h127.0.0.1 jspp -e "${*/\\*/*}"
+}
+
 Co() {
     shift
     local branchName=$1
@@ -305,7 +315,6 @@ PortForward() {
     local arr=("$@")
     unset arr[0]
 
-    ps aux | pgrep kube | awk '{print "kill -9 " $1}' | bash
     local template="%2s %-19s %-30s %-10s\n"
     printf "${template}" "ID" "SERVICE NAME" "POD NAME" "STATUS"
     local index=1
@@ -329,9 +338,13 @@ PortForward() {
 }
 
 PortForwardSimple() {
+    local pid=$(ps -ef | grep "jspp port-forward $1" | awk '{print $2}')
+    if [[ "$pid" != "" ]]; then
+        kill -9 $pid
+    fi
     if [[ "mongo mysql redis" == *"${1}"* ]]; then
         name="${1}-0"
-        jspp-kubectl port-forward --address 0.0.0.0 "${name}" "${2}:${2}" >"/tmp/$1.log" 2>&1 &
+        jspp-kubectl port-forward "${name}" --address 0.0.0.0 "${2}:${2}" >"/tmp/$1.log" 2>&1 &
     else
         name=$(jspp-kubectl get pods | grep "$1" | awk '{if(NR==1){print $1}}')
         if [[ "$name" == "" ]]; then
@@ -387,7 +400,8 @@ List() {
 
 GeneralConfForNginx() {
     declare -A DebugServers=(
-        ["paysv"]=19092
+        ["usersv"]=19091
+        ["authsv"]=19099
     )
     filename=/usr/local/etc/openresty/servers/rpc.conf
     if [[ $debug ]]; then

@@ -41,7 +41,8 @@ autocmd FileType c ClangFormatAutoEnable
 autocmd FileType c,cpp,objc nnoremap <buffer><Leader>cf :<C-u>ClangFormat<CR>
 autocmd FileType c,cpp,objc vnoremap <buffer><Leader>cf :ClangFormat<CR>
 autocmd FileType c,cpp,objc map <buffer><Leader>x <Plug>(operator-clang-format)
-
+autocmd FileType sh,bash setlocal makeprg=shellcheck\ -f\ gcc\ --exclude=SC2206,SC2034,SC1091,SC2086,SC1090,SC2155\ %
+autocmd FileType sh,bash setlocal errorformat=%f:%l:%c:\ %m
 ""--------------
 "" vim-go配置
 ""--------------
@@ -175,7 +176,7 @@ let g:Lf_WorkingDirectoryMode = 'a'
 let g:Lf_RootMarkers = ['.workspace_root']
 let g:Lf_UseVersionControlTool=0
 let g:Lf_DefaultExternalTool='rg'
-let g:Lf_ExternalCommand = 'fd --ignore-file  /Users/jim/.ignore.ag.rg "%s"'
+let g:Lf_ExternalCommand = 'fd --ignore-file /Users/jim/.ignore.ag.rg -H "%s"'
 let g:Lf_PreviewInPopup = 0
 let g:Lf_WindowHeight = 0.3
 let g:Lf_PopupHeight = float2nr(&lines * 0.3)
@@ -194,6 +195,7 @@ let g:Lf_Gtagsconf = '/usr/local/Cellar/global/6.6.10/share/gtags/gtags.conf'
 let g:Lf_Gtagslabel = 'native-pygments'
 let g:Lf_ReverseOrder = 0
 let g:Lf_DefaultMode = 'NameOnly'
+let g:Lf_DefaultMode = 'Fuzzy'
 noremap <leader>f   :LeaderfSelf<cr>
 noremap <leader>fm  :LeaderfMru<cr>
 noremap <leader>ff  :LeaderfFunction<cr>
