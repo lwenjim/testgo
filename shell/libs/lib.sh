@@ -43,11 +43,15 @@ ServiceServersOrder=(
 
 debug=false
 
+ClearMysqlGenerateLog(){
+    echo 123
+}
+
 PullAll(){
-    cd $GOPATH/src/jspp/testgo
+    cd $GOPATH/src/jspp/testgo || exit 131
     for i in $(ls ..)
     do
-        cd ../$i
+        cd ../$i || exit 131
         if [ ! -f .git/config ];then
             continue
         fi
@@ -83,7 +87,7 @@ Co() {
             isChange=on
             continue
         fi
-        cd $GOPATH/src/jspp/$item
+        cd $GOPATH/src/jspp/$item || exit 131
         if [[ $(git status --short 2>/dev/null) != "" ]]; then
             isChange=on
             echo $item:
@@ -223,9 +227,9 @@ ArrayUnique() {
 }
 
 SyncConfig() {
-    cd ~ || exit 1
-    cd $GO_JSPP_WORKSPACE || exit 1
-    cd testgo || exit 1
+    cd ~ || exit 131
+    cd $GO_JSPP_WORKSPACE || exit 131
+    cd testgo || exit 131
     cp ~/.vimrc . &&
         cp ~/.bashrc . &&
         cp ~/.zshrc . &&
@@ -362,7 +366,7 @@ PortForwardSimple() {
 }
 
 UpdateGitHook() {
-    cd $GOPATH/src/jspp || exit 1
+    cd $GOPATH/src/jspp || exit 131
     for forService in "$GOPATH"/src/jspp/**; do
         if [ ! -d $forService ] || [ ! -d "$forService/.git/hooks" ] || [ ! -f "$forService/Makefile" ]; then
             printf "%-12s %s\n" $forService "failed"
@@ -520,7 +524,7 @@ MoveVscConfig() {
 }
 
 CheckoutGoModSum() {
-    cd $HOME/Workdata/goland/src/jspp || exit 1
+    cd $HOME/Workdata/goland/src/jspp || exit 131
     ll ./**/go.mod | awk -F' ' '{print $7}' | awk -F'/' '{print $1}' | xargs -I {} echo "cd {};git checkout go.mod go.sum" | xargs -I {} bash -c {}
 }
 
@@ -564,7 +568,7 @@ StockTrade() {
 GoShell() {
     shift
     path=$HOME/Workdata/goland/src/jspp/
-    cd $path || exit
+    cd $path || exit 131
     for item in $(ls $path); do
         case $item in
         "go.work.sum" | "go.work" | "testgo" | "pusher")
@@ -578,7 +582,7 @@ GoShell() {
         if [[ ! -d "$item" ]]; then
             continue
         fi
-        cd $item || exit
+        cd $item || exit 131
         if [[ ! -f "go.mod" ]]; then
             cd ..
             continue
