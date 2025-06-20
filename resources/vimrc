@@ -1,6 +1,6 @@
 call plug#begin()
  Plug 'neoclide/coc.nvim', {'branch': 'release'}
- Plug 'SirVer/ultisnips'
+" Plug 'SirVer/ultisnips'
  Plug 'vim-airline/vim-airline'
  Plug 'vim-airline/vim-airline-themes'
  Plug 'joshdick/onedark.vim'
@@ -315,6 +315,7 @@ let g:rehash256 = 1
 let g:molokai_original = 1
 let g:syntastic_mode_map = {'mode': 'active', 'passive_filetypes': ['go', 'java', 'py', 'json', 'js', 'sql', 'c', 'h', 'cpp', 'rs', 'rb', 'lisp', 'lua'] }
 let g:node_client_debug = 0
+let g:python3_host_prog = '/usr/local/bin/python3'
 
 nnoremap <tab>   :bnext<Return>
 nnoremap <c-tab> :bprev<Return>
