@@ -35,16 +35,21 @@ source $(brew --prefix)/etc/profile.d/autojump.sh
 source $ZSH/oh-my-zsh.sh
 source $HOME/.bashrc
 
-if [[ $(uname) == 'Darwin' ]];then
-    source $(brew --prefix)/etc/profile.d/z.sh
-    source $(brew --prefix)/etc/profile.d/bash_completion.sh
+if [[ $(uname) == 'Darwin' ]]; then
+    if [[ -f $(brew --prefix)/etc/profile.d/z.sh ]]; then
+        source $(brew --prefix)/etc/profile.d/z.sh
+    fi
+
+    if [[ -f $(brew --prefix)/etc/profile.d/bash_completion.sh ]]; then
+        source $(brew --prefix)/etc/profile.d/bash_completion.sh
+    fi
 
     source $(brew --prefix)/opt/nvm/nvm.sh
     source $(brew --prefix)/opt/nvm/etc/bash_completion.d/nvm
 
     HB_CNF_HANDLER="$(brew --repository)/Library/Taps/homebrew/homebrew-command-not-found/handler.sh"
     if [ -f "$HB_CNF_HANDLER" ]; then
-        source "$HB_CNF_HANDLER";
+        source "$HB_CNF_HANDLER"
     fi
 
     source $HOME/.fzf.zsh
