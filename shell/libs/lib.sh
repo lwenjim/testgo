@@ -43,23 +43,37 @@ ServiceServersOrder=(
 
 debug=false
 
-ClearMysqlGenerateLog(){
+CheckoutAll() {
+    local path=~/Workdata/goland/src/jspp
+    if [[ ! -d $path ]]; then
+        echo "not exists "$path
+        return
+    fi
+    for item in ${ServiceServersOrder[@]}; do
+        if [[ -d "$path/$item" ]]; then
+            echo "exists "$path/$item
+            continue
+        fi
+        git clone git@code.jspp.com:jspp/$item.git
+    done
+}
+
+ClearMysqlGenerateLog() {
     echo 123
 }
 
-PullAll(){
+PullAll() {
     cd $GOPATH/src/jspp/testgo || exit 131
-    for i in $(ls ..)
-    do
+    for i in $(ls ..); do
         cd ../$i || exit 131
-        if [ ! -f .git/config ];then
+        if [ ! -f .git/config ]; then
             continue
         fi
-        if [ $(git status -s|wc -l) == "1" ];then
+        if [ $(git status -s | wc -l) == "1" ]; then
             continue
         fi
         git pull
-    done;
+    done
 }
 
 loadnvm() {
