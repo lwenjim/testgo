@@ -12,7 +12,7 @@ alias gawk='/usr/local/bin/gawk -i $HOME/Workdata/goland/src/jspp/testgo/shell/a
 alias ag='ag --color-match 35:48 --color-path 6:37 '
 alias rg='rg --ignore-file=$HOME/.gitignore --colors "match:fg:magenta" --colors "line:bg:black" '
 
-
+export PAGER=less
 export WORDCHARS='*?_-.[]~=&;!#$%^(){}<>'
 export PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND ;} history -a"
 export TESTGOPATH=$HOME/Workdata/goland/src/jspp/testgo
@@ -132,4 +132,4 @@ export WORDCHARS='*?_-[]~&;!#$%^(){}<>'
 
 source $HOME/.local_config
 
-export https_proxy=http://127.0.0.1:33210 http_proxy=http://127.0.0.1:33210 all_proxy=socks5://127.0.0.1:33210
+#export https_proxy=http://127.0.0.1:33210 http_proxy=http://127.0.0.1:33210 all_proxy=socks5://127.0.0.1:33210
