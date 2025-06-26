@@ -418,8 +418,8 @@ List() {
 
 GeneralConfForNginx() {
     declare -A DebugServers=(
-        ["usersv"]=19091
-        ["authsv"]=19099
+        # ["usersv"]=19091
+        ["edgesv"]=19099
     )
     filename=/usr/local/etc/openresty/servers/rpc.conf
     if [[ $debug ]]; then

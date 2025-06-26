@@ -1,5 +1,4 @@
 [core]
-	excludesfile = /Users/jim/.gitignore_global
 	excludesfile = /Users/jim/.gitignore
 	autocrlf = input
 	ignoreCase = false
