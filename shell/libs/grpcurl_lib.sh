@@ -181,3 +181,34 @@ function ApplyFriend() {
 
 # 7837 android
 # squaresv-svc:9090/rpc.Square/GetMemberPermission
+
+function SetGroupAdmin() {
+  addResp=$(grpcurl -d '
+    {
+      "auth": {
+        "token": {
+          "user_id": 21244
+        }
+      },
+      "group_id":1048,
+      "user_id":[22055,21479]
+    }
+    ' -plaintext groupsv-svc:9090 rpc.Group.SetGroupAdmin)
+  echo $addResp
+}
+
+function EditUserInfo() {
+  addResp=$(grpcurl -d '
+    {
+      "auth": {
+        "token": {
+          "user_id": 10043
+        }
+      },
+      "info":{
+        "username":"ab123c"
+      }
+    }
+    ' -plaintext usersv-svc:9090 rpc.User.EditUserInfo 2>&1)
+  echo $addResp
+}

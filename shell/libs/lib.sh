@@ -418,8 +418,19 @@ List() {
 
 GeneralConfForNginx() {
     declare -A DebugServers=(
-        # ["usersv"]=19091
-        ["edgesv"]=19099
+#        ["adminsv"]=19091
+#        ["edgesv"]=19092
+#        ["openapi"]=19093
+#        ["messagesv"]=19094
+#        ["paysv"]=19095
+#        ["pushersv"]=19097
+#        ["authsv"]=19098
+#        ["uploadsv"]=19099
+       ["usersv"]=19100
+    #    ["squaresv"]=19101
+#        ["net-security-data-report"]=19103
+    #    ["groupsv"]=19102
+#        ["chatbot"]=19104
     )
     filename=/usr/local/etc/openresty/servers/rpc.conf
     if [[ $debug ]]; then
@@ -437,7 +448,7 @@ GeneralConfForNginx() {
         server {
             server_name $server-svc;
             listen 9090 http2;
-            access_log /tmp/$server-svc_nginx.log combined;
+#            access_log /tmp/$server-svc_nginx.log combined;
 
             location / {
                 grpc_pass grpc://127.0.0.1:$targetPort;
