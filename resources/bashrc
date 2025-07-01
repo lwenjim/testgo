@@ -125,9 +125,13 @@ a() {
   $TESTGOPATH/shell/start.sh "$@"
 }
 
-if [[ $(uname) == 'Darwin' ]];then
+if [[ $(uname) == 'Darwin' ]]; then
   export SDKROOT=$(xcrun --show-sdk-path)
 fi
 export WORDCHARS='*?_-[]~&;!#$%^(){}<>'
 
 source $HOME/.local_config
+
+batdiff() {
+  git diff --name-only --relative --diff-filter=d | xargs bat --diff
+}
