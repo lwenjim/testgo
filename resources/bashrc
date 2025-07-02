@@ -12,7 +12,7 @@ alias gawk='/usr/local/bin/gawk -i $HOME/Workdata/goland/src/jspp/testgo/shell/a
 alias ag='ag --color-match 35:48 --color-path 6:37 '
 alias rg='rg --ignore-file=$HOME/.gitignore --colors "match:fg:magenta" --colors "line:bg:black" '
 
-export PAGER=less
+export PAGER='bat --tabs 4 --theme gruvbox-dark -p --paging=never '
 export WORDCHARS='*?_-.[]~=&;!#$%^(){}<>'
 export PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND ;} history -a"
 export TESTGOPATH=$HOME/Workdata/goland/src/jspp/testgo
@@ -38,7 +38,7 @@ export C_INCLUDE_PATH=
 export CPLUS_INCLUDE_PATH=
 export LD_LIBRARY_PATH=
 export LIBRARY_PATH=
-export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+export MANPAGER="bat --tabs 4 --theme gruvbox-dark -p --paging=never "
 export FZF_BASE=/usr/local/Cellar/fzf/0.49.0
 export FZF_COMPLETION_TRIGGER='**'
 export FZF_DEFAULT_COMMAND="fd --exclude={.git,.idea,.vscode,.sass-cache,node_modules,build,.history} --hidden --type file"

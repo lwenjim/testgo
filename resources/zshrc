@@ -65,3 +65,6 @@ setopt EXTENDED_HISTORY
 set rtp+=/usr/local/opt/fzf
 autoload -Uz compinit
 compinit
+fpath=(/Users/jim/.docker/completions $fpath)
+autoload -Uz compinit
+compinit
