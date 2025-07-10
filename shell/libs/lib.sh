@@ -341,18 +341,13 @@ PortForward() {
             PortForwardSimple "${server}" "${ServiceServers[$server]}" ${index}
             ((index++))
         done
-        GeneralConfForNginx
-        if ps -ef | grep nginx >/dev/null; then
-            /usr/local/bin/openresty -s reload
-        else
-            brew services reload openresty
-        fi
     else
         for server in "${ServiceServersOrder[@]}"; do
             PortForwardSimple "${server}" "${ServiceServers[$server]}" ${index}
             ((index++))
         done
     fi
+    GeneralConfForNginx
 }
 
 PortForwardSimple() {
@@ -418,19 +413,19 @@ List() {
 
 GeneralConfForNginx() {
     declare -A DebugServers=(
-#        ["adminsv"]=19091
-#        ["edgesv"]=19092
-#        ["openapi"]=19093
-#        ["messagesv"]=19094
-#        ["paysv"]=19095
-#        ["pushersv"]=19097
-#        ["authsv"]=19098
-#        ["uploadsv"]=19099
-       ["usersv"]=19100
-    #    ["squaresv"]=19101
-#        ["net-security-data-report"]=19103
-    #    ["groupsv"]=19102
-#        ["chatbot"]=19104
+        #        ["adminsv"]=19091
+        #        ["edgesv"]=19092
+        #        ["openapi"]=19093
+        #        ["messagesv"]=19094
+        #        ["paysv"]=19095
+        #        ["pushersv"]=19097
+        #        ["authsv"]=19098
+        #        ["uploadsv"]=19099
+           ["usersv"]=19100
+        #    ["squaresv"]=19101
+        #        ["net-security-data-report"]=19103
+        #    ["groupsv"]=19102
+        #        ["chatbot"]=19104
     )
     filename=/usr/local/etc/openresty/servers/rpc.conf
     if [[ $debug ]]; then
@@ -461,6 +456,11 @@ EOF
             echo "$template"
         fi
     done
+    if ps -ef | grep nginx >/dev/null; then
+        /usr/local/bin/openresty -s reload
+    else
+        brew services reload openresty
+    fi
 }
 
 PrintEnvPath() {
@@ -665,4 +665,12 @@ IsLinux() {
         return 0
     fi
     return 1
+}
+
+KeepaliveForword() {
+    count=$(netstat -nat -p tcp|grep -i listen|grep -c 3306)
+    if "$count" != "";then
+        return
+    fi
+    PortForward "$@"
 }
