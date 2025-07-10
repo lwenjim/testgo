@@ -187,15 +187,30 @@ function SetGroupAdmin() {
     {
       "auth": {
         "token": {
-          "user_id": 21244
+          "user_id": 10088
         }
       },
-      "group_id":1048,
-      "user_id":[22055,21479]
+      "group_id":1064,
+      "user_id":[23631,10023,10028,12888,22013]
     }
     ' -plaintext groupsv-svc:9090 rpc.Group.SetGroupAdmin)
   echo $addResp
 }
+
+function GetPermissionLimit () {
+  addResp=$(grpcurl -d '
+    {
+      "auth": {
+        "token": {
+          "user_id": 10088
+        }
+      },
+      "member_max_limit_type": 16
+    }
+    ' -plaintext squaresv-svc:9090 rpc.Square.GetPermissionLimit)
+  echo $addResp
+}
+
 
 function EditUserInfo() {
   addResp=$(grpcurl -d '
@@ -205,8 +220,8 @@ function EditUserInfo() {
           "user_id": 10043
         }
       },
-      "info":{
-        "username":"ab123c"
+      "info": {
+        "card": {}
       }
     }
     ' -plaintext usersv-svc:9090 rpc.User.EditUserInfo 2>&1)
