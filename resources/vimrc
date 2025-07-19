@@ -349,15 +349,3 @@ set fileencoding=utf-8
 " 自动检测文件换行符类型
 set fileformats=unix,dos,mac
 
-set rtp+=$HOME/.linuxbrew/opt/fzf
-
-let g:lightline.component_expand = {'lint': 'lightline#ale#check'}
-let g:lightline.component_type = {'lint': 'error'}
-" 忽略特定错误 (e.g. SC1090, SC1091)
-let g:ale_sh_shellcheck_options = '-e SC1090,SC1091'
-
-" 指定 Shell 类型
-let g:ale_sh_shellcheck_options .= ' -s bash'
-
-" 启用额外检查
-let g:ale_sh_shellcheck_options .= ' -o all'
