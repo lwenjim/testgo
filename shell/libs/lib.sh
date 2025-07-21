@@ -417,15 +417,16 @@ GeneralConfForNginx() {
         #        ["edgesv"]=19092
         #        ["openapi"]=19093
         #        ["messagesv"]=19094
-        #        ["paysv"]=19095
-        #        ["pushersv"]=19097
-        #        ["authsv"]=19098
+            #    ["paysv"]=19095
+        # ["pushersv"]=19097
+            #    ["authsv"]=19098
         #        ["uploadsv"]=19099
-           ["usersv"]=19100
-        #    ["squaresv"]=19101
+        # ["usersv"]=19100
+           ["squaresv"]=19101
         #        ["net-security-data-report"]=19103
         #    ["groupsv"]=19102
         #        ["chatbot"]=19104
+        # ["deliversv"]=19105
     )
     filename=/usr/local/etc/openresty/servers/rpc.conf
     if [[ $debug ]]; then
@@ -668,8 +669,8 @@ IsLinux() {
 }
 
 KeepaliveForword() {
-    count=$(netstat -nat -p tcp|grep -i listen|grep -c 3306)
-    if "$count" != "";then
+    count=$(netstat -nat -p tcp | grep -i listen | grep -c 3306)
+    if "$count" != ""; then
         return
     fi
     PortForward "$@"
