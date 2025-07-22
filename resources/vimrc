@@ -49,7 +49,7 @@ autocmd FileType sh,zsh setlocal makeprg=shellcheck\ -f\ gcc\ --exclude=2206,203
 nnoremap <f2>   :GoFillStruct<cr>
 nnoremap <f3>   :GoAlternate<cr>
 nnoremap <f4>   :GoDecls<cr>
-nnoremap <s-f6> :GoRename<cr>
+nnoremap <s-f4> :GoRename<cr>
 let g:go_imports_autosave = 1
 let g:go_debug_windows = {'vars':'rightbelow 60vnew','stack':'rightbelow 10new'}
 let g:lightline = {'colorscheme': 'molokai'}
@@ -207,7 +207,7 @@ noremap <leader>frr :LeaderfRgRecall<cr>
 noremap <leader>fgo :<C-U><C-R>=printf("Leaderf! gtags --recall %s", "")<CR><CR>
 noremap <leader>fgn :<C-U><C-R>=printf("Leaderf gtags --next %s", "")<CR><CR>
 noremap <leader>fgp :<C-U><C-R>=printf("Leaderf gtags --previous %s", "")<CR><CR>
-noremap <c-space>   :<C-U>Leaderf rg --ignore-file /Users/jim/.ignore.ag.rg -e<Space>
+noremap <c-space>   :<C-U>Leaderf rg --ignore-file /Users/jim/.ignore.ag.rg -w -e<Space>
 noremap <leader>ra  <Plug>LeaderfRgCwordLiteralNoBoundary
 noremap <leader>rb  <Plug>LeaderfRgCwordLiteralBoundary
 noremap <leader>rc  <Plug>LeaderfRgCwordRegexNoBoundary
@@ -349,3 +349,4 @@ set fileencoding=utf-8
 " 自动检测文件换行符类型
 set fileformats=unix,dos,mac
 
+nnoremap <s-f6> :GoRename<cr>

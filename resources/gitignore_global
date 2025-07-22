@@ -17,6 +17,5 @@ __debug*
 *.http
 test.tsx
 debug.go
-config.ts
 test.json
 .history*

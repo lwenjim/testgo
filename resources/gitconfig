@@ -3,7 +3,6 @@
 	autocrlf = input
 	ignoreCase = false
 	editor = vim
-#    pager = delta --features calochortus-lyallii
 [difftool "sourcetree"]
 	cmd = /usr/local/bin/bcomp \"$LOCAL\" \"$REMOTE\"
 	path = -ro
