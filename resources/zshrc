@@ -2,13 +2,10 @@ export DISABLE_MAGIC_FUNCTIONS="true"
 export ZSH=$HOME/.oh-my-zsh
 export PATH=$HOME/.tiup/bin:$PATH
 export NVM_DIR=$HOME/.nvm
-
 ZSH_THEME="amuse"
-
 fpath=($HOME/.docker/completions $fpath)
 autoload -Uz compinit
 compinit
-
 plugins=(
     git
     golang
@@ -21,36 +18,28 @@ plugins=(
     fzf
     gnu-utils
     vscode
-
     zsh-completions
     zsh-autosuggestions
     zsh-syntax-highlighting
     zsh-autopair
 )
-
 zstyle :omz:plugins:iterm2 shell-integration yes
-
 source $(brew --prefix)/etc/profile.d/autojump.sh
 source $ZSH/oh-my-zsh.sh
 source $HOME/.bashrc
-
 if [[ $(uname) == 'Darwin' ]]; then
     if [[ -f $(brew --prefix)/etc/profile.d/z.sh ]]; then
         source $(brew --prefix)/etc/profile.d/z.sh
     fi
-
     if [[ -f $(brew --prefix)/etc/profile.d/bash_completion.sh ]]; then
         source $(brew --prefix)/etc/profile.d/bash_completion.sh
     fi
-
     source $(brew --prefix)/opt/nvm/nvm.sh
     source $(brew --prefix)/opt/nvm/etc/bash_completion.d/nvm
-
     HB_CNF_HANDLER="$(brew --repository)/Library/Taps/homebrew/homebrew-command-not-found/handler.sh"
     if [ -f "$HB_CNF_HANDLER" ]; then
         source "$HB_CNF_HANDLER"
     fi
-
     source $HOME/.fzf.zsh
     source $HOME/.cargo/env
     source $HOME/.iterm2_shell_integration.zsh
@@ -59,7 +48,6 @@ if [[ $(uname) == 'Darwin' ]]; then
 elif [[ $(uname) == 'Linux' ]];then
     set rtp+=$HOME/.linuxbrew/opt/fzf
 fi
-
 setopt APPEND_HISTORY
 setopt HIST_IGNORE_DUPS
 setopt SHARE_HISTORY

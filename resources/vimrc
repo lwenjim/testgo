@@ -194,7 +194,7 @@ let g:Lf_GtagsSource = 1
 let g:Lf_Gtagsconf = '/usr/local/opt/global/share/gtags/gtags.conf'
 let g:Lf_Gtagslabel = 'native-pygments'
 let g:Lf_ReverseOrder = 0
-let g:Lf_DefaultMode = 'NameOnly'
+let g:Lf_DefaultMode = 'FullPath'
 let g:Lf_DefaultMode = 'Fuzzy'
 noremap <leader>f   :LeaderfSelf<cr>
 noremap <leader>fm  :LeaderfMru<cr>
