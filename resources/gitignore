@@ -36,7 +36,6 @@ debug.go
 menus.txt
 test.json
 test.tsx
-config.ts
 debug.go.bak
 coverage.out
 main.coverprofile
@@ -64,6 +63,5 @@ __debug*
 *.http
 test.tsx
 debug.go
-config.ts
 test.json
 .history*

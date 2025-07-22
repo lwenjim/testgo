@@ -427,6 +427,7 @@ GeneralConfForNginx() {
         #    ["groupsv"]=19102
         #        ["chatbot"]=19104
         # ["deliversv"]=19105
+        ["riskcontrolsv"]=19106
     )
     filename=/usr/local/etc/openresty/servers/rpc.conf
     if [[ $debug ]]; then
