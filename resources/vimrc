@@ -43,6 +43,7 @@ autocmd FileType c,cpp,objc vnoremap <buffer><Leader>cf :ClangFormat<CR>
 autocmd FileType c,cpp,objc map <buffer><Leader>x <Plug>(operator-clang-format)
 autocmd FileType sh,zsh setlocal makeprg=shellcheck\ -f\ gcc\ --exclude=2206,2034,1091,2086,1090,2155,2154,2086,1019
 "autocmd FileType sh,zsh setlocal errorformat=%f:%l:%c:\ %m
+
 ""--------------
 "" vim-go配置
 ""--------------
