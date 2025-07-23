@@ -175,7 +175,7 @@ let g:Lf_CommandMap = {'<C-K>': ['<Up>'], '<C-J>': ['<Down>']}
 let g:Lf_ShowDevIcons = 0
 let g:Lf_WorkingDirectoryMode = 'a'
 let g:Lf_RootMarkers = ['.workspace_root']
-let g:Lf_UseVersionControlTool=0
+let g:Lf_UseVersionControlTool=1
 let g:Lf_DefaultExternalTool='rg'
 let g:Lf_ExternalCommand = 'fd --ignore-file /Users/jim/.ignore.ag.rg -H "%s"'
 let g:Lf_PreviewInPopup = 0
@@ -196,7 +196,6 @@ let g:Lf_Gtagsconf = '/usr/local/opt/global/share/gtags/gtags.conf'
 let g:Lf_Gtagslabel = 'native-pygments'
 let g:Lf_ReverseOrder = 0
 let g:Lf_DefaultMode = 'FullPath'
-let g:Lf_DefaultMode = 'Fuzzy'
 noremap <leader>f   :LeaderfSelf<cr>
 noremap <leader>fm  :LeaderfMru<cr>
 noremap <leader>ff  :LeaderfFunction<cr>
@@ -335,19 +334,13 @@ highlight Folded ctermfg=NONE ctermbg=NONE guibg=NONE guifg=NONE
 highlight Folded guibg=NONE guifg=NONE
 highlight FoldColumn guibg=NONE guifg=NONE
 
-" 显示特殊字符
 set list
 set listchars=tab:→\ ,trail:·,nbsp:␣,eol:↵
 
-" 高亮尾随空格
 highlight ExtraWhitespace ctermbg=red guibg=red
 match ExtraWhitespace /\s\+$/
 
-" 编码设置
 set encoding=utf-8
 set fileencoding=utf-8
 
-" 自动检测文件换行符类型
 set fileformats=unix,dos,mac
-
-nnoremap <s-f6> :GoRename<cr>
