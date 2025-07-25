@@ -429,7 +429,7 @@ GeneralConfForNginx() {
 		#["deliversv"]=19105
 		["riskcontrolsv"]=19106
 	)
-	filename=/usr/local/etc/openresty/servers/rpc.conf
+	filename=/usr/local/etc/nginx/servers/rpc.conf
 	if [[ $debug ]]; then
 		echo >$filename
 	fi
@@ -459,9 +459,9 @@ EOF
 		fi
 	done
 	if ps -ef | grep nginx >/dev/null; then
-		/usr/local/bin/openresty -s reload
+		/usr/local/bin/nginx -s reload
 	else
-		brew services reload openresty
+		brew services reload nginx
 	fi
 }
 
