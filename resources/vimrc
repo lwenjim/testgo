@@ -334,6 +334,10 @@ highlight clear CursorLine
 highlight Folded ctermfg=NONE ctermbg=NONE guibg=NONE guifg=NONE
 highlight Folded guibg=NONE guifg=NONE
 highlight FoldColumn guibg=NONE guifg=NONE
+highlight IncSearch ctermfg=Black ctermbg=Yellow
+highlight IncSearch guifg=#FFFFFF guibg=#FF00FF
+highlight IncSearch ctermfg=Black ctermbg=Cyan
+highlight Search    ctermfg=White ctermbg=Red
 
 set list
 set listchars=tab:→\ ,trail:·,nbsp:␣,eol:↵
