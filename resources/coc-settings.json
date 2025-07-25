@@ -57,7 +57,7 @@
             }
         },
         "lua": {
-            "command": "/Users/jim/.vscode/extensions/sumneko.lua-3.10.6-darwin-x64/server/bin/lua-language-server",
+            "command": "lua-language-server",
             "args": ["-E", "/Users/jim/.vscode/extensions/sumneko.lua-3.10.6-darwin-x64/server/main.lua"],
             "rootPatterns": [".git"],
             "filetypes": ["lua"]
