@@ -41,7 +41,6 @@ if [[ $(uname) == 'Darwin' ]]; then
         source "$HB_CNF_HANDLER"
     fi
     source $HOME/.fzf.zsh
-    source $HOME/.cargo/env
     source $HOME/.iterm2_shell_integration.zsh
     source <(kubectl completion zsh)
     set rtp+=/usr/local/opt/fzf
