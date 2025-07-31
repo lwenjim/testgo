@@ -34,6 +34,11 @@
             "command": "kotlin-language-server",
             "filetypes": ["kotlin"]
         },
+        "rust": {
+            "command": "rust-analyzer",
+            "filetypes": ["rust"],
+            "rootPatterns": ["Cargo.toml"]
+        },
         "rust-analyzer":{
             "enable":true,
             "filetypes":["rs"]
