@@ -12,7 +12,12 @@ alias gawk='/usr/local/bin/gawk -i $HOME/Workdata/goland/src/jspp/testgo/shell/a
 alias ag='ag --color-match 35:48 --color-path 6:37 '
 alias rg='rg --ignore-file=$HOME/.gitignore --colors "match:fg:magenta" --colors "line:bg:black" '
 alias vim='/usr/local/bin/vim'
+alias gitcomment="git log --name-status --author liuwenjin@jspp.cn --reverse|grep 'feat:'|sed 's/^[[:space:]]*//'"
+alias python='/usr/local/bin/python3'
+alias gitchange='PAGER=less git log --name-status --author liuwenjin@jspp.cn'
+alias gitchangecontent='PAGER=less git log -p --author liuwenjin@jspp.cn'
 
+export GOTELEMETRY=off
 export PATH="/usr/local/bin:$PATH"
 export PAGER='bat --tabs 4 --theme gruvbox-dark -p --paging=never '
 export WORDCHARS='*?_-.[]~=&;!#$%^(){}<>'

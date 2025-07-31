@@ -303,6 +303,12 @@ set cursorline
 set fileformats=unix,dos,mac
 set list
 set listchars=tab:→\ ,space:·
+set nofoldenable
+set viewoptions-=folds
+set viewoptions=cursor,curdir,slash,unix
+set viewoptions-=folds
+
+autocmd BufRead * set foldlevel=99
 
 syntax on
 filetype plugin indent on
@@ -318,7 +324,6 @@ let g:node_client_debug = 0
 let g:python3_host_prog = '/usr/local/bin/python3'
 let g:Lf_ShowRelativePath = 1
 
-
 nnoremap <tab>   :bnext<Return>
 nnoremap <c-tab> :bprev<Return>
 vnoremap <c-c>   "+y
@@ -326,9 +331,6 @@ nnoremap <esc>   :noh<return>
 
 set background=dark
 colorscheme codedark
-"colorscheme  gruvbox
-"colorscheme molokai
-"colorscheme onedark
 
 highlight clear CursorLine
 highlight Folded ctermfg=NONE ctermbg=NONE guibg=NONE guifg=NONE

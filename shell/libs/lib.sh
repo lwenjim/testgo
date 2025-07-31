@@ -390,7 +390,7 @@ UpdateGitHook() {
 }
 
 Ip() {
-	ifconfig | grep "inet " | grep -v '127.0.0.1' | awk -F "inet" '{print $2}' | awk -F "netmask" '{print $1}' | tr -d " "
+	ifconfig | grep "inet " | grep -v '127.0.0.1' | awk -F "inet" '{print $2}' | awk -F "netmask" '{print $1}' |sed 's/^[[:space:]]*//g'
 }
 
 Help() {
@@ -427,7 +427,7 @@ GeneralConfForNginx() {
 		#["net-security-data-report"]=19103
 		#["chatbot"]=19104
 		#["deliversv"]=19105
-		["riskcontrolsv"]=19106
+		# ["riskcontrolsv"]=19106
 	)
 	filename=/usr/local/etc/nginx/servers/rpc.conf
 	if [[ $debug ]]; then
@@ -445,8 +445,9 @@ GeneralConfForNginx() {
         server {
             server_name $server-svc;
             listen 9090 http2;
-#            access_log /tmp/$server-svc_nginx.log combined;
-
+       		grpc_connect_timeout 1h;
+        	grpc_read_timeout 1h;
+        	grpc_send_timeout 1h;
             location / {
                 grpc_pass grpc://127.0.0.1:$targetPort;
             }
