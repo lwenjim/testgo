@@ -16,6 +16,8 @@ alias gitcomment="git log --name-status --author liuwenjin@jspp.cn --reverse|gre
 alias python='/usr/local/bin/python3'
 alias gitchange='PAGER=less git log --name-status --author liuwenjin@jspp.cn'
 alias gitchangecontent='PAGER=less git log -p --author liuwenjin@jspp.cn'
+alias netlisten="netstat -nat -p tcp|grep -v '::'|grep -i listen"
+alias netlisten46="netlisten|grep -w tcp4;netlisten|grep -w tcp6"
 
 export GOTELEMETRY=off
 export PATH="/usr/local/bin:$PATH"

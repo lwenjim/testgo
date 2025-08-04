@@ -351,5 +351,7 @@ set encoding=utf-8
 set fileencoding=utf-8
 set fileformats=unix,dos,mac
 
+autocmd VimEnter * silent! call coc#rpc#start_server()
+
 nnoremap @ #
 nnoremap ! *
