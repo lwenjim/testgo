@@ -34,15 +34,6 @@
             "command": "kotlin-language-server",
             "filetypes": ["kotlin"]
         },
-        "rust": {
-            "command": "rust-analyzer",
-            "filetypes": ["rust"],
-            "rootPatterns": ["Cargo.toml"]
-        },
-        "rust-analyzer":{
-            "enable":true,
-            "filetypes":["rs"]
-        },
         "clangd": {
             "command": "clangd",
             "rootPatterns": ["compile_flags.txt", "compile_commands.json"],
@@ -69,11 +60,6 @@
         }
     },
     "diagnostic.refreshOnInsertMode":true,
-    "workspace.ignoredFolders": [
-        "$HOME",
-        "$HOME/.cargo/**",
-        "$HOME/.rustup/**"
-    ],
     "inlayHint.enable": false,
     "inlayHint.enableParameter": false,
     "java.jdt.ls.java.home":"/Users/jim/Library/Java/JavaVirtualMachines/openjdk-22.0.1/Contents/Home",
@@ -92,5 +78,8 @@
     ],
     "[java]": {
         "semanticTokens.enable": true
-    }
+    },
+    "diagnostic.ignoredFiletypes": ["log"],
+    "eslint.ignorePatterns": ["**/node_modules/**"],
+    "coc.preferences.ignoredRootPaths": ["node_modules", "dist"]
 }
