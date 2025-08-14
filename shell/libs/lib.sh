@@ -366,7 +366,7 @@ PortForwardSimple() {
 			jspp-kubectl port-forward "${name}" "${2}:9090" >"/tmp/$1.log" 2>&1 &
 		fi
 	fi
-	local template="%-2s %-19s %-30s %-10s\n"
+	local template="%02s %-19s %-30s %-10s\n"
 	if [ ! $? ]; then
 		printf "${template}" ${index} "${1}" "${name}" "failed"
 	else
@@ -390,7 +390,7 @@ UpdateGitHook() {
 }
 
 Ip() {
-	ifconfig | grep "inet " | grep -v '127.0.0.1' | awk -F "inet" '{print $2}' | awk -F "netmask" '{print $1}' |sed 's/^[[:space:]]*//g'
+	ifconfig | grep "inet 192" | grep -v '127.0.0.1' | awk -F "inet" '{print $2}' | awk -F "netmask" '{print $1}' |sed 's/^[[:space:]]*//g'
 }
 
 Help() {
@@ -419,7 +419,7 @@ GeneralConfForNginx() {
 		#["messagesv"]=19094
 		#["paysv"]=19095
 		#["pushersv"]=19097
-		#["authsv"]=19098
+		["authsv"]=19098
 		#["uploadsv"]=19099
 		#["usersv"]=19100
 		#["squaresv"]=19101

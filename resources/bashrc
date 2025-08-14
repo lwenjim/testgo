@@ -9,7 +9,7 @@ alias ifd='fd'
 alias code='/usr/local/bin/code 2>/dev/null '
 alias ls=$HOME'/.cargo/bin/exa -s modified'
 alias gawk='/usr/local/bin/gawk -i $HOME/Workdata/goland/src/jspp/testgo/shell/awk/lib.awk '
-alias ag='ag --color-match 35:48 --color-path 6:37 '
+alias ag='ag  --ignore-dir dist --ignore-dir node_modules --ignore-dir .vscode --ignore-dir .history --color-match 35:48 --color-path 6:37 '
 alias rg='rg --ignore-file=$HOME/.gitignore --colors "match:fg:magenta" --colors "line:bg:black" '
 alias vim='/usr/local/bin/vim'
 alias gitcomment="git log --name-status --author liuwenjin@jspp.cn --reverse|grep 'feat:'|sed 's/^[[:space:]]*//'"

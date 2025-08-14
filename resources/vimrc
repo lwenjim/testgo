@@ -85,6 +85,9 @@ let g:go_fmt_autosave = 1
 let g:go_gopls_options = ['-remote', "127.0.0.1:39999"]
 let g:go_completion_enabled = 1
 let g:coc_disable_transparent_cursor = 1
+"let g:go_code_completion_autobuild = 1
+"let g:go_complete_enabled = 1
+"let g:go_debug=['lsp']
 
 "--------------
 " coc.nvim推荐的配置--------------------

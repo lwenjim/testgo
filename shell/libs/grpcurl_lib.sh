@@ -227,3 +227,56 @@ function EditUserInfo() {
     ' -plaintext usersv-svc:9090 rpc.User.EditUserInfo 2>&1)
   echo $addResp
 }
+
+function EmojiCategory() {
+  addResp=$(grpcurl -d '
+    {
+      "auth": {
+        "token": {
+          "user_id": 10043
+        }
+      },
+      "info": {
+        "card": {}
+      }
+    }
+    ' -plaintext usersv-svc:9090 rpc.Admin.EmojiCategory 2>&1)
+  echo $addResp
+}
+
+function registerDevice() {
+  addResp=$(grpcurl -d '
+{
+  "auth":{
+    "request_id":"-xkWtPlHRz",
+    "token":{
+      "country_code":86,
+      "device_id":12077,
+      "device_type":1,
+      "expires":211472854270,
+      "user_id":24339
+    }
+  },
+  "info":{
+    "build_info":{
+      "build_number":4260,
+      "build_time":1755153523005,
+      "bundle":"OPPO/PHJ110H1/OP526D13/TP1A.220905.001/S.1d81cb6-5f471user/release-keys",
+      "channel":4,
+      "device_name":"OPPO-PHJ110",
+      "device_type":1,
+      "package_channel":4,
+      "version":"4.26.0"
+    },
+    "client_ip":"218.1.139.125:43518",
+    "device_id":"81c3f61fb06a0992",
+    "language":"zh",
+    "oaid":"2EC527F0C406473EA747961FFB7738D0c1faa07a9c8d2ed6e3ad0fe25512a39c",
+    "os_type":"OPPO",
+    "time_zone":"Asia/Shanghai",
+    "timestamp":1755153523007
+  }
+}
+    ' -plaintext authsv-svc:9090 rpc.Auth.RegisterDevice 2>&1)
+  echo $addResp
+}
