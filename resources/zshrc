@@ -51,4 +51,4 @@ setopt APPEND_HISTORY
 setopt HIST_IGNORE_DUPS
 setopt SHARE_HISTORY
 setopt EXTENDED_HISTORY
-/usr/local/bin/composer completion bash
+source <(/usr/local/bin/composer completion bash)

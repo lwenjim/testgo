@@ -1,22 +1,5 @@
 {
     "languageserver": {
-        "rubocop": {
-            "command": "rubocop",
-            "args": ["--lsp"],
-            "filetypes": ["ruby"]
-        },
-        "dart": {
-            "command": "dart_language_server",
-            "args": [],
-            "filetypes": ["dart"],
-            "initializationOptions": {},
-            "settings": {
-                "dart": {
-                    "validation": {},
-                    "completion": {}
-                }
-            }
-        },
         "golang": {
             "command": "/Users/jim/Workdata/goland/bin/gopls",
             "rootPatterns": ["go.mod", "go.work", ".git"],
@@ -30,10 +13,6 @@
             },
             "args": ["-remote", "127.0.0.1:39999"]
         },
-        "kotlin": {
-            "command": "kotlin-language-server",
-            "filetypes": ["kotlin"]
-        },
         "clangd": {
             "command": "clangd",
             "rootPatterns": ["compile_flags.txt", "compile_commands.json"],
@@ -43,14 +22,6 @@
             "command": "bash-language-server",
             "args": ["start"],
             "filetypes": ["sh"]
-        },
-        "intelephense": {
-            "command": "intelephense",
-            "args": ["--stdio"],
-            "filetypes": ["php"],
-            "initializationOptions": {
-                "storagePath": "/tmp/intelephense"
-            }
         },
         "lua": {
             "command": "lua-language-server",

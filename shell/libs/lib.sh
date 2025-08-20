@@ -419,7 +419,7 @@ GeneralConfForNginx() {
 		#["messagesv"]=19094
 		#["paysv"]=19095
 		#["pushersv"]=19097
-		["authsv"]=19098
+		#["authsv"]=19098
 		#["uploadsv"]=19099
 		#["usersv"]=19100
 		#["squaresv"]=19101
@@ -427,7 +427,7 @@ GeneralConfForNginx() {
 		#["net-security-data-report"]=19103
 		#["chatbot"]=19104
 		#["deliversv"]=19105
-		# ["riskcontrolsv"]=19106
+		#["riskcontrolsv"]=19106
 	)
 	filename=/usr/local/etc/nginx/servers/rpc.conf
 	if [[ $debug ]]; then
