@@ -280,3 +280,29 @@ function registerDevice() {
     ' -plaintext authsv-svc:9090 rpc.Auth.RegisterDevice 2>&1)
   echo $addResp
 }
+
+function GetLivePortraitsInfo() {
+  addResp=$(grpcurl -d '
+    {
+      "auth": {
+        "token": {
+          "user_id": 10043
+        }
+      }
+    }
+    ' -plaintext usersv-svc:9090 rpc.User.GetLivePortraitsInfo 2>&1)
+  echo $addResp
+}
+
+function GetResultLivePortraitsInfo() {
+  addResp=$(grpcurl -d '
+    {
+      "auth": {
+        "token": {
+          "user_id": 10043
+        }
+      }
+    }
+    ' -plaintext usersv-svc:9090 rpc.User.GetResultLivePortraitsInfo 2>&1)
+  echo $addResp
+}
