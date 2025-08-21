@@ -357,13 +357,13 @@ PortForwardSimple() {
 	fi
 	if [[ "mongo mysql redis" == *"${1}"* ]]; then
 		name="${1}-0"
-		jspp-kubectl port-forward "${name}" --address 0.0.0.0 "${2}:${2}" >"/tmp/$1.log" 2>&1 &
+		PortForwardSimpleDo2 "${name}" "${2}" >"/tmp/$1.log" 2>&1 &
 	else
 		name=$(jspp-kubectl get pods | grep "$1" | awk '{if(NR==1){print $1}}')
 		if [[ "$name" == "" ]]; then
 			return 1
 		else
-			jspp-kubectl port-forward "${name}" "${2}:9090" >"/tmp/$1.log" 2>&1 &
+			PortForwardSimpleDo "${name}" "${2}" >"/tmp/$1.log" 2>&1 &
 		fi
 	fi
 	local template="%02s %-19s %-30s %-10s\n"
@@ -372,6 +372,26 @@ PortForwardSimple() {
 	else
 		printf "${template}" ${index} "${1}" "${name}" "success"
 	fi
+}
+
+PortForwardSimpleDo() {
+	name=$1
+	port=$2
+	while true; do
+		jspp-kubectl port-forward "${name}" "${port}:9090"
+		echo "${name} Port-forward connection lost. Retrying in 5 seconds..."
+		sleep 5
+	done
+}
+
+PortForwardSimpleDo2() {
+	name=$1
+	port=$2
+	while true; do
+		jspp-kubectl port-forward "${name}" --address 0.0.0.0 "${port}:${port}"
+		echo "${name} Port-forward connection lost. Retrying in 5 seconds..."
+		sleep 5
+	done
 }
 
 UpdateGitHook() {
@@ -390,7 +410,7 @@ UpdateGitHook() {
 }
 
 Ip() {
-	ifconfig | grep "inet 192" | grep -v '127.0.0.1' | awk -F "inet" '{print $2}' | awk -F "netmask" '{print $1}' |sed 's/^[[:space:]]*//g'
+	ifconfig | grep "inet 192" | grep -v '127.0.0.1' | awk -F "inet" '{print $2}' | awk -F "netmask" '{print $1}' | sed 's/^[[:space:]]*//g'
 }
 
 Help() {
@@ -676,4 +696,17 @@ KeepaliveForword() {
 		return
 	fi
 	PortForward "$@"
+}
+
+StartAdminWebsite() {
+	if [[ $(node --version) != "v14.21.3" ]]; then
+		nvm use v14 --default
+	fi
+	cd $GOPATH/src/jspp/admin-website || exit 1
+	npm run dev >/tmp/StartAdminWebsite.log 2>&1 &
+}
+
+StopAdminWebsite() {
+	ps -ef|grep kubectl|awk '{print $2}'|xargs kill -9
+	ps -ef|grep 'start.sh PortForward'|awk '{print $2}'|xargs kill -9
 }
