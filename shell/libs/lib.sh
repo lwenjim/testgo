@@ -394,6 +394,11 @@ PortForwardSimpleDo2() {
 	done
 }
 
+UnPortForward() {
+	ps -ef|grep kubectl|awk '{print $2}'|xargs kill -9
+	ps -ef|grep 'start.sh PortForward'|awk '{print $2}'|xargs kill -9
+}
+
 UpdateGitHook() {
 	cd $GOPATH/src/jspp || exit 131
 	for forService in "$GOPATH"/src/jspp/**; do
@@ -706,7 +711,3 @@ StartAdminWebsite() {
 	npm run dev >/tmp/StartAdminWebsite.log 2>&1 &
 }
 
-StopAdminWebsite() {
-	ps -ef|grep kubectl|awk '{print $2}'|xargs kill -9
-	ps -ef|grep 'start.sh PortForward'|awk '{print $2}'|xargs kill -9
-}
