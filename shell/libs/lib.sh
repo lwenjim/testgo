@@ -378,7 +378,7 @@ PortForwardSimpleDo() {
 	name=$1
 	port=$2
 	while true; do
-		jspp-kubectl port-forward "${name}" "${port}:9090"
+		jspp-kubectl port-forward "${name}" "${port}:9090" >>/tmp/${name}.log 2>&1
 		echo "${name} Port-forward connection lost. Retrying in 5 seconds..."
 		sleep 5
 	done
@@ -388,7 +388,7 @@ PortForwardSimpleDo2() {
 	name=$1
 	port=$2
 	while true; do
-		jspp-kubectl port-forward "${name}" --address 0.0.0.0 "${port}:${port}"
+		jspp-kubectl port-forward "${name}" --address 0.0.0.0 "${port}:${port}" >>/tmp/${name}.log 2>&1
 		echo "${name} Port-forward connection lost. Retrying in 5 seconds..."
 		sleep 5
 	done
