@@ -18,6 +18,7 @@ declare -A ServiceServers=(
 	["favoritesv"]=64452
 	["openapi"]=64453
 	["groupsv"]=64454
+	["momentsv"]=64455
 )
 
 ServiceServersOrder=(
@@ -39,6 +40,7 @@ ServiceServersOrder=(
 	favoritesv
 	openapi
 	groupsv
+	momentsv
 )
 
 debug=false
@@ -377,8 +379,10 @@ PortForwardSimple() {
 PortForwardSimpleDo() {
 	name=$1
 	port=$2
+	local index=1
+	local maxIndex=1000
 	while true; do
-		name=$(echo $name|awk -F'-' '{print $1}')
+		name=$(echo $name | awk -F'-' '{print $1}')
 		name=$(jspp-kubectl get pods | grep "$name" | awk '{if(NR==1){print $1}}')
 		if [[ "$name" == "" ]]; then
 			return 1
@@ -386,14 +390,20 @@ PortForwardSimpleDo() {
 		jspp-kubectl port-forward "${name}" "${port}:9090" >>/tmp/${name}.log 2>&1
 		echo "${name} Port-forward connection lost. Retrying in 5 seconds..."
 		sleep 5
+		((index++))
+		if [[ $index -gt $maxIndex ]]; then
+			break
+		fi
 	done
 }
 
 PortForwardSimpleDo2() {
 	name=$1
 	port=$2
+	local index=1
+	local maxIndex=1000
 	while true; do
-		name=$(echo $name|awk -F'-' '{print $1}')
+		name=$(echo $name | awk -F'-' '{print $1}')
 		name=$(jspp-kubectl get pods | grep "$name" | awk '{if(NR==1){print $1}}')
 		if [[ "$name" == "" ]]; then
 			return 1
@@ -401,12 +411,16 @@ PortForwardSimpleDo2() {
 		jspp-kubectl port-forward "${name}" --address 0.0.0.0 "${port}:${port}" >>/tmp/${name}.log 2>&1
 		echo "${name} Port-forward connection lost. Retrying in 5 seconds..."
 		sleep 5
+		((index++))
+		if [[ $index -gt $maxIndex ]]; then
+			break
+		fi
 	done
 }
 
 UnPortForward() {
-	ps -ef|grep kubectl|awk '{print $2}'|xargs kill -9
-	ps -ef|grep 'start.sh PortForward'|awk '{print $2}'|xargs kill -9
+	ps -ef | grep kubectl | awk '{print $2}' | xargs kill -9
+	ps -ef | grep 'start.sh PortForward' | awk '{print $2}' | xargs kill -9
 }
 
 UpdateGitHook() {
@@ -456,13 +470,14 @@ GeneralConfForNginx() {
 		#["pushersv"]=19097
 		#["authsv"]=19098
 		#["uploadsv"]=19099
-		#["usersv"]=19100
+		["usersv"]=19100
 		#["squaresv"]=19101
 		#["groupsv"]=19102
 		#["net-security-data-report"]=19103
 		#["chatbot"]=19104
 		#["deliversv"]=19105
 		#["riskcontrolsv"]=19106
+		["momentsv"]=19107
 	)
 	filename=/usr/local/etc/nginx/servers/rpc.conf
 	if [[ $debug ]]; then
@@ -720,4 +735,3 @@ StartAdminWebsite() {
 	cd $GOPATH/src/jspp/admin-website || exit 1
 	npm run dev >/tmp/StartAdminWebsite.log 2>&1 &
 }
-

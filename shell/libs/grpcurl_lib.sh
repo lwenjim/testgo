@@ -306,3 +306,16 @@ function GetResultLivePortraitsInfo() {
     ' -plaintext usersv-svc:9090 rpc.User.GetResultLivePortraitsInfo 2>&1)
   echo $addResp
 }
+
+function AdminGetMomentsExamine() {
+  addResp=$(grpcurl -d '
+    {
+      "auth": {
+        "token": {
+          "user_id": 24417
+        }
+      }
+    }
+    ' -plaintext momentsv-svc:9090 rpc.Moment.AdminGetMomentsExamine 2>&1)
+  echo $addResp
+}
