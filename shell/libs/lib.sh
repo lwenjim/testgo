@@ -45,6 +45,34 @@ ServiceServersOrder=(
 
 debug=false
 
+CheckoutAllForce() {
+	local path=~/Workdata/goland/src/jspp
+	if [[ ! -d $path ]]; then
+		echo "not exists "$path
+		return
+	fi
+	cur=$(pwd)
+	cd $path
+	for item in *; do
+		if [ -f $path/$item ]; then
+			continue
+		fi
+		if [ ! -d $path/$item/.git/hooks ]; then
+			continue
+		fi
+		cd $item || exit 2
+		echo $item
+		for branch in master develop; do
+			git co $branch
+			git pull
+			echo $branch
+		done
+
+		cd ..
+	done
+	cd $cur
+}
+
 CheckoutAll() {
 	local path=~/Workdata/goland/src/jspp
 	if [[ ! -d $path ]]; then
