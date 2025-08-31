@@ -62,12 +62,10 @@ CheckoutAllForce() {
 		fi
 		cd $item || exit 2
 		echo $item
-		for branch in master develop; do
+		for branch in develop master; do
 			git co $branch
 			git pull
-			echo $branch
 		done
-
 		cd ..
 	done
 	cd $cur
