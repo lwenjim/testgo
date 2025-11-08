@@ -1,11 +1,9 @@
 package main
 
-import (
-	"fmt"
-	"math/rand"
-	"time"
-)
-
 func main() {
-	fmt.Println(rand.New(rand.NewSource(time.Now().UnixNano())))
+	go func() {
+		go func() {
+			panic("111")
+		}()
+	}()
 }
