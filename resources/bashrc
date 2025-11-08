@@ -121,7 +121,6 @@ export PATH="/home/linuxbrew/.linuxbrew/bin":$PATH
 export PATH=".":$PATH
 export PATH="/Users/jim/Workdata/goland/protoc-21.12/bin":$PATH
 
-
 export ZSH_THEME_GIT_PROMPT_PREFIX="%{$reset_color%}%{$fg[green]%}["
 export ZSH_THEME_GIT_PROMPT_SUFFIX="]%{$reset_color%}"
 export ZSH_THEME_GIT_PROMPT_DIRTY="%{$fg[red]%}*%{$reset_color%}"
