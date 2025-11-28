@@ -1,9 +1,7 @@
 package main
 
+import "fmt"
+
 func main() {
-	go func() {
-		go func() {
-			panic("111")
-		}()
-	}()
+	fmt.Println("abc")
 }

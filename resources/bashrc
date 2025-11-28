@@ -33,7 +33,7 @@ export GOFLAGS=""
 export GOPRIVATE=code.jspp.com
 export GOOS=darwin
 export GOARCH=amd64
-export GOROOT="$HOME/Workdata/goland/go1.21.12"
+export GOROOT="$HOME/Workdata/goland/go1.25.4"
 export CGO_ENABLED=0
 export GOMAXPROCS=12
 export CARGO_NET_GIT_FETCH_WITH_CLI=true
@@ -75,7 +75,7 @@ export ISABLE_MAGIC_FUNCTIONS=true
 export RUST_BACKTRACE=0
 export ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=60'
 export JMETER_HOME=/usr/local/apache-jmeter-5.1.1
-#export HOMEBREW_NO_AUTO_UPDATE=
+export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_INSTALL_CLEANUP=
 #export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=
 export PYTHONDONTWRITEBYTECODE=1
