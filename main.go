@@ -1,7 +1,12 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"io"
+	"os"
+)
 
 func main() {
-	fmt.Println("abc")
+	data, _ := io.ReadAll(os.Stdin)
+	fmt.Printf("%v\n", string(data))
 }
