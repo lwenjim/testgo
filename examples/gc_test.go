@@ -27,7 +27,9 @@ func allocate() {
 
 func TestGC(t *testing.T) {
 	f, _ := os.Create("trace.out")
-	defer f.Close()
+	defer func ()  {
+		_ =f.Close()
+	}()
 	_ = trace.Start(f)
 	defer trace.Stop()
 
