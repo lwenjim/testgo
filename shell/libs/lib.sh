@@ -520,7 +520,7 @@ GeneralConfForNginx() {
 		read -r -d '' template <<EOF
         server {
             server_name $server-svc;
-            listen 9090 http2;
+            listen 9090;
        		grpc_connect_timeout 1h;
         	grpc_read_timeout 1h;
         	grpc_send_timeout 1h;

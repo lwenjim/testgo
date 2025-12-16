@@ -36,16 +36,12 @@ if [[ $(uname) == 'Darwin' ]]; then
     fi
     source $(brew --prefix)/opt/nvm/nvm.sh
     source $(brew --prefix)/opt/nvm/etc/bash_completion.d/nvm
-    HB_CNF_HANDLER="$(brew --repository)/Library/Taps/homebrew/homebrew-command-not-found/handler.sh"
-    if [ -f "$HB_CNF_HANDLER" ]; then
-        source "$HB_CNF_HANDLER"
-    fi
     source $HOME/.fzf.zsh
     source $HOME/.iterm2_shell_integration.zsh
     source <(kubectl completion zsh)
-    set rtp+=/usr/local/opt/fzf
+    rtp+=/usr/local/opt/fzf
 elif [[ $(uname) == 'Linux' ]];then
-    set rtp+=$HOME/.linuxbrew/opt/fzf
+    rtp+=$HOME/.linuxbrew/opt/fzf
 fi
 setopt APPEND_HISTORY
 setopt HIST_IGNORE_DUPS
@@ -55,3 +51,4 @@ source <(/usr/local/bin/composer completion bash)
 if [[ -f ~/.bash_profile ]];then
     source ~/.bash_profile
 fi
+export https_proxy=http://127.0.0.1:33210 http_proxy=http://127.0.0.1:33210 all_proxy=socks5://127.0.0.1:33210
