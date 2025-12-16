@@ -19,6 +19,10 @@ alias gitchangecontent='PAGER=less git log -p --author liuwenjin@jspp.cn'
 alias netlisten="netstat -nat -p tcp|grep -v '::'|grep -i listen"
 alias netlisten46="netlisten|grep -w tcp4;netlisten|grep -w tcp6"
 
+export GO111MODULE=on
+export SERVER_ENV=local
+export SERVER_PORT=8080
+export GRPC_SERVER_PORT=8080
 export GOTELEMETRY=off
 export PATH="/usr/local/bin:$PATH"
 export PAGER='bat --tabs 4 --theme gruvbox-dark -p --paging=never '
@@ -33,7 +37,7 @@ export GOFLAGS=""
 export GOPRIVATE=code.jspp.com
 export GOOS=darwin
 export GOARCH=amd64
-export GOROOT="$HOME/Workdata/goland/go1.25.4"
+export GOROOT="$HOME/Workdata/goland/go1.23.1"
 export CGO_ENABLED=0
 export GOMAXPROCS=12
 export CARGO_NET_GIT_FETCH_WITH_CLI=true

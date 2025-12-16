@@ -319,3 +319,24 @@ function AdminGetMomentsExamine() {
     ' -plaintext momentsv-svc:9090 rpc.Moment.AdminGetMomentsExamine 2>&1)
   echo $addResp
 }
+
+function Whoami() {
+  local data=$(curl \
+    --header "Content-Type: application/json" \
+    --header "x-player-id: 019b01c3-d8c2-7f36-a0a0-71b9d8a61bd3" \
+    --header "x-player-credential: NvxkbyRwXAHNiIQVQ7NrroEVwBLgkS2e" \
+    --data '{"initial_data_group": "I feel happy."}' \
+    http://localhost:8080/app.player.PlayerService/Whoami 2>&1)
+  echo $data
+}
+
+function Register() {
+  local data=$(curl \
+    --header "Content-Type: application/json" \
+    --header "x-player-id: 1" \
+    --header "x-player-credential: xxx" \
+    --header "x-debug-skip-auth: xxx" \
+    --data '{"initial_data_group": "I feel happy."}' \
+    http://localhost:8080/app.player.PlayerService/Register 2>&1)
+  echo $data
+}
