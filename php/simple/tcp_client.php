@@ -8,7 +8,7 @@ if ($socket === false) {
 
 echo "attemp to connect server ...\n";
 
-$host = '192.168.1.16';
+$host = '192.168.1.3';
 $port = 9501;
 $timeout = 10;
 
