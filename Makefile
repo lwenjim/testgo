@@ -1,3 +1,5 @@
+include simple/Makefile
+
 lint:
 	@echo Lint start
 	@golangci-lint run -v ./...
@@ -15,4 +17,5 @@ clean:
 	@rm -f *.coverprofile
 	@rm -f coverage.*
 	@echo Clean Finish
+
 .PHONY: lint test cover clean
