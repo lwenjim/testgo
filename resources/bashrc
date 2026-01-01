@@ -51,7 +51,7 @@ export C_INCLUDE_PATH=
 export CPLUS_INCLUDE_PATH=
 export LD_LIBRARY_PATH=
 export LIBRARY_PATH=
-export MANPAGER="bat --tabs 4 --theme gruvbox-dark -p --paging=never "
+export MANPAGER="bat --tabs 4 --theme gruvbox-dark -p "
 export FZF_BASE=/usr/local/Cellar/fzf/0.49.0
 export FZF_COMPLETION_TRIGGER='**'
 export FZF_DEFAULT_COMMAND="fd --exclude={.git,.idea,.vscode,.sass-cache,node_modules,build,.history} --hidden --type file"
