@@ -6,7 +6,7 @@ if ($socket === false) {
     die("socket_create failed" . socket_strerror(socket_last_error()));
 }
 
-$host = '192.168.1.3';
+$host = '127.0.0.1';
 $port = 9501;
 $timeout = 10;
 
@@ -14,21 +14,30 @@ $result = socket_connect($socket, $host, $port);
 if ($result === false) {
     die('socket_connect() failed:' . socket_strerror(socket_last_error()));
 }
-
+$config = require "config.php";
 echo sprintf("成功连接服务器\n");
-while (true) {
-    $response = socket_read($socket, 1024);
-    if ($response === false) {
-        break;
+$pid = pcntl_fork();
+if ($pid == -1) {
+    die("failed to fork");
+} elseif ($pid) {
+    for ($i = 0; $i < 1000; $i++) {
+        $message = fread(STDIN, 1024) . "\n";
+        if (strlen($message) > 0) {
+            socket_write($socket, $message, strlen($message));
+        }
     }
-    $response =     trim($response);
-    if (strlen($response)>0) {
-        echo sprintf("%s:%s->%s\n", $host, $port, $response);
+    pcntl_waitpid($pid, $status, WNOHANG);
+    socket_close($socket);
+} else {
+    for ($i = 0; $i < 1000; $i++) {
+        $response = socket_read($socket, 1024);
+        if ($response === false) {
+            break;
+        }
+        $response =     trim($response);
+        if (strlen($response) > 0) {
+            echo sprintf("%s: %s\n", $config["server"]["name"], $response);
+        }
     }
-    $message = fread(STDIN, 1024) . "\n";
-    if (strlen($message) > 0) {
-        socket_write($socket, $message, strlen($message));
-    }
+    exit(0);
 }
-
-socket_close($socket);
