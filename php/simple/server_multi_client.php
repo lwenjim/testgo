@@ -17,6 +17,30 @@ if (!socket_listen($socket, 5)) {
 }
 $config = require "config.php";
 echo sprintf("服务器启动成功\n", $address, $port);
+
+$key = ftok(__FILE__, 'a');
+$queue = msg_get_queue($key, 0666);
+
+$pids = [];
+$queuePid = pcntl_fork();
+if ($queuePid == -1) {
+    die("failed to fork");
+} else if (!$queuePid) {
+    while (true) {
+        msg_receive($queue, 1, $msgtype, 1024, $parentMessage);
+        echo sprintf("%s: %s\n", $parentMessage[0], $parentMessage[1]);
+        print_r($pids);
+        foreach ($pids as $pid => $client) {
+            if (strlen($parentMessage[1]) > 0) {
+                socket_write($client, $parentMessage[1], strlen($parentMessage[1]));
+            }
+        }
+        sleep(1);
+    }
+    exit(0);
+}
+
+// shmop_write($shmId, json_encode($pids), 0);
 while (true) {
     $client = socket_accept($socket);
     if (!$client) {
@@ -33,21 +57,8 @@ while (true) {
     echo sprintf("客户端 %s:%s 加入\n", $clientAddress, $clientPort);
     $pid = pcntl_fork();
     if ($pid == -1) {
-        die("failed to failed");
-    } elseif ($pid) {
-        for ($i = 0; $i < 1000; $i++) {
-            $response = fread(STDIN, 1024) . "\n";
-            if ($response === false) {
-                socket_close($client);
-                break;
-            }
-            if (strlen($response) > 0) {
-                socket_write($client, $response, strlen($response));
-            }
-        }
-        pcntl_waitpid($pid, $status, WNOHANG);
-        socket_close($socket);
-    } else {
+        die("failed to fork");
+    } elseif (!$pid) {
         for ($i = 0; $i < 1000; $i++) {
             $input = socket_read($client, 1024);
             if ($input === false) {
@@ -56,9 +67,10 @@ while (true) {
                 break;
             }
             if (strlen($input) > 0) {
-                echo sprintf("%s: %s\n", $config["client"]["name"], trim($input));
+                msg_send($queue, 1, [posix_getpid(), trim($input)]);
             }
         }
         exit(0);
     }
+    $pids[$pid] = $client;
 }
