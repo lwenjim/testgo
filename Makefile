@@ -18,4 +18,7 @@ clean:
 	@rm -f coverage.*
 	@echo Clean Finish
 
+download:
+	@php php/bili/main.php
+
 .PHONY: lint test cover clean
