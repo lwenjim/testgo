@@ -1,5 +1,3 @@
-include simple/Makefile
-
 lint:
 	@echo Lint start
 	@golangci-lint run -v ./...
@@ -17,10 +15,21 @@ clean:
 	@rm -f *.coverprofile
 	@rm -f coverage.*
 	@echo Clean Finish
-
 download:
 	@php php/bili/main.php
+server:
+	@php php/simple/tcp_server.php
+
+client:
+	@php php/simple/tcp_client.php
+
+server_origin:
+	@php php/simple/server_multi_client.php
+
+server_swoole:
+	@php php/simple/swoole_server_multi_client.php
 
 build:
-	@go build .
-.PHONY: lint test cover clean build
+	@GOOS=windows GOARCH=amd64 go build -o /Users/jim/Workdata
+
+.PHONY: lint test cover clean
