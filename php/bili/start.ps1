@@ -1,6 +1,6 @@
 
 
-Set-Variable -Name "Service_Name" -Value testgo -Option ReadOnly -Scope Script
+Set-Variable -Name "Service_Name" -Value AnonTokyoServer -Option ReadOnly -Scope Script
 $startTime = Get-Date
 function response {
     param (
@@ -13,7 +13,7 @@ function response {
         "interval" = ((Get-Date)-$startTime).TotalSeconds
     }
     $json = $response | ConvertTo-Json
-    [System.IO.File]::WriteAllText("D:\workdata\golang\src\testgo\php\bili\data.log", $json)
+    [System.IO.File]::WriteAllText("D:\\workdata\\testgo\\php\\bili\\data.log", $json)
     Write-Host $json
 }
 
@@ -38,7 +38,6 @@ function Update-Server {
     param (
         [bool]$isStart
     )
-
     if ( !$isStart ) {
         Stop-Service -Name $Service_Name
         return Wait-ForServiceState -ServiceName $Service_Name -DesiredState Stopped -Timeout 30
@@ -56,8 +55,7 @@ function main(){
             return
         }
     }
-
-    $binPath = "D:\\bin\bin\\testgo.exe";
+    $binPath = "D:\\bin\\bin\\anontokyo_server.exe";
     if ([System.IO.File]::Exists($binPath)) {
         [System.IO.File]::Delete($binPath)
     }
@@ -66,7 +64,7 @@ function main(){
     if (![System.IO.File]::Exists($logPath)){
         [System.IO.File]::WriteAllText($logPath, "ok")
     }
-    Invoke-WebRequest -Uri "http://192.168.50.51/$filename.exe" -OutFile $binPath
+    Invoke-WebRequest -Uri "http://10.27.84.7/$filename.exe" -OutFile $binPath
     if ( (Get-Service -Name $Service_Name).Status -eq "Stopped" ) {
         if (!(Update-Server -serviceName $Service_Name -isStart $true)) {
             response -message "Service failed to start within the timeout."
