@@ -1,0 +1,5 @@
+{
+    "message":  "Service failed to start within the timeout.",
+    "code":  500,
+    "interval":  53.513624899999996
+}

@@ -21,4 +21,6 @@ clean:
 download:
 	@php php/bili/main.php
 
-.PHONY: lint test cover clean
+build:
+	@go build .
+.PHONY: lint test cover clean build
