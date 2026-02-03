@@ -1,8 +1,0 @@
-D:\workdata\ManageAnonTokyo\ManageAnonTokyo\bin\Debug\ManageAnonTokyo.exe.config
-D:\workdata\ManageAnonTokyo\ManageAnonTokyo\bin\Debug\ManageAnonTokyo.exe
-D:\workdata\ManageAnonTokyo\ManageAnonTokyo\bin\Debug\ManageAnonTokyo.pdb
-D:\workdata\ManageAnonTokyo\ManageAnonTokyo\obj\Debug\ManageAnonTokyo.csproj.AssemblyReference.cache
-D:\workdata\ManageAnonTokyo\ManageAnonTokyo\obj\Debug\ManageAnonTokyo.csproj.CoreCompileInputs.cache
-D:\workdata\ManageAnonTokyo\ManageAnonTokyo\obj\Debug\ManageAnonTokyo.exe
-D:\workdata\ManageAnonTokyo\ManageAnonTokyo\obj\Debug\ManageAnonTokyo.pdb
-D:\workdata\ManageAnonTokyo\ManageAnonTokyo\obj\Debug\ManageAnonTokyo.exe.config

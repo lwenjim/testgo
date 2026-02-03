@@ -50,8 +50,12 @@ func ExecPowerShell() string {
 func main() {
 	router := gin.Default()
 	router.GET("/deploy", func(c *gin.Context) {
-		output := ExecPowerShell()
-		c.String(200, output)
+		if output, err := exec.Command(`D:\workdata\testgo\csharp\ManageAnonTokyo\bin\Debug\ManageAnonTokyo.exe`).Output(); err != nil {
+			c.String(500, err.Error())
+		} else {
+			c.String(200, string(output))
+		}
+		// output := ExecPowerShell()
 	})
 	if err := router.Run(":8081"); err != nil {
 		fmt.Println(err)

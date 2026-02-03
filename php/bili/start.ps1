@@ -64,7 +64,7 @@ function main(){
     if (![System.IO.File]::Exists($logPath)){
         [System.IO.File]::WriteAllText($logPath, "ok")
     }
-    Invoke-WebRequest -Uri "http://10.27.84.7/$filename.exe" -OutFile $binPath
+    Invoke-WebRequest -Uri "http://10.27.84.42/$filename.exe" -OutFile $binPath
     if ( (Get-Service -Name $Service_Name).Status -eq "Stopped" ) {
         if (!(Update-Server -serviceName $Service_Name -isStart $true)) {
             response -message "Service failed to start within the timeout."

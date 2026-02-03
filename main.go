@@ -1,15 +1,14 @@
 package main
 
-import "github.com/gin-gonic/gin"
+import (
+	"fmt"
+	"os/exec"
+)
 
 func main() {
-	r := gin.Default()
-
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "pong",
-		})
-	})
-
-	_ = r.Run(":8080")
+	if output, err := exec.Command(`D:\workdata\testgo\csharp\ManageAnonTokyo\bin\Debug\ManageAnonTokyo.exe`).Output(); err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println(string(output))
+	}
 }
