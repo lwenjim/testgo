@@ -3,6 +3,7 @@
 	autocrlf = input
 	ignoreCase = false
 	editor = vim
+	quotepath = false
 [difftool "sourcetree"]
 	cmd = /usr/local/bin/bcomp \"$LOCAL\" \"$REMOTE\"
 	path = -ro
@@ -10,8 +11,8 @@
 	cmd = /usr/local/bin/bcomp \"$LOCAL\" \"$REMOTE\" \"$BASE\" \"$MERGED\"
 	trustExitCode = true
 [user]
-	name = jim
-	email = liuwenjin@jspp.cn
+	name = liuwenjin
+	email = liuwenjin@bilibili.com
 [commit]
 	template = /Users/jim/.stCommitMsg
 [filesystem "Oracle Corporation|13|/dev/disk1s5"]

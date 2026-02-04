@@ -761,3 +761,23 @@ StartAdminWebsite() {
 	cd $GOPATH/src/jspp/admin-website || exit 1
 	npm run dev >/tmp/StartAdminWebsite.log 2>&1 &
 }
+
+Register() {
+	grpcurl -plaintext localhost:8080 app.player.PlayerService.Register|jq -r '"grpcurl -H \"x-player-id: \(.credential.id)\" -H \"x-player-credential: \(.credential.credential)\" -plaintext localhost:9090 app.bilibili.anontokyo.UserPlayerService.GetUserPlayerData"'|bash
+}
+
+PrintTableData() {
+	for item in $(mysql -uroot -P3306 -h127.0.0.1 anontokyo_shard_01 -e 'show tables'|grep -v Tables_in_anontokyo_shard_01); do
+		echo
+		echo $item
+		mysql -uroot -P3306 -h127.0.0.1 anontokyo_shard_01 -Ee "SELECT * FROM ${item}"
+	done
+}
+
+TruncateTableData() {
+	for item in $(mysql -uroot -P3306 -h127.0.0.1 anontokyo_shard_01 -e 'show tables'|grep -v Tables_in_anontokyo_shard_01); do
+		echo
+		echo $item
+		mysql -uroot -P3306 -h127.0.0.1 anontokyo_shard_01 -Ee "truncate ${item}"
+	done
+}

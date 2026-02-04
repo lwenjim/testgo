@@ -1,3 +1,4 @@
+
 lint:
 	@echo Lint start
 	@golangci-lint run -v ./...
