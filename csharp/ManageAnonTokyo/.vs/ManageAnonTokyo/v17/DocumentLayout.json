@@ -1,0 +1,37 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\workdata\\testgo\\csharp\\ManageAnonTokyo\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{BAC9CEDC-4D16-49FA-991F-03C450FB3484}|ManageAnonTokyo\\ManageAnonTokyo.csproj|d:\\workdata\\testgo\\csharp\\manageanontokyo\\manageanontokyo\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{BAC9CEDC-4D16-49FA-991F-03C450FB3484}|ManageAnonTokyo\\ManageAnonTokyo.csproj|solutionrelative:manageanontokyo\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Program.cs",
+              "DocumentMoniker": "D:\\workdata\\testgo\\csharp\\ManageAnonTokyo\\ManageAnonTokyo\\Program.cs",
+              "RelativeDocumentMoniker": "ManageAnonTokyo\\Program.cs",
+              "ToolTip": "D:\\workdata\\testgo\\csharp\\ManageAnonTokyo\\ManageAnonTokyo\\Program.cs",
+              "RelativeToolTip": "ManageAnonTokyo\\Program.cs",
+              "ViewState": "AgIAABYAAAAAAAAAAAAgwCAAAAARAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-03T07:54:46.526Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

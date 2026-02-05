@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-// https://leetcode.cn/problems/container-with-most-water/description/?envType=study-plan-v2&envId=top-100-liked
 func TestMaxArea(t *testing.T) {
 	var maxArea = func(height []int) (ans int) {
 		left, right := 0, len(height)-1
@@ -27,7 +26,6 @@ func TestMaxArea(t *testing.T) {
 	fmt.Printf("result: %v\n", result)
 }
 
-// https://leetcode.cn/problems/move-zeroes/description/?envType=study-plan-v2&envId=top-100-liked
 func TestMoveZeroes(t *testing.T) {
 	var moveZeroes = func(nums []int) {
 		left, right, n := 0, 0, len(nums)
@@ -44,7 +42,6 @@ func TestMoveZeroes(t *testing.T) {
 	fmt.Printf("nums: %v\n", nums)
 }
 
-// https://leetcode.cn/problems/longest-consecutive-sequence/description/?envType=study-plan-v2&envId=top-100-liked
 func TestLongestConsecutive(t *testing.T) {
 	var longestConsecutive = func(nums []int) int {
 		numSet := map[int]bool{}
