@@ -3,15 +3,16 @@
 	autocrlf = input
 	ignoreCase = false
 	editor = vim
+	quotepath = false
 [difftool "sourcetree"]
-	cmd = /usr/local/bin/bcomp \"$LOCAL\" \"$REMOTE\"
-	path = -ro
+	cmd = opendiff \"$LOCAL\" \"$REMOTE\"
+	path = 
 [mergetool "sourcetree"]
-	cmd = /usr/local/bin/bcomp \"$LOCAL\" \"$REMOTE\" \"$BASE\" \"$MERGED\"
+	cmd = /Applications/Sourcetree.app/Contents/Resources/opendiff-w.sh \"$LOCAL\" \"$REMOTE\" -ancestor \"$BASE\" -merge \"$MERGED\"
 	trustExitCode = true
 [user]
-	name = jim
-	email = liuwenjin@jspp.cn
+	name = liuwenjin
+	email = liuwenjin@bilibili.com
 [commit]
 	template = /Users/jim/.stCommitMsg
 [filesystem "Oracle Corporation|13|/dev/disk1s5"]

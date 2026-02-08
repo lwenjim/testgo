@@ -340,3 +340,15 @@ function Register() {
     http://localhost:8080/app.player.PlayerService/Register 2>&1)
   echo $data
 }
+
+function Login() {
+  local data=$(curl \
+    --header "Content-Type: application/json" \
+    --header "x-player-id: 019b4afa-5117-7c40-84b8-00e3470e12c9" \
+    --header "x-player-credential: JPB3U3mJF9n6nv1XItGbJM3LcTbzv0yg" \
+    --header "x-debug-skip-auth: xxx" \
+    --header "SdkUid: xxx" \
+    --data '{"initial_data_group": "I feel happy."}' \
+    https://anontokyo-dev-all-sirius.bilibiligame.net/app.bilibili.anontokyo.UserPlayerService.GetUserPlayerData 2>&1)
+  echo $data
+}

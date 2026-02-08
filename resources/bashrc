@@ -1,13 +1,13 @@
 #! /usr/bin/env bash
 alias ll='ls -l'
 alias jspp-kubectl='kubectl --kubeconfig $HOME/.kube/config.fuli -n jspp'
-alias grep='grep -v grep | grep --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn,.idea,.tox}'
+alias grep='grep -v grep | grep --color=auto -I --exclude-dir={.bzr,CVS,.git,.hg,.svn,.idea,.tox}'
 alias cat='bat --tabs 4 --theme gruvbox-dark -p --paging=never --color=always '
 alias nocat='bat --tabs 4 --theme gruvbox-dark -p -n --paging=never'
 alias fd='fd --ignore-file=$HOME/.gitignore '
 alias ifd='fd'
 alias code='/usr/local/bin/code 2>/dev/null '
-alias ls=$HOME'/.cargo/bin/exa -s modified'
+alias ls=$HOME'/.cargo/bin/exa -s modified --bytes'
 alias gawk='/usr/local/bin/gawk -i $HOME/Workdata/goland/src/jspp/testgo/shell/awk/lib.awk '
 alias ag='ag  --ignore-dir dist --ignore-dir node_modules --ignore-dir .vscode --ignore-dir .history --color-match 35:48 --color-path 6:37 '
 alias rg='rg --ignore-file=$HOME/.gitignore --colors "match:fg:magenta" --colors "line:bg:black" '
@@ -19,13 +19,15 @@ alias gitchangecontent='PAGER=less git log -p --author liuwenjin@jspp.cn'
 alias netlisten="netstat -nat -p tcp|grep -v '::'|grep -i listen"
 alias netlisten46="netlisten|grep -w tcp4;netlisten|grep -w tcp6"
 
+export GIT_PAGER='less -R -F -X'
+export LESS='-R --mouse --wheel-lines=3'
 export GO111MODULE=on
-export SERVER_ENV=local
+#export SERVER_ENV=local
 export SERVER_PORT=8080
 export GRPC_SERVER_PORT=8080
 export GOTELEMETRY=off
 export PATH="/usr/local/bin:$PATH"
-export PAGER='bat --tabs 4 --theme gruvbox-dark -p  '
+export PAGER='bat --tabs 4 --theme gruvbox-dark -p --pager "less -RF -s -M +Gg"'
 export WORDCHARS='*?_-.[]~=&;!#$%^(){}<>'
 export PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND ;} history -a"
 export TESTGOPATH=$HOME/Workdata/goland/src/jspp/testgo
@@ -41,7 +43,7 @@ export GOROOT="$HOME/Workdata/goland/go1.23.1"
 export CGO_ENABLED=0
 export GOMAXPROCS=12
 export CARGO_NET_GIT_FETCH_WITH_CLI=true
-export BAT_PAGER="less -RF"
+#export BAT_PAGER="less -RF -s -M +Gg"
 export ELECTRON_MIRROR="http://cdn.npm.taobao.org/dist/electron/"
 export TERM="xterm-256color"
 export GIPHY_API_KEY=xVXd8j7UxP8Lvn8Dn1aLjLAd5EHYGE31
@@ -51,7 +53,7 @@ export C_INCLUDE_PATH=
 export CPLUS_INCLUDE_PATH=
 export LD_LIBRARY_PATH=
 export LIBRARY_PATH=
-export MANPAGER="bat --tabs 4 --theme gruvbox-dark -p "
+export MANPAGER="bat --tabs 4 --theme gruvbox-dark -p --pager 'less -RF -s -M +Gg'"
 export FZF_BASE=/usr/local/Cellar/fzf/0.49.0
 export FZF_COMPLETION_TRIGGER='**'
 export FZF_DEFAULT_COMMAND="fd --exclude={.git,.idea,.vscode,.sass-cache,node_modules,build,.history} --hidden --type file"
@@ -124,6 +126,7 @@ export PATH="/usr/local/lib/ruby/gems/3.3.0/bin:$PATH"
 export PATH="/home/linuxbrew/.linuxbrew/bin":$PATH
 export PATH=".":$PATH
 export PATH="/Users/jim/Workdata/goland/protoc-21.12/bin":$PATH
+export PATH=/usr/local/Cellar/mysql@8.0/8.0.44_2/bin:$PATH
 
 export ZSH_THEME_GIT_PROMPT_PREFIX="%{$reset_color%}%{$fg[green]%}["
 export ZSH_THEME_GIT_PROMPT_SUFFIX="]%{$reset_color%}"
@@ -133,6 +136,15 @@ export ZSH_THEME_GIT_PROMPT_CLEAN=""
 export MACOSX_SDK="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
 export LIBRARY_PATH="$MACOSX_SDK/usr/lib"
 export CPATH="$MACOSX_SDK/usr/include"
+
+
+export MYAPP_DEBUG=false
+export MYAPP_PORT=8080
+export MYAPP_USER=Kelsey
+export MYAPP_RATE="0.5"
+export MYAPP_TIMEOUT="3m"
+export MYAPP_USERS="rob,ken,robert"
+export MYAPP_COLORCODES="red:1,green:2,blue:3"
 
 a() {
   $TESTGOPATH/shell/start.sh "$@"
