@@ -11,6 +11,8 @@ using Newtonsoft.Json;
 namespace ManageAnonTokyo {
     internal class Program {
         static DateTime startDate = DateTime.Now;
+        const string BinPath = "D:\\bin\\bin";
+        const string DomainPath = "http://10.27.84.42";
         static async Task Main(string[] args) {
             try {
                 if (args.Length <= 0) {
@@ -37,27 +39,26 @@ namespace ManageAnonTokyo {
                     specificService.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(60));
                 }
 
-                string[] info = GetBinPathFilenameAndLogname(urlName);
-                string url = $"http://10.27.84.42/{info[1]}.exe";
+                PathInfo info = GetBinPathFilenameAndLogname(urlName);
+                string url = $"{DomainPath}/{info.filename}.exe";
                 switch (Path.GetExtension(urlName)) {
                     case ".exe":
                         if (!config.ContainsKey(urlName)) {
                             Response("500", "error params");
                             return;
                         }
-                        await DownloadFileWithHttpWebRequest(url, info[0]);
+                        await DownloadFileWithHttpWebRequest(url, info.binPath);
                         break;
                     case ".zip":
-                        url = $"http://10.27.84.42/{urlName}";
-                        if (File.Exists(info[0])) {
-                            File.Delete(info[0]);
+                        url = $"{DomainPath}/{urlName}";
+                        if (File.Exists(info.binPath)) {
+                            File.Delete(info.binPath);
                         }
-                        await DownloadFileWithHttpWebRequest(url, info[0]);
-                        string distName = "D:\\bin\\bin";
-                        if (Directory.Exists(distName + "\\mastercbor")) {
-                            Directory.Delete(distName + "\\mastercbor", true);
+                        await DownloadFileWithHttpWebRequest(url, info.binPath);
+                        if (Directory.Exists(BinPath + "\\mastercbor")) {
+                            Directory.Delete(BinPath + "\\mastercbor", true);
                         }
-                        ZipFile.ExtractToDirectory(info[0], distName);
+                        ZipFile.ExtractToDirectory(info.binPath, BinPath);
                         break;
                     default:
                         Response("500", "error params");
@@ -73,18 +74,17 @@ namespace ManageAnonTokyo {
             }
         }
 
-        public static string[] GetBinPathFilenameAndLogname(string urlName) {
-            string binPath = $"D:\\bin\\bin\\{urlName}";
+        public static PathInfo GetBinPathFilenameAndLogname(string urlName) {
+            string binPath = $"{BinPath}\\{urlName}";
             if (File.Exists(binPath)) {
                 File.Delete(binPath);
             }
             string filename = Path.GetFileNameWithoutExtension(binPath);
-            string logPath = string.Format("D:\\bin\\bin\\{0}.log", filename);
+            string logPath = string.Format($"{BinPath}\\{0}.log", filename);
             if (!File.Exists(logPath)) {
                 File.Create(logPath);
             }
-            return new string[] { binPath, filename, logPath }
-            ;
+            return new PathInfo() { binPath = binPath, filename = filename, logPath = logPath };
         }
 
         public static void Response(string code = "200", string message = "Service update successfully.") {
@@ -115,6 +115,9 @@ namespace ManageAnonTokyo {
             } else {
                 throw new Exception($"HTTP错误: {response.StatusCode}");
             }
+        }
+        public class PathInfo {
+            public string binPath, filename, logPath;
         }
     }
 }

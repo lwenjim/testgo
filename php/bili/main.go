@@ -50,6 +50,9 @@ func ExecPowerShell() string {
 func main() {
 	router := gin.Default()
 	router.GET("/deploy", func(c *gin.Context) {
+		if len(c.Query("execName")) == 0 {
+			c.String(500, "errer param")
+		}
 		if output, err := exec.Command(`D:\workdata\testgo\csharp\ManageAnonTokyo\ManageAnonTokyo\bin\Debug\ManageAnonTokyo.exe`, c.Query("execName")).Output(); err != nil {
 			c.String(500, err.Error())
 		} else {
