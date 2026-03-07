@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace ManageAnonTokyo {
     public class InstallService {
-        static DateTime startDate = DateTime.Now;
+        static DateTime StartDate = DateTime.Now;
         const string BinPath = "D:\\bin\\bin";
         const string DomainPath = "http://localhost";
         public async static Task<string> Install(string urlName) {
@@ -23,55 +23,63 @@ namespace ManageAnonTokyo {
                 if (Path.GetExtension(urlName) == ".exe" && !fileMapService.ContainsKey(urlName)) {
                     return Response("500", "error params");
                 }
-                ServiceController specificService = new ServiceController(fileMapService[urlName]);
-                bool serviceExists = ServiceController.GetServices().Any(s => s.ServiceName.Equals(fileMapService[urlName], StringComparison.OrdinalIgnoreCase));
-                if (serviceExists && (specificService.Status == ServiceControllerStatus.Running || specificService.Status == ServiceControllerStatus.Paused)) {
-                    specificService.Stop();
-                    specificService.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(60));
-                }
-
-                PathInfo info = GetBinPathFilenameAndLogname(urlName);
-                string url = $"{DomainPath}/{info.filename}.exe";
-                switch (Path.GetExtension(urlName)) {
-                    case ".exe":
-                        if (!fileMapService.ContainsKey(urlName)) {
+                return await RestartService(fileMapService, urlName, async () => {
+                    PathInfo info = GetBinPathFilenameAndLogname(urlName);
+                    string url = $"{DomainPath}/{info.filename}.exe";
+                    switch (Path.GetExtension(urlName)) {
+                        case ".exe":
+                            if (!fileMapService.ContainsKey(urlName)) {
+                                return Response("500", "error params");
+                            }
+                            await DownloadFileWithHttpWebRequest(url, info.binPath);
+                            break;
+                        case ".zip":
+                            url = $"{DomainPath}/{urlName}";
+                            if (File.Exists(info.binPath)) {
+                                File.Delete(info.binPath);
+                            }
+                            await DownloadFileWithHttpWebRequest(url, info.binPath);
+                            if (Directory.Exists(BinPath + "\\mastercbor")) {
+                                Directory.Delete(BinPath + "\\mastercbor", true);
+                            }
+                            ZipFile.ExtractToDirectory(info.binPath, BinPath);
+                            break;
+                        default:
                             return Response("500", "error params");
-                        }
-                        await DownloadFileWithHttpWebRequest(url, info.binPath);
-                        break;
-                    case ".zip":
-                        url = $"{DomainPath}/{urlName}";
-                        if (File.Exists(info.binPath)) {
-                            File.Delete(info.binPath);
-                        }
-                        await DownloadFileWithHttpWebRequest(url, info.binPath);
-                        if (Directory.Exists(BinPath + "\\mastercbor")) {
-                            Directory.Delete(BinPath + "\\mastercbor", true);
-                        }
-                        ZipFile.ExtractToDirectory(info.binPath, BinPath);
-                        break;
-                    default:
-                        return Response("500", "error params");
-                }
-
-                if (!serviceExists) {
-                    string nssmPath = "C:\\ProgramData\\chocolatey\\bin\\nssm.exe";
-                    string fullName = $"{BinPath}\\{Path.GetFileName(urlName)}";
-                    string serviceName = fileMapService[urlName];
-                    string serviceDisplayName = serviceName;
-                    string description = serviceName;
-                    if (!NssmServiceInstaller.InstallService(nssmPath, serviceName, serviceDisplayName, description, fullName)) {
-                        return Response("500", "failed to install");
                     }
-                }
-                if (specificService.Status == ServiceControllerStatus.Stopped) {
-                    specificService.Start();
-                    specificService.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
-                }
-                return Response();
+                    return "";
+                });
             } catch (Exception ex) {
                 return Response("500", $"操作失败: {ex.Message}");
             }
+        }
+
+        public static async Task<string> RestartService(Dictionary<string, string> fileMapService, string urlName, Func<Task<string>> handdle) {
+            ServiceController specificService = new ServiceController(fileMapService[urlName]);
+            bool serviceExists = ServiceController.GetServices().Any(s => s.ServiceName.Equals(fileMapService[urlName], StringComparison.OrdinalIgnoreCase));
+            if (serviceExists && (specificService.Status == ServiceControllerStatus.Running || specificService.Status == ServiceControllerStatus.Paused)) {
+                specificService.Stop();
+                specificService.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(60));
+            }
+            string result = await handdle();
+            if (result.Length > 0) {
+                return result;
+            }
+            if (!serviceExists) {
+                string nssmPath = "C:\\ProgramData\\chocolatey\\bin\\nssm.exe";
+                string fullName = $"{BinPath}\\{Path.GetFileName(urlName)}";
+                string serviceName = fileMapService[urlName];
+                string serviceDisplayName = serviceName;
+                string description = serviceName;
+                if (!NssmServiceInstaller.InstallService(nssmPath, serviceName, serviceDisplayName, description, fullName)) {
+                    return Response("500", "failed to install");
+                }
+            }
+            if (specificService.Status == ServiceControllerStatus.Stopped) {
+                specificService.Start();
+                specificService.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
+            }
+            return Response();
         }
 
         public static PathInfo GetBinPathFilenameAndLogname(string urlName) {
@@ -91,7 +99,7 @@ namespace ManageAnonTokyo {
             Dictionary<string, string> scores = new Dictionary<string, string>() {
                 {"code", code},
                 {"message", message },
-                {"interval", (DateTime.Now.Subtract(startDate).TotalSeconds).ToString() },
+                {"interval", (DateTime.Now.Subtract(StartDate).TotalSeconds).ToString() },
             };
             return ($"{JsonConvert.SerializeObject(scores)}");
         }
