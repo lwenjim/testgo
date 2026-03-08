@@ -183,7 +183,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="InstallService.cs" />
-    <Compile Include="NssmServiceInstaller.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

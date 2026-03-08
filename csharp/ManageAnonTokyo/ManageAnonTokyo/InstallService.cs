@@ -104,8 +104,9 @@ namespace ManageAnonTokyo {
                 string serviceName = fileMapService[urlName];
                 string serviceDisplayName = serviceName;
                 string description = serviceName;
-                if (!Install(nssmPath, serviceName, serviceDisplayName, description, fullName)) {
-                    return Response("500", "failed to install");
+                string data = RegisterWindowService(nssmPath, serviceName, serviceDisplayName, description, fullName);
+                if (data.Length > 0) {
+                    return Response("500", data);
                 }
             }
             if (specificService.Status == ServiceControllerStatus.Stopped) {
@@ -134,7 +135,7 @@ namespace ManageAnonTokyo {
                 {"message", message },
                 {"interval", (DateTime.Now.Subtract(StartDate).TotalSeconds).ToString() },
             };
-            return ($"{JsonConvert.SerializeObject(scores)}");
+            return $"{JsonConvert.SerializeObject(scores)}";
         }
 
         public async static Task DownloadFileWithHttpWebRequest(string url, string filePath) {
@@ -162,15 +163,13 @@ namespace ManageAnonTokyo {
             public string binPath, filename, logPath;
         }
 
-        public static bool Install(string nssmPath, string serviceName, string serviceDisplayName, string description, string executablePath, string arguments = "", string startType = "SERVICE_AUTO_START") {
+        public static string RegisterWindowService(string nssmPath, string serviceName, string serviceDisplayName, string description, string executablePath, string arguments = "", string startType = "SERVICE_AUTO_START") {
             if (!File.Exists(nssmPath)) {
-                Console.WriteLine($"nssm.exe 未找到: {nssmPath}");
-                return false;
+                return Response("500", $"nssm.exe 未找到: {nssmPath}");
             }
 
             if (!File.Exists(executablePath)) {
-                Console.WriteLine($"可执行文件未找到: {executablePath}");
-                return false;
+                return Response("500", $"可执行文件未找到: {executablePath}");
             }
 
             string installArgs = $"install \"{serviceName}\" \"{executablePath}\"";
@@ -178,8 +177,8 @@ namespace ManageAnonTokyo {
                 installArgs += $" {arguments}";
             }
 
-            if (RunNssmCommand(nssmPath, installArgs) != 0) {
-                return false;
+            if (RunNssmCommand(nssmPath, installArgs).Length > 0) {
+                return Response("500", "failed to install window service");
             }
 
             if (!string.IsNullOrWhiteSpace(serviceDisplayName)) {
@@ -199,14 +198,11 @@ namespace ManageAnonTokyo {
             if (!string.IsNullOrWhiteSpace(startType)) {
                 RunNssmCommand(nssmPath, $"set \"{serviceName}\" Start {startType}");
             }
-
             RunNssmCommand(nssmPath, $"set \"{serviceName}\" AppRestartDelay 5000");
-
-            Console.WriteLine($"服务 '{serviceName}' 安装完成。");
-            return true;
+            return "";
         }
 
-        private static int RunNssmCommand(string nssmPath, string arguments) {
+        private static string RunNssmCommand(string nssmPath, string arguments) {
             var startInfo = new ProcessStartInfo {
                 FileName = nssmPath,
                 Arguments = arguments,
@@ -226,7 +222,9 @@ namespace ManageAnonTokyo {
 
             try {
                 using (var process = Process.Start(startInfo)) {
-                    if (process == null) return -1;
+                    if (process == null) {
+                        return Response("500", "process == null");
+                    }
                     process.WaitForExit();
                     if (!needAdmin) {
                         string output = process.StandardOutput.ReadToEnd();
@@ -235,15 +233,17 @@ namespace ManageAnonTokyo {
                             Console.WriteLine(output);
                         }
                         if (!string.IsNullOrEmpty(error)) {
-                            Console.WriteLine("错误: " + error);
+                            return Response("500", "错误: " + error);
                         }
                     }
-                    return process.ExitCode;
+                    if (process.ExitCode > 0) {
+                        return Response("500", $"nssm 命令执行失败，退出代码: {process.ExitCode}");
+                    }
                 }
             } catch (Exception ex) {
-                Console.WriteLine($"执行 nssm 命令失败: {ex.Message}");
-                return -1;
+                return Response("500", $"执行 nssm 命令失败: {ex.Message}");
             }
+            return "";
         }
 
         private static bool IsAdministrator() {
