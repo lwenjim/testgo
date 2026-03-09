@@ -29,6 +29,14 @@
     <BootstrapperEnabled>true</BootstrapperEnabled>
     <NuGetPackageImportStamp>
     </NuGetPackageImportStamp>
+   <!-- 指定目标操作系统和架构，例如 win-x64, linux-x64 -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- 启用单文件发布 -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <!-- 是否包含 .NET 运行时。true 为独立发布，文件更大；false 为依赖框架，目标机需安装 .NET -->
+    <SelfContained>true</SelfContained>
+    <!-- 可选：是否启用压缩，可以减小最终文件体积，但会影响启动速度 [citation:4] -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -143,6 +151,9 @@
     <Reference Include="System" />
     <Reference Include="System.Buffers, Version=4.0.5.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Buffers.4.6.1\lib\net462\System.Buffers.dll</HintPath>
+    </Reference>
+    <Reference Include="System.CommandLine, Version=2.0.3.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.CommandLine.2.0.3\lib\netstandard2.0\System.CommandLine.dll</HintPath>
     </Reference>
     <Reference Include="System.ComponentModel.DataAnnotations" />
     <Reference Include="System.Core" />

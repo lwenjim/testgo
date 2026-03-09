@@ -1,21 +1,24 @@
-﻿using Newtonsoft.Json;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.ServiceProcess;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 
 namespace ManageAnonTokyo {
     public class InstallService {
         readonly static DateTime StartDate = DateTime.Now;
         const string BinPath = "D:\\bin\\bin";
-        const string DomainDownload = "http://localhost";
-        const string domainExpose = "http://localhost:8082/";
+        const string DomainDownload = "http://10.27.84.42";
+        const string domainExpose = "http://10.27.6.27:8082/deploy/";
+        //const string nssmPath = "C:\\ProgramData\\chocolatey\\bin\\nssm.exe";
+        const string nssmPath = "D:\\bin\\nssm2.24\\win64\\nssm.exe";
 
         public static async Task StartService() {
             HttpListener listener = new HttpListener();
@@ -87,6 +90,34 @@ namespace ManageAnonTokyo {
             }
         }
 
+        public static string InstallWindowServiceMain() {
+            string path = Assembly.GetExecutingAssembly().Location;
+            string serverName = Path.GetFileNameWithoutExtension(path);
+            ServiceController specificService = new ServiceController(serverName);
+            bool serviceExists = ServiceController.GetServices().Any(s => s.ServiceName.Equals(serverName, StringComparison.OrdinalIgnoreCase));
+            if (serviceExists && (specificService.Status == ServiceControllerStatus.Running || specificService.Status == ServiceControllerStatus.Paused)) {
+                specificService.Stop();
+                specificService.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(60));
+                string result = UnRegisterWindowService(nssmPath, serverName);
+                if (result.Length > 0) {
+                    return Response("500", result);
+                }
+            }
+
+            string fullName = $"{BinPath}\\{Path.GetFileName(path)}";
+            if (File.Exists(fullName)) {
+                File.Delete(fullName);
+            }
+            File.Copy(path, fullName);
+            string data = RegisterWindowService(nssmPath, serverName, fullName, "service run");
+            if (data.Length > 0) {
+                return Response("500", data);
+            }
+            specificService.Start();
+            specificService.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
+            return "";
+        }
+
         public static async Task<string> RestartService(Dictionary<string, string> fileMapService, string urlName, Func<Task<string>> handdle) {
             ServiceController specificService = new ServiceController(fileMapService[urlName]);
             bool serviceExists = ServiceController.GetServices().Any(s => s.ServiceName.Equals(fileMapService[urlName], StringComparison.OrdinalIgnoreCase));
@@ -98,13 +129,10 @@ namespace ManageAnonTokyo {
             if (result.Length > 0) {
                 return result;
             }
-            if (!serviceExists) {
-                string nssmPath = "C:\\ProgramData\\chocolatey\\bin\\nssm.exe";
+            if (!serviceExists && Path.GetExtension(urlName) == ".exe") {
                 string fullName = $"{BinPath}\\{Path.GetFileName(urlName)}";
                 string serviceName = fileMapService[urlName];
-                string serviceDisplayName = serviceName;
-                string description = serviceName;
-                string data = RegisterWindowService(nssmPath, serviceName, serviceDisplayName, description, fullName);
+                string data = RegisterWindowService(nssmPath, serviceName, fullName);
                 if (data.Length > 0) {
                     return Response("500", data);
                 }
@@ -135,7 +163,7 @@ namespace ManageAnonTokyo {
                 {"message", message },
                 {"interval", (DateTime.Now.Subtract(StartDate).TotalSeconds).ToString() },
             };
-            return $"{JsonConvert.SerializeObject(scores)}";
+            return $"{JsonConvert.SerializeObject(scores)}\n";
         }
 
         public async static Task DownloadFileWithHttpWebRequest(string url, string filePath) {
@@ -163,7 +191,19 @@ namespace ManageAnonTokyo {
             public string binPath, filename, logPath;
         }
 
-        public static string RegisterWindowService(string nssmPath, string serviceName, string serviceDisplayName, string description, string executablePath, string arguments = "", string startType = "SERVICE_AUTO_START") {
+        public static string UnRegisterWindowService(string nssmPath, string serviceName) {
+            if (!File.Exists(nssmPath)) {
+                return Response("500", $"nssm.exe 未找到: {nssmPath}");
+            }
+            string installArgs = $"remove \"{serviceName}\" confirm";
+            if (RunNssmCommand(nssmPath, installArgs).Length > 0) {
+                return Response("500", "failed to uninstall window service");
+            }
+            return "";
+        }
+
+
+        public static string RegisterWindowService(string nssmPath, string serviceName, string executablePath, string arguments = "", string startType = "SERVICE_AUTO_START") {
             if (!File.Exists(nssmPath)) {
                 return Response("500", $"nssm.exe 未找到: {nssmPath}");
             }
@@ -180,13 +220,11 @@ namespace ManageAnonTokyo {
             if (RunNssmCommand(nssmPath, installArgs).Length > 0) {
                 return Response("500", "failed to install window service");
             }
-
-            if (!string.IsNullOrWhiteSpace(serviceDisplayName)) {
-                RunNssmCommand(nssmPath, $"set \"{serviceName}\" DisplayName \"{serviceDisplayName}\"");
+            if (RunNssmCommand(nssmPath, $"set \"{serviceName}\" DisplayName \"{serviceName}\"").Length > 0) { 
+                return Response("500", "failed to update service DisplayName");
             }
-
-            if (!string.IsNullOrWhiteSpace(description)) {
-                RunNssmCommand(nssmPath, $"set \"{serviceName}\" Description \"{description}\"");
+            if (RunNssmCommand(nssmPath, $"set \"{serviceName}\" Description \"{serviceName}\"").Length > 0) { 
+                return Response("500", "failed to update service Description");
             }
             string logPath = Path.GetDirectoryName(executablePath) + "\\" + Path.GetFileNameWithoutExtension(executablePath) + ".log";
             if (!File.Exists(logPath)) {
