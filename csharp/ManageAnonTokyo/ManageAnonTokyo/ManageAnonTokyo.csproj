@@ -29,7 +29,7 @@
     <BootstrapperEnabled>true</BootstrapperEnabled>
     <NuGetPackageImportStamp>
     </NuGetPackageImportStamp>
-   <!-- 指定目标操作系统和架构，例如 win-x64, linux-x64 -->
+    <!-- 指定目标操作系统和架构，例如 win-x64, linux-x64 -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <!-- 启用单文件发布 -->
     <PublishSingleFile>true</PublishSingleFile>
