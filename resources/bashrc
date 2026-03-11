@@ -4,7 +4,7 @@ alias jspp-kubectl='kubectl --kubeconfig $HOME/.kube/config.fuli -n jspp'
 alias grep='grep -v grep | grep --color=auto -I --exclude-dir={.bzr,CVS,.git,.hg,.svn,.idea,.tox}'
 alias cat='bat --tabs 4 --theme gruvbox-dark -p --paging=never --color=always '
 alias nocat='bat --tabs 4 --theme gruvbox-dark -p -n --paging=never'
-alias fd='fd --ignore-file=$HOME/.gitignore '
+alias fd='fd --no-ignore '
 alias ifd='fd'
 alias code='/usr/local/bin/code 2>/dev/null '
 alias ls=$HOME'/.cargo/bin/exa -s modified --bytes'
@@ -39,7 +39,7 @@ export GOFLAGS=""
 export GOPRIVATE=code.jspp.com
 export GOOS=darwin
 export GOARCH=amd64
-export GOROOT="$HOME/Workdata/goland/go1.23.1"
+export GOROOT="$HOME/Workdata/goland/go1.24.11"
 export CGO_ENABLED=0
 export GOMAXPROCS=12
 export CARGO_NET_GIT_FETCH_WITH_CLI=true
@@ -127,7 +127,7 @@ export PATH="/home/linuxbrew/.linuxbrew/bin":$PATH
 export PATH=".":$PATH
 export PATH="/Users/jim/Workdata/goland/protoc-21.12/bin":$PATH
 export PATH=/usr/local/Cellar/mysql@8.0/8.0.44_2/bin:$PATH
-
+export WORDCHARS=${WORDCHARS//[\/._]/}
 export ZSH_THEME_GIT_PROMPT_PREFIX="%{$reset_color%}%{$fg[green]%}["
 export ZSH_THEME_GIT_PROMPT_SUFFIX="]%{$reset_color%}"
 export ZSH_THEME_GIT_PROMPT_DIRTY="%{$fg[red]%}*%{$reset_color%}"
