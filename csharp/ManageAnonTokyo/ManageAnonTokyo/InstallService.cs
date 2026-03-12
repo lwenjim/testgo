@@ -14,15 +14,22 @@ using System.Threading.Tasks;
 
 namespace ManageAnonTokyo {
     public class InstallService {
+
         readonly static DateTime StartDate = DateTime.Now;
-        const string BinPath = "D:\\bin\\bin";
-        const string domainExpose = "http://*:8082/deploy/";
+
+        public static string GetDomainExpose() {
+            return "http://*:8082/deploy/";
+        }
+
+        public static string GetBinPath() {
+            return "D:\\bin\\bin";
+        }
 
         public static async Task StartService() {
             HttpListener listener = new HttpListener();
-            listener.Prefixes.Add(domainExpose);
+            listener.Prefixes.Add(GetDomainExpose());
             listener.Start();
-            Console.WriteLine($"lissten: {domainExpose} port");
+            Console.WriteLine($"lissten: {GetDomainExpose()} port");
             while (true) {
                 HttpListenerContext context = await listener.GetContextAsync();
                 await ProcessRequest(context);
@@ -41,7 +48,7 @@ namespace ManageAnonTokyo {
                 Response(context.Response, $"not open {ip.Address.ToString()}:80 ");
                 return;
             }
-            string responseString = await Install(exeName, ip.Address.ToString());
+            string responseString = await Install(exeName, "http://" + ip.Address.ToString());
             Response(context.Response, responseString);
         }
 
@@ -79,10 +86,10 @@ namespace ManageAnonTokyo {
                                 File.Delete(info.binPath);
                             }
                             await DownloadFileWithHttpWebRequest(url, info.binPath);
-                            if (Directory.Exists(BinPath + "\\mastercbor")) {
-                                Directory.Delete(BinPath + "\\mastercbor", true);
+                            if (Directory.Exists(GetBinPath() + "\\mastercbor")) {
+                                Directory.Delete(GetBinPath() + "\\mastercbor", true);
                             }
-                            ZipFile.ExtractToDirectory(info.binPath, BinPath);
+                            ZipFile.ExtractToDirectory(info.binPath, GetBinPath());
                             break;
                         default:
                             return Response("500", "error params");
@@ -95,21 +102,29 @@ namespace ManageAnonTokyo {
         }
 
         public static string InstallWindowServiceMain() {
-            string binPath = Assembly.GetExecutingAssembly().Location;
-            string serverName = Path.GetFileNameWithoutExtension(binPath);
+            string path = Assembly.GetExecutingAssembly().Location;
+            string serverName = "AnonTokyoManage";
             ServiceController specificService = new ServiceController(serverName);
             bool serviceExists = ServiceController.GetServices().Any(s => s.ServiceName.Equals(serverName, StringComparison.OrdinalIgnoreCase));
             if (serviceExists && (specificService.Status == ServiceControllerStatus.Running || specificService.Status == ServiceControllerStatus.Paused)) {
                 specificService.Stop();
                 specificService.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(60));
-                string result = UnRegisterWindowService(GetNssmPath(), serverName);
-                if (result.Length > 0) {
-                    return Response("500", result);
+            }
+
+            if (serviceExists) {
+                string data = UnRegisterWindowService(GetNssmPath(), serverName);
+                if (data.Length > 0) {
+                    return Response("500", data);
                 }
             }
-            string data = RegisterWindowService(GetNssmPath(), serverName, binPath, "service run");
-            if (data.Length > 0) {
-                return Response("500", data);
+            string destFile = $"{GetBinPath()}\\{Path.GetFileName(path)}";
+            if (File.Exists(destFile)) {
+                File.Delete(destFile);
+            }
+            File.Copy(path, destFile);
+            string result = RegisterWindowService(GetNssmPath(), serverName, destFile, "service run");
+            if (result.Length > 0) {
+                return Response("500", result);
             }
             specificService.Start();
             specificService.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
@@ -128,7 +143,7 @@ namespace ManageAnonTokyo {
                 return result;
             }
             if (!serviceExists && Path.GetExtension(urlName) == ".exe") {
-                string fullName = $"{BinPath}\\{Path.GetFileName(urlName)}";
+                string fullName = $"{GetBinPath()}\\{Path.GetFileName(urlName)}";
                 string serviceName = fileMapService[urlName];
                 string data = RegisterWindowService(GetNssmPath(), serviceName, fullName);
                 if (data.Length > 0) {
@@ -143,12 +158,12 @@ namespace ManageAnonTokyo {
         }
 
         public static PathInfo GetBinPathFilenameAndLogname(string urlName) {
-            string binPath = $"{BinPath}\\{urlName}";
+            string binPath = $"{GetBinPath()}\\{urlName}";
             if (File.Exists(binPath)) {
                 File.Delete(binPath);
             }
             string filename = Path.GetFileNameWithoutExtension(binPath);
-            string logPath = string.Format($"{BinPath}\\{0}.log", filename);
+            string logPath = string.Format($"{GetBinPath()}\\{0}.log", filename);
             if (!File.Exists(logPath)) {
                 File.Create(logPath);
             }
@@ -199,7 +214,6 @@ namespace ManageAnonTokyo {
             }
             return "";
         }
-
 
         public static string RegisterWindowService(string nmPath, string serviceName, string executablePath, string arguments = "", string startType = "SERVICE_AUTO_START") {
             if (!File.Exists(nmPath)) {
@@ -291,11 +305,11 @@ namespace ManageAnonTokyo {
         public static string RunCommand(string command) {
             Process process = new Process();
             process.StartInfo.FileName = "cmd.exe";
-            process.StartInfo.Arguments = "/c " + command;  
+            process.StartInfo.Arguments = "/c " + command;
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
-            process.StartInfo.CreateNoWindow = true;       
+            process.StartInfo.CreateNoWindow = true;
 
             StringBuilder output = new StringBuilder();
             process.OutputDataReceived += (sender, e) => output.AppendLine(e.Data);
