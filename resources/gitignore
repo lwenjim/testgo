@@ -14,7 +14,6 @@ localdata
 master.rdb
 slave.rdb
 nodes*.conf
-*.txt
 *.rdb
 testgo
 nodes.json

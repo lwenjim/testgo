@@ -11,8 +11,8 @@
 	cmd = /usr/local/bin/bcomp \"$LOCAL\" \"$REMOTE\" \"$BASE\" \"$MERGED\"
 	trustExitCode = true
 [user]
-	name = liuwenjin
-	email = liuwenjin@bilibili.com
+	name = jim
+	email = v_liuwenjin@bilibili.com
 [commit]
 	template = /Users/jim/.stCommitMsg
 [filesystem "Oracle Corporation|13|/dev/disk1s5"]
@@ -73,3 +73,10 @@
 #    colorMoved = default
 [http]
 	sslBackend = openssl
+[safe]
+	directory = *
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
