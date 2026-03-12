@@ -63,12 +63,12 @@ namespace ManageAnonTokyo {
         public async static Task<string> Install(string urlName, string DomainDownload) {
             try {
                 Dictionary<string, string> fileMapService = new Dictionary<string, string>() {
-                    {"anontokyo_server.exe", "AnonTokyoServer"},
+                    {"AnontokyoServer.exe", "AnonTokyoServer"},
                     {"AnonTokyoSiriusServer.exe", "AnonTokyoSiriusServer"},
                     {"AnonTokyoSiriusServerCbor.zip", "AnonTokyoSiriusServer" },
                 };
                 if (Path.GetExtension(urlName) == ".exe" && !fileMapService.ContainsKey(urlName)) {
-                    return Response("500", "error params");
+                    return Response("500", $"error params, info:{urlName}");
                 }
                 return await RestartService(fileMapService, urlName, async () => {
                     PathInfo info = GetBinPathFilenameAndLogname(urlName);
