@@ -1,0 +1,78 @@
+# 代码规范扫描
+lint:
+	@echo Lint
+	@golangci-lint run -v ./...
+
+# 执行单元测试 并 生成覆盖率文件
+test: clean
+	@echo Test
+	@go list -f '{{if gt (len .TestGoFiles) 0}}"go test -tags test -covermode count -coverprofile {{.Name}}.coverprofile -coverpkg ./... {{.ImportPath}}"{{end}}' ./... | xargs -I {} sh -c {}
+	@gocovmerge `ls *.coverprofile` | grep -v ".pb.go" | grep -v ".gen.go"> coverage.out
+	@go tool cover -func coverage.out | grep total
+
+# 查看单元测试覆盖率
+cover: test
+	@echo cover
+	@go tool cover -html coverage.out
+
+# mock外部调用
+mock:
+	@echo mock
+	@rm -rf mocks/*.go
+	@mockery --all --dir=./gen/rpc
+
+# 嵌入git客户端的脚本, 提交前审核, commit text 审核
+pre_commit:
+	@echo pre_commit
+	@cp shell/{commit-msg,pre-commit} .git/hooks
+
+# 配表变更
+convert_master:
+	@echo covert_master
+	@go run cmd/convert_master/main.go
+	@cat configs/mastercbor/Version
+	@grpcurl -plaintext 10.27.6.27:9090 app.bilibili.anontokyo.MasterdataService.Version|jq -c
+
+# proto变更
+proto:
+	@echo proto
+	@make -C proto proto
+
+# 模型变更
+generate_shard_sql:
+	@go run cmd/gorm_gen/create_table/main.go
+
+create_database_shard_from_sql:
+	@mysql -uroot -h127.0.0.1 -e "show databases"|egrep -e "anontokyo_shard_\d"|xargs -I {} echo "\"mysql -h127.0.0.1 -uroot -e 'drop database "{}"'\""|xargs -I {} sh -c {}
+	@cat /tmp/load_data.txt|xargs -I {} echo 'mysql -uroot -P3306 -h127.0.0.1  <'{} >/tmp/data.txt
+	@cat /tmp/data.txt|xargs -I {} bash -c {}
+
+generate_gorm_model:
+	@cd cmd/gorm_gen/gen_code && go run main.go
+
+update_model: generate_shard_sql create_database_shard_from_sql generate_gorm_model
+
+# 发布开发机器
+deploy_window:
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnontokyoServer.exe -v -x -gcflags "-N -l" .
+	@mysql -uroot -h10.27.6.27 -e "show databases"|egrep -e "anontokyo_shard_\d"|xargs -I {} echo "\"mysql -h10.27.6.27 -uroot -e 'drop database "{}"'\""|xargs -I {} sh -c {}
+	@cat /tmp/load_data.txt|xargs -I {} echo 'mysql -uroot -P3306 -h10.27.6.27  <'{} >/tmp/data.txt
+	@cat /tmp/data.txt|xargs -I {} bash -c {}
+	@curl http://10.27.6.27:8082/deploy\?execName\=AnontokyoServer.exe
+	@grpcurl -plaintext 10.27.6.27:9090 app.bilibili.anontokyo.MasterdataService.Version|jq -c
+	@cp -f ~/Workdata/anontokyo_server/Makefile ~/Workdata/testgo/resources/AnontokyoMakefile
+
+deploy_release:
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp -v -x -trimpath -ldflags "-s -w" .
+
+build:
+	@go build .
+run:
+	@go run main.go
+
+clean:
+	@rm -f *.coverprofile
+	@rm -f coverage.*
+	@echo Clean Finish
+
+.PHONY: lint test cover build install clean proto move generate_shard_sql generate_gorm_model run create_database_shard_from_sql convert_master update_model run deploy deploy_window deploy_release import_database
