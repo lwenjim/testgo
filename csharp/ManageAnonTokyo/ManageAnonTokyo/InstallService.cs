@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using Microsoft.Win32;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -6,6 +7,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Reflection;
 using System.ServiceProcess;
@@ -101,7 +103,7 @@ namespace ManageAnonTokyo {
             }
         }
 
-        public static string InstallWindowServiceMain() {
+        public static string InstallDaemon() {
             string path = Assembly.GetExecutingAssembly().Location;
             string serverName = "AnonTokyoManage";
             ServiceController specificService = new ServiceController(serverName);
@@ -110,7 +112,6 @@ namespace ManageAnonTokyo {
                 specificService.Stop();
                 specificService.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(60));
             }
-
             if (serviceExists) {
                 string data = UnRegisterWindowService(GetNssmPath(), serverName);
                 if (data.Length > 0) {
@@ -342,5 +343,90 @@ namespace ManageAnonTokyo {
                 }
             }
         }
+
+        public static void PrintNetInfo() {
+            string hostName = Dns.GetHostName();
+            IPAddress[] addresses = Dns.GetHostAddresses(hostName);
+            var data = addresses.Where(ip => ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !IPAddress.IsLoopback(ip));
+            string ipAddress = "";
+            string subnetMask = "";
+            foreach (var item in data) {
+                if (ipAddress.Length < item.ToString().Length) {
+                    ipAddress = item.ToString();
+                    subnetMask = GetSubnetMaskForIp(item).ToString();
+                }
+            }
+            Console.WriteLine($"Ip Address: \t{ipAddress}");
+            Console.WriteLine($"Net Mask: \t{subnetMask}");
+
+            foreach (var i in GetAllDnsServers()) {
+                Console.WriteLine($"Dns: \t\t{i.ToString()}");
+            }
+
+            var proxyInfo = SystemProxyInfo.GetFromRegistry();
+            Console.WriteLine($"Enable Proxy: \t{proxyInfo.Enabled}");
+            Console.WriteLine($"Proxy Domain: \t{proxyInfo.Server}");
+        }
+
+        public static IPAddress GetSubnetMaskForIp(IPAddress ip) {
+            foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces()) {
+                if (ni.OperationalStatus == OperationalStatus.Up) {
+                    foreach (UnicastIPAddressInformation ipInfo in ni.GetIPProperties().UnicastAddresses) {
+                        if (ipInfo.Address.Equals(ip)) {
+                            return ipInfo.IPv4Mask;
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        public static List<IPAddress> GetAllDnsServers() {
+            var dnsList = new List<IPAddress>();
+            foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces()) {
+                if (ni.OperationalStatus == OperationalStatus.Up && ni.NetworkInterfaceType != NetworkInterfaceType.Loopback) {
+                    IPInterfaceProperties ipProps = ni.GetIPProperties();
+                    foreach (var dns in ipProps.DnsAddresses) {
+                        if (dns.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork) {
+                            dnsList.Add(dns);
+                        }
+                    }
+                }
+            }
+            return dnsList.Distinct().ToList();
+        }
+
+        public static string GetRuntimeDefaultProxy() {
+            IWebProxy defaultProxy = WebRequest.DefaultWebProxy;
+            if (defaultProxy != null) {
+                Uri testUri = new Uri("http://www.baidu.com");
+                Uri proxyUri = defaultProxy.GetProxy(testUri);
+                return proxyUri.ToString();
+            }
+            return "";
+        }
+
     }
+    public class SystemProxyInfo {
+        public bool Enabled { get; set; }
+        public string Server { get; set; }
+        public string Override { get; set; }
+        public bool AutoDetect { get; set; }
+        public string AutoConfigUrl { get; set; }
+        public static SystemProxyInfo GetFromRegistry() {
+            var info = new SystemProxyInfo();
+            const string keyPath = @"Software\Microsoft\Windows\CurrentVersion\Internet Settings";
+            using (RegistryKey registryKey = Registry.CurrentUser.OpenSubKey(keyPath)) {
+                if (registryKey != null) {
+                    info.Enabled = Convert.ToInt32(registryKey.GetValue("ProxyEnable", 0)) == 1;
+                    info.Server = registryKey.GetValue("ProxyServer", "").ToString();
+                    info.Override = registryKey.GetValue("ProxyOverride", "").ToString();
+                    info.AutoDetect = Convert.ToInt32(registryKey.GetValue("AutoDetect", 0)) == 1;
+                    info.AutoConfigUrl = registryKey.GetValue("AutoConfigURL", "").ToString();
+                }
+            }
+            return info;
+        }
+    }
+
 }
