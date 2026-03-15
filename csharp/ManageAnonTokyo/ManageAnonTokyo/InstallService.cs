@@ -1,6 +1,4 @@
-﻿using Microsoft.Win32;
-using Newtonsoft.Json;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -13,19 +11,13 @@ using System.Reflection;
 using System.ServiceProcess;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Win32;
+using Newtonsoft.Json;
 
 namespace ManageAnonTokyo {
     public class InstallService {
 
         readonly static DateTime StartDate = DateTime.Now;
-
-        public static string GetDomainExpose() {
-            return "http://*:8082/deploy/";
-        }
-
-        public static string GetBinPath() {
-            return "D:\\bin\\bin";
-        }
 
         public static async Task StartService() {
             HttpListener listener = new HttpListener();
@@ -38,7 +30,60 @@ namespace ManageAnonTokyo {
             }
         }
 
-        static async Task ProcessRequest(HttpListenerContext context) {
+        public static string InstallDaemon() {
+            string path = Assembly.GetExecutingAssembly().Location;
+            string serverName = "AnonTokyoManage";
+            ServiceController specificService = new ServiceController(serverName);
+            bool serviceExists = ServiceController.GetServices().Any(s => s.ServiceName.Equals(serverName, StringComparison.OrdinalIgnoreCase));
+            if (serviceExists && (specificService.Status == ServiceControllerStatus.Running || specificService.Status == ServiceControllerStatus.Paused)) {
+                specificService.Stop();
+                specificService.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(60));
+            }
+            if (serviceExists) {
+                string data = UnRegisterWindowService(GetNssmPath(), serverName);
+                if (data.Length > 0) {
+                    return Response("500", data);
+                }
+            }
+            string destFile = $"{GetBinPath()}\\{Path.GetFileName(path)}";
+            if (File.Exists(destFile)) {
+                File.Delete(destFile);
+            }
+            File.Copy(path, destFile);
+            string result = RegisterWindowService(GetNssmPath(), serverName, destFile, "service run");
+            if (result.Length > 0) {
+                return Response("500", result);
+            }
+            specificService.Start();
+            specificService.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
+            return "";
+        }
+
+        public static void PrintNetInfo() {
+            string hostName = Dns.GetHostName();
+            IPAddress[] addresses = Dns.GetHostAddresses(hostName);
+            var data = addresses.Where(ip => ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !IPAddress.IsLoopback(ip));
+            string ipAddress = "";
+            string subnetMask = "";
+            foreach (var item in data) {
+                if (ipAddress.Length < item.ToString().Length) {
+                    ipAddress = item.ToString();
+                    subnetMask = GetSubnetMaskForIp(item).ToString();
+                }
+            }
+            Console.WriteLine($"Ip Address: \t{ipAddress}");
+            Console.WriteLine($"Net Mask: \t{subnetMask}");
+
+            foreach (var i in GetAllDnsServers()) {
+                Console.WriteLine($"Dns: \t\t{i.ToString()}");
+            }
+
+            var proxyInfo = SystemProxyInfo.GetFromRegistry();
+            Console.WriteLine($"Enable Proxy: \t{proxyInfo.Enabled}");
+            Console.WriteLine($"Proxy Domain: \t{proxyInfo.Server}");
+        }
+
+        public static async Task ProcessRequest(HttpListenerContext context) {
             string exeName = context.Request.QueryString.Get("execName");
             if (exeName == null || exeName.Length == 0) {
                 Response(context.Response, "error params");
@@ -54,7 +99,7 @@ namespace ManageAnonTokyo {
             Response(context.Response, responseString);
         }
 
-        static void Response(HttpListenerResponse response, string responseString) {
+        public static void Response(HttpListenerResponse response, string responseString) {
             byte[] buffer = Encoding.UTF8.GetBytes(responseString);
             response.ContentType = "text/html; charset=utf-8";
             response.ContentLength64 = buffer.Length;
@@ -98,38 +143,10 @@ namespace ManageAnonTokyo {
                     }
                     return "";
                 });
-            } catch (Exception ex) {
+            }
+            catch (Exception ex) {
                 return Response("500", $"操作失败: {ex.Message}");
             }
-        }
-
-        public static string InstallDaemon() {
-            string path = Assembly.GetExecutingAssembly().Location;
-            string serverName = "AnonTokyoManage";
-            ServiceController specificService = new ServiceController(serverName);
-            bool serviceExists = ServiceController.GetServices().Any(s => s.ServiceName.Equals(serverName, StringComparison.OrdinalIgnoreCase));
-            if (serviceExists && (specificService.Status == ServiceControllerStatus.Running || specificService.Status == ServiceControllerStatus.Paused)) {
-                specificService.Stop();
-                specificService.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(60));
-            }
-            if (serviceExists) {
-                string data = UnRegisterWindowService(GetNssmPath(), serverName);
-                if (data.Length > 0) {
-                    return Response("500", data);
-                }
-            }
-            string destFile = $"{GetBinPath()}\\{Path.GetFileName(path)}";
-            if (File.Exists(destFile)) {
-                File.Delete(destFile);
-            }
-            File.Copy(path, destFile);
-            string result = RegisterWindowService(GetNssmPath(), serverName, destFile, "service run");
-            if (result.Length > 0) {
-                return Response("500", result);
-            }
-            specificService.Start();
-            specificService.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
-            return "";
         }
 
         public static async Task<string> RestartService(Dictionary<string, string> fileMapService, string urlName, Func<Task<string>> handdle) {
@@ -196,7 +213,8 @@ namespace ManageAnonTokyo {
                     totalBytesRead += bytesRead;
                 }
                 fileStream.Close();
-            } else {
+            }
+            else {
                 throw new Exception($"HTTP错误: {response.StatusCode}");
             }
         }
@@ -291,7 +309,8 @@ namespace ManageAnonTokyo {
                         return Response("500", $"nssm 命令执行失败，退出代码: {process.ExitCode}");
                     }
                 }
-            } catch (Exception ex) {
+            }
+            catch (Exception ex) {
                 return Response("500", $"执行 nssm 命令失败: {ex.Message}");
             }
             return "";
@@ -338,35 +357,14 @@ namespace ManageAnonTokyo {
                         return true;
                     }
                     return false;
-                } catch {
+                }
+                catch {
                     return false;
                 }
             }
         }
 
-        public static void PrintNetInfo() {
-            string hostName = Dns.GetHostName();
-            IPAddress[] addresses = Dns.GetHostAddresses(hostName);
-            var data = addresses.Where(ip => ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !IPAddress.IsLoopback(ip));
-            string ipAddress = "";
-            string subnetMask = "";
-            foreach (var item in data) {
-                if (ipAddress.Length < item.ToString().Length) {
-                    ipAddress = item.ToString();
-                    subnetMask = GetSubnetMaskForIp(item).ToString();
-                }
-            }
-            Console.WriteLine($"Ip Address: \t{ipAddress}");
-            Console.WriteLine($"Net Mask: \t{subnetMask}");
 
-            foreach (var i in GetAllDnsServers()) {
-                Console.WriteLine($"Dns: \t\t{i.ToString()}");
-            }
-
-            var proxyInfo = SystemProxyInfo.GetFromRegistry();
-            Console.WriteLine($"Enable Proxy: \t{proxyInfo.Enabled}");
-            Console.WriteLine($"Proxy Domain: \t{proxyInfo.Server}");
-        }
 
         public static IPAddress GetSubnetMaskForIp(IPAddress ip) {
             foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces()) {
@@ -405,7 +403,13 @@ namespace ManageAnonTokyo {
             }
             return "";
         }
+        public static string GetDomainExpose() {
+            return "http://*:8082/deploy/";
+        }
 
+        public static string GetBinPath() {
+            return "D:\\bin\\bin";
+        }
     }
     public class SystemProxyInfo {
         public bool Enabled { get; set; }

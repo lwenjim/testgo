@@ -1,0 +1,12 @@
+# 根配置，作用于整个项目
+root = true
+
+# 匹配所有 C# 文件
+[*.cs]
+# 大括号不单独一行（核心规则）
+csharp_new_line_before_open_brace = none
+# 可选：补充其他常用代码风格（按需调整）
+csharp_indent_braces = false          # 大括号不缩进
+csharp_indent_case_contents = true     # switch-case 内容缩进
+csharp_space_after_keywords = true     # 关键字后加空格（如 if (）
+csharp_space_between_parentheses = false # 括号内不加空格
