@@ -1,0 +1,17 @@
+deploy_window:
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnonTokyoSiriusServer.exe -v -x -gcflags "-N -l" ./cmd/server_app/main.go
+	@zip -r ~/Downloads/AnonTokyoSiriusServerCbor.zip  mastercbor
+	@curl http://10.27.6.27:8082/deploy\?execName\=AnonTokyoSiriusServerCbor.zip
+	@curl http://10.27.6.27:8082/deploy\?execName\=AnonTokyoSiriusServer.exe
+	@grpcurl -plaintext 10.27.6.27:8080 app.masterdata.MasterdataService.Version|jq -c
+	@cp -f ~/Workdata/sirius_server_api/src/Makefile ~/Workdata/testgo/resources/SiriusMakefile
+
+convert_master:
+	@go run cmd/convert_master/main.go
+	@cat mastercbor/Version
+	@grpcurl -plaintext 10.27.6.27:8080 app.masterdata.MasterdataService.Version|jq -c
+
+proto:
+	@go run cmd/proto/main.go
+
+.PHONY: convert_master proto deploy_window
