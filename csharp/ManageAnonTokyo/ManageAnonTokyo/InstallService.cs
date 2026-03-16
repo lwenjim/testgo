@@ -257,13 +257,15 @@ namespace ManageAnonTokyo {
             if (RunNssmCommand(nmPath, $"set \"{serviceName}\" Description \"{serviceName}\"").Length > 0) {
                 return Response("500", "failed to update service Description");
             }
-            string logPath = Path.GetDirectoryName(executablePath) + "\\" + Path.GetFileNameWithoutExtension(executablePath) + ".log";
-            if (!File.Exists(logPath)) {
-                File.Create(logPath);
+            if (Path.GetExtension(executablePath) == ".exe") {
+                string logPath = Path.GetDirectoryName(executablePath) + "\\" + Path.GetFileNameWithoutExtension(executablePath) + ".log";
+                if (!File.Exists(logPath)) {
+                    File.Create(logPath);
+                }
+                RunNssmCommand(nmPath, $"set \"{serviceName}\" AppStdin \"{logPath}\"");
+                RunNssmCommand(nmPath, $"set \"{serviceName}\" AppStdout \"{logPath}\"");
+                RunNssmCommand(nmPath, $"set \"{serviceName}\" AppStderr \"{logPath}\"");
             }
-            RunNssmCommand(nmPath, $"set \"{serviceName}\" AppStdin \"{logPath}\"");
-            RunNssmCommand(nmPath, $"set \"{serviceName}\" AppStdout \"{logPath}\"");
-            RunNssmCommand(nmPath, $"set \"{serviceName}\" AppStderr \"{logPath}\"");
             if (!string.IsNullOrWhiteSpace(startType)) {
                 RunNssmCommand(nmPath, $"set \"{serviceName}\" Start {startType}");
             }
