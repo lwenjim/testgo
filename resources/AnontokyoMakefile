@@ -30,8 +30,9 @@ pre_commit:
 convert_master:
 	@echo covert_master
 	@go run cmd/convert_master/main.go
-	@cat configs/mastercbor/Version
+	@cat configs/mastercbor/Version;echo
 	@grpcurl -plaintext 10.27.6.27:9090 app.bilibili.anontokyo.MasterdataService.Version|jq -c
+	@grpcurl anontokyo-dev-all-sirius.bilibiligame.net:443 app.bilibili.anontokyo.MasterdataService.Version|jq -c
 
 # proto变更
 proto:
@@ -52,14 +53,20 @@ generate_gorm_model:
 
 update_model: generate_shard_sql create_database_shard_from_sql generate_gorm_model
 
-# 发布开发机器
-deploy_window:
+# 发布开发机器1
+deploy_window: deploy_window_do print_version
+
+deploy_window_do:
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnontokyoServer.exe -v -x -gcflags "-N -l" .
 	@mysql -uroot -h10.27.6.27 -e "show databases"|egrep -e "anontokyo_shard_\d"|xargs -I {} echo "\"mysql -h10.27.6.27 -uroot -e 'drop database "{}"'\""|xargs -I {} sh -c {}
 	@cat /tmp/load_data.txt|xargs -I {} echo 'mysql -uroot -P3306 -h10.27.6.27  <'{} >/tmp/data.txt
 	@cat /tmp/data.txt|xargs -I {} bash -c {}
 	@curl http://10.27.6.27:8082/deploy\?execName\=AnontokyoServer.exe
+
+print_version:
+	@cat configs/mastercbor/Version;echo
 	@grpcurl -plaintext 10.27.6.27:9090 app.bilibili.anontokyo.MasterdataService.Version|jq -c
+	@grpcurl anontokyo-dev-all-sirius.bilibiligame.net:443 app.bilibili.anontokyo.MasterdataService.Version|jq -c
 	@cp -f ~/Workdata/anontokyo_server/Makefile ~/Workdata/testgo/resources/AnontokyoMakefile
 
 deploy_release:
