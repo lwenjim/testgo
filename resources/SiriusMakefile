@@ -1,15 +1,21 @@
-deploy_window:
+deploy_window: deploy_window_do print_version
+
+deploy_window_do:
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnonTokyoSiriusServer.exe -v -x -gcflags "-N -l" ./cmd/server_app/main.go
 	@zip -r ~/Downloads/AnonTokyoSiriusServerCbor.zip  mastercbor
 	@curl http://10.27.6.27:8082/deploy\?execName\=AnonTokyoSiriusServerCbor.zip
 	@curl http://10.27.6.27:8082/deploy\?execName\=AnonTokyoSiriusServer.exe
-	@grpcurl -plaintext 10.27.6.27:8080 app.masterdata.MasterdataService.Version|jq -c
 	@cp -f ~/Workdata/sirius_server_api/src/Makefile ~/Workdata/testgo/resources/SiriusMakefile
 
-convert_master:
+convert_master: convert_master_do print_version
+
+convert_master_do:
 	@go run cmd/convert_master/main.go
-	@cat mastercbor/Version
+
+print_version:
+	@cat mastercbor/Version;echo
 	@grpcurl -plaintext 10.27.6.27:8080 app.masterdata.MasterdataService.Version|jq -c
+	@grpcurl l4-dev-all-gs-sirius.bilibiligame.net:443 app.player.PlayerService.Register|jq -c
 
 proto:
 	@go run cmd/proto/main.go
