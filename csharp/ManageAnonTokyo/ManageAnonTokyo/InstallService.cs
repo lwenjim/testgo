@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.CommandLine;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -17,13 +18,43 @@ using Newtonsoft.Json;
 namespace ManageAnonTokyo {
     public class InstallService {
 
-        readonly static DateTime StartDate = DateTime.Now;
-        static Dictionary<string, string> fileMapService = new Dictionary<string, string>() {
+        public readonly static DateTime StartDate = DateTime.Now;
+
+        public static Dictionary<string, string> fileMapService = new Dictionary<string, string>() {
                     {"AnontokyoServer.exe", "AnonTokyoServer"},
                     {"AnonTokyoSiriusServer.exe", "AnonTokyoSiriusServer"},
                     {"AnonTokyoSiriusServerCbor.zip", "AnonTokyoSiriusServer" },
                     {"AnontokyoDocs.zip","" },
                 };
+
+        public static int Run(string[] args) {
+            var root = new RootCommand("MyApplication");
+            var service = new Command("service", "Configure the application");
+            var daemon = new Command("daemon", "install window service");
+            var run = new Command("run", "deploy and run window service");
+            var netinfo = new Command("info", "print network infomation");
+
+            run.SetAction(async (@params) => {
+                await InstallService.StartService();
+            });
+
+            daemon.SetAction((@params) => {
+                string data = InstallService.InstallDaemon();
+                if (data.Length > 0) {
+                    Console.WriteLine(data);
+                }
+            });
+
+            netinfo.SetAction((@params) => {
+                InstallService.PrintNetInfo();
+            });
+
+            root.Subcommands.Add(service);
+            service.Subcommands.Add(daemon);
+            service.Subcommands.Add(netinfo);
+
+            return root.Parse(args).Invoke();
+        }
 
         public static async Task StartService() {
             HttpListener listener = new HttpListener();
@@ -68,7 +99,7 @@ namespace ManageAnonTokyo {
         public static void PrintNetInfo() {
             string hostName = Dns.GetHostName();
             IPAddress[] addresses = Dns.GetHostAddresses(hostName);
-            var data = addresses.Where(ip => ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !IPAddress.IsLoopback(ip));
+            var data = addresses.Where(ip => ip.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ip));
             string ipAddress = "";
             string subnetMask = "";
             foreach (var item in data) {
@@ -161,8 +192,7 @@ namespace ManageAnonTokyo {
                     }
                     return "";
                 });
-            }
-            catch (Exception ex) {
+            } catch (Exception ex) {
                 return Response("500", $"操作失败: {ex.Message}");
             }
         }
@@ -234,8 +264,7 @@ namespace ManageAnonTokyo {
                     totalBytesRead += bytesRead;
                 }
                 fileStream.Close();
-            }
-            else {
+            } else {
                 throw new Exception($"HTTP错误: {response.StatusCode}");
             }
         }
@@ -294,7 +323,7 @@ namespace ManageAnonTokyo {
             return "";
         }
 
-        private static string RunNssmCommand(string nmPath, string arguments) {
+        public static string RunNssmCommand(string nmPath, string arguments) {
             var startInfo = new ProcessStartInfo {
                 FileName = nmPath,
                 Arguments = arguments,
@@ -332,14 +361,13 @@ namespace ManageAnonTokyo {
                         return Response("500", $"nssm 命令执行失败，退出代码: {process.ExitCode}");
                     }
                 }
-            }
-            catch (Exception ex) {
+            } catch (Exception ex) {
                 return Response("500", $"执行 nssm 命令失败: {ex.Message}");
             }
             return "";
         }
 
-        private static bool IsAdministrator() {
+        public static bool IsAdministrator() {
             var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
             var principal = new System.Security.Principal.WindowsPrincipal(identity);
             return principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
@@ -380,14 +408,11 @@ namespace ManageAnonTokyo {
                         return true;
                     }
                     return false;
-                }
-                catch {
+                } catch {
                     return false;
                 }
             }
         }
-
-
 
         public static IPAddress GetSubnetMaskForIp(IPAddress ip) {
             foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces()) {
