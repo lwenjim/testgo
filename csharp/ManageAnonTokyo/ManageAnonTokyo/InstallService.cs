@@ -18,6 +18,12 @@ namespace ManageAnonTokyo {
     public class InstallService {
 
         readonly static DateTime StartDate = DateTime.Now;
+        static Dictionary<string, string> fileMapService = new Dictionary<string, string>() {
+                    {"AnontokyoServer.exe", "AnonTokyoServer"},
+                    {"AnonTokyoSiriusServer.exe", "AnonTokyoSiriusServer"},
+                    {"AnonTokyoSiriusServerCbor.zip", "AnonTokyoSiriusServer" },
+                    {"AnontokyoDocs.zip","" },
+                };
 
         public static async Task StartService() {
             HttpListener listener = new HttpListener();
@@ -109,15 +115,10 @@ namespace ManageAnonTokyo {
 
         public async static Task<string> Install(string urlName, string DomainDownload) {
             try {
-                Dictionary<string, string> fileMapService = new Dictionary<string, string>() {
-                    {"AnontokyoServer.exe", "AnonTokyoServer"},
-                    {"AnonTokyoSiriusServer.exe", "AnonTokyoSiriusServer"},
-                    {"AnonTokyoSiriusServerCbor.zip", "AnonTokyoSiriusServer" },
-                };
                 if (Path.GetExtension(urlName) == ".exe" && !fileMapService.ContainsKey(urlName)) {
                     return Response("500", $"error params, info:{urlName}");
                 }
-                return await RestartService(fileMapService, urlName, async () => {
+                return await RestartService(urlName, async () => {
                     PathInfo info = GetBinPathFilenameAndLogname(urlName);
                     string url = $"{DomainDownload}/{info.filename}.exe";
                     switch (Path.GetExtension(urlName)) {
@@ -128,15 +129,32 @@ namespace ManageAnonTokyo {
                             await DownloadFileWithHttpWebRequest(url, info.binPath);
                             break;
                         case ".zip":
-                            url = $"{DomainDownload}/{urlName}";
-                            if (File.Exists(info.binPath)) {
-                                File.Delete(info.binPath);
+                            switch (urlName) {
+                                case "AnonTokyoSiriusServerCbor.zip":
+                                    url = $"{DomainDownload}/{urlName}";
+                                    if (File.Exists(info.binPath)) {
+                                        File.Delete(info.binPath);
+                                    }
+                                    await DownloadFileWithHttpWebRequest(url, info.binPath);
+
+                                    if (Directory.Exists(GetBinPath() + "\\mastercbor")) {
+                                        Directory.Delete(GetBinPath() + "\\mastercbor", true);
+                                    }
+                                    ZipFile.ExtractToDirectory(info.binPath, GetBinPath());
+                                    break;
+                                case "AnontokyoDocs.zip":
+                                    url = $"{DomainDownload}/{urlName}";
+                                    if (File.Exists(info.binPath)) {
+                                        File.Delete(info.binPath);
+                                    }
+                                    await DownloadFileWithHttpWebRequest(url, info.binPath);
+                                    string wwwPath = "C:\\inetpub\\wwwroot";
+                                    if (Directory.Exists(wwwPath + "\\docs")) {
+                                        Directory.Delete(wwwPath + "\\docs", true);
+                                    }
+                                    ZipFile.ExtractToDirectory(info.binPath, wwwPath);
+                                    return Response();
                             }
-                            await DownloadFileWithHttpWebRequest(url, info.binPath);
-                            if (Directory.Exists(GetBinPath() + "\\mastercbor")) {
-                                Directory.Delete(GetBinPath() + "\\mastercbor", true);
-                            }
-                            ZipFile.ExtractToDirectory(info.binPath, GetBinPath());
                             break;
                         default:
                             return Response("500", "error params");
@@ -149,7 +167,10 @@ namespace ManageAnonTokyo {
             }
         }
 
-        public static async Task<string> RestartService(Dictionary<string, string> fileMapService, string urlName, Func<Task<string>> handdle) {
+        public static async Task<string> RestartService(string urlName, Func<Task<string>> handdle) {
+            if (fileMapService[urlName].Length == 0) {
+                return await handdle();
+            }
             ServiceController specificService = new ServiceController(fileMapService[urlName]);
             bool serviceExists = ServiceController.GetServices().Any(s => s.ServiceName.Equals(fileMapService[urlName], StringComparison.OrdinalIgnoreCase));
             if (serviceExists && (specificService.Status == ServiceControllerStatus.Running || specificService.Status == ServiceControllerStatus.Paused)) {
