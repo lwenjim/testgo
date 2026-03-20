@@ -16,124 +16,203 @@ using Microsoft.Win32;
 using Newtonsoft.Json;
 
 namespace ManageAnonTokyo {
+    public static class AppConfig {
+        public const string BinPath = "D:\\bin\\bin";
+        public const string DocsPath = "C:\\inetpub\\wwwroot";
+        public const string DomainExpose = "http://*:8082/deploy/";
+        public const string ServiceName = "AnonTokyoManage";
+        public const string CborDirectoryName = "mastercbor";
+        public const int DefaultTimeout = 60000;
+        public const int ProcessTimeout = 30;
+    }
+
     public class InstallService {
+        private const string SuccessCode = "200";
+        private const string ErrorCode = "500";
+        private const string SuccessMessage = "Service update successfully.";
 
         public readonly static DateTime StartDate = DateTime.Now;
 
-        public static Dictionary<string, string> fileMapService = new Dictionary<string, string>() {
-                    {"AnontokyoServer.exe", "AnonTokyoServer"},
-                    {"AnonTokyoSiriusServer.exe", "AnonTokyoSiriusServer"},
-                    {"AnonTokyoSiriusServerCbor.zip", "AnonTokyoSiriusServer" },
-                    {"AnontokyoDocs.zip","" },
-                };
+        private static readonly Dictionary<string, string> FileMapService = new Dictionary<string, string>() {
+            {"AnontokyoServer.exe", "AnonTokyoServer"},
+            {"AnonTokyoSiriusServer.exe", "AnonTokyoSiriusServer"},
+            {"AnonTokyoSiriusServerCbor.zip", "AnonTokyoSiriusServer"},
+            {"AnontokyoDocs.zip", ""},
+        };
 
         public static int Run(string[] args) {
             var root = new RootCommand("MyApplication");
             var service = new Command("service", "Configure the application");
             var daemon = new Command("daemon", "install window service");
             var run = new Command("run", "deploy and run window service");
-            var netinfo = new Command("info", "print network infomation");
+            var netinfo = new Command("info", "print network information");
 
             run.SetAction(async (@params) => {
-                await InstallService.StartService();
+                await StartService();
             });
 
             daemon.SetAction((@params) => {
-                string data = InstallService.InstallDaemon();
-                if (data.Length > 0) {
-                    Console.WriteLine(data);
+                string result = InstallDaemon();
+                if (!string.IsNullOrEmpty(result)) {
+                    Console.WriteLine(result);
                 }
             });
 
             netinfo.SetAction((@params) => {
-                InstallService.PrintNetInfo();
+                PrintNetInfo();
             });
 
             root.Subcommands.Add(service);
             service.Subcommands.Add(daemon);
             service.Subcommands.Add(netinfo);
+            service.Subcommands.Add(run);
 
             return root.Parse(args).Invoke();
         }
 
         public static async Task StartService() {
             HttpListener listener = new HttpListener();
-            listener.Prefixes.Add(GetDomainExpose());
+            listener.Prefixes.Add(AppConfig.DomainExpose);
             listener.Start();
-            Console.WriteLine($"lissten: {GetDomainExpose()} port");
-            while (true) {
-                HttpListenerContext context = await listener.GetContextAsync();
-                await ProcessRequest(context);
+            Console.WriteLine($"Listen: {AppConfig.DomainExpose}");
+            try {
+                while (true) {
+                    HttpListenerContext context = await listener.GetContextAsync();
+                    _ = ProcessRequest(context); // Fire and forget
+                }
+            } finally {
+                listener?.Close();
             }
         }
 
         public static string InstallDaemon() {
-            string path = Assembly.GetExecutingAssembly().Location;
-            string serverName = "AnonTokyoManage";
-            ServiceController specificService = new ServiceController(serverName);
-            bool serviceExists = ServiceController.GetServices().Any(s => s.ServiceName.Equals(serverName, StringComparison.OrdinalIgnoreCase));
-            if (serviceExists && (specificService.Status == ServiceControllerStatus.Running || specificService.Status == ServiceControllerStatus.Paused)) {
-                specificService.Stop();
-                specificService.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(60));
+            try {
+                string executablePath = Assembly.GetExecutingAssembly().Location;
+                StopServiceIfRunning(AppConfig.ServiceName);
+                UnregisterServiceIfExists(AppConfig.ServiceName);
+
+                string destFile = Path.Combine(AppConfig.BinPath, Path.GetFileName(executablePath));
+                CopyFileWithBackup(executablePath, destFile);
+
+                string nssmPath = GetNssmPath();
+                string result = RegisterWindowService(nssmPath, AppConfig.ServiceName, destFile, "service run");
+                if (!string.IsNullOrEmpty(result)) {
+                    return CreateErrorResponse(result);
+                }
+
+                StartServiceAndWait(AppConfig.ServiceName);
+                return "";
+            } catch (Exception ex) {
+                return CreateErrorResponse($"服务安装失败: {ex.Message}");
             }
+        }
+
+        private static void StopServiceIfRunning(string serviceName) {
+            ServiceController specificService = new ServiceController(serviceName);
+            bool serviceExists = ServiceController.GetServices()
+                .Any(s => s.ServiceName.Equals(serviceName, StringComparison.OrdinalIgnoreCase));
+
             if (serviceExists) {
-                string data = UnRegisterWindowService(GetNssmPath(), serverName);
-                if (data.Length > 0) {
-                    return Response("500", data);
+                if (specificService.Status == ServiceControllerStatus.Running ||
+                    specificService.Status == ServiceControllerStatus.Paused) {
+                    specificService.Stop();
+                    specificService.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(60));
                 }
             }
-            string destFile = $"{GetBinPath()}\\{Path.GetFileName(path)}";
-            if (File.Exists(destFile)) {
-                File.Delete(destFile);
+        }
+
+        private static void UnregisterServiceIfExists(string serviceName) {
+            bool serviceExists = ServiceController.GetServices()
+                .Any(s => s.ServiceName.Equals(serviceName, StringComparison.OrdinalIgnoreCase));
+
+            if (serviceExists) {
+                string nssmPath = GetNssmPath();
+                string data = UnRegisterWindowService(nssmPath, serviceName);
+                if (!string.IsNullOrEmpty(data)) {
+                    throw new Exception(data);
+                }
             }
-            File.Copy(path, destFile);
-            string result = RegisterWindowService(GetNssmPath(), serverName, destFile, "service run");
-            if (result.Length > 0) {
-                return Response("500", result);
+        }
+
+        private static void CopyFileWithBackup(string source, string destination) {
+            SafeDeleteFile(destination);
+            File.Copy(source, destination);
+        }
+
+        private static void SafeDeleteFile(string path) {
+            if (File.Exists(path)) {
+                File.Delete(path);
             }
+        }
+
+        private static void StartServiceAndWait(string serviceName) {
+            ServiceController specificService = new ServiceController(serviceName);
             specificService.Start();
-            specificService.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
-            return "";
+            specificService.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(AppConfig.ProcessTimeout));
         }
 
         public static void PrintNetInfo() {
+            Console.WriteLine("\n=== Network Information ===\n");
+
+            PrintIPInfo();
+            PrintDnsServers();
+            PrintProxyInfo();
+
+            Console.WriteLine();
+        }
+
+        private static void PrintIPInfo() {
             string hostName = Dns.GetHostName();
             IPAddress[] addresses = Dns.GetHostAddresses(hostName);
-            var data = addresses.Where(ip => ip.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ip));
+            var validAddresses = addresses.Where(ip => ip.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ip));
+
             string ipAddress = "";
             string subnetMask = "";
-            foreach (var item in data) {
-                if (ipAddress.Length < item.ToString().Length) {
-                    ipAddress = item.ToString();
-                    subnetMask = GetSubnetMaskForIp(item).ToString();
+            foreach (var address in validAddresses) {
+                if (ipAddress.Length < address.ToString().Length) {
+                    ipAddress = address.ToString();
+                    subnetMask = GetSubnetMaskForIp(address)?.ToString() ?? "";
                 }
             }
-            Console.WriteLine($"Ip Address: \t{ipAddress}");
-            Console.WriteLine($"Net Mask: \t{subnetMask}");
 
-            foreach (var i in GetAllDnsServers()) {
-                Console.WriteLine($"Dns: \t\t{i.ToString()}");
+            Console.WriteLine($"IP Address:  {ipAddress}");
+            Console.WriteLine($"Net Mask:    {subnetMask}");
+        }
+
+        private static void PrintDnsServers() {
+            Console.WriteLine();
+            foreach (var dns in GetAllDnsServers()) {
+                Console.WriteLine($"DNS Server:  {dns}");
             }
+        }
 
+        private static void PrintProxyInfo() {
+            Console.WriteLine();
             var proxyInfo = SystemProxyInfo.GetFromRegistry();
-            Console.WriteLine($"Enable Proxy: \t{proxyInfo.Enabled}");
-            Console.WriteLine($"Proxy Domain: \t{proxyInfo.Server}");
+            Console.WriteLine($"Proxy Enabled:  {proxyInfo.Enabled}");
+            Console.WriteLine($"Proxy Server:   {proxyInfo.Server}");
         }
 
         public static async Task ProcessRequest(HttpListenerContext context) {
-            string exeName = context.Request.QueryString.Get("execName");
-            if (exeName == null || exeName.Length == 0) {
-                Response(context.Response, "error params");
-                return;
+            try {
+                string exeName = context.Request.QueryString.Get("execName");
+                if (string.IsNullOrEmpty(exeName)) {
+                    Response(context.Response, CreateErrorResponse("Invalid executable name"));
+                    return;
+                }
+
+                IPEndPoint remoteIP = context.Request.RemoteEndPoint;
+                bool portOpen = await IsTcpPortOpenAsync(remoteIP.Address.ToString(), 80);
+                if (!portOpen) {
+                    Response(context.Response, CreateErrorResponse($"Port 80 not open on {remoteIP.Address}"));
+                    return;
+                }
+
+                string responseString = await Install(exeName, "http://" + remoteIP.Address);
+                Response(context.Response, responseString);
+            } catch (Exception ex) {
+                Response(context.Response, CreateErrorResponse($"Request processing error: {ex.Message}"));
             }
-            IPEndPoint ip = context.Request.RemoteEndPoint;
-            bool isOpen = await IsTcpPortOpenAsync(ip.Address.ToString(), 80);
-            if (!isOpen) {
-                Response(context.Response, $"not open {ip.Address.ToString()}:80 ");
-                return;
-            }
-            string responseString = await Install(exeName, "http://" + ip.Address.ToString());
-            Response(context.Response, responseString);
         }
 
         public static void Response(HttpListenerResponse response, string responseString) {
@@ -144,128 +223,157 @@ namespace ManageAnonTokyo {
             response.OutputStream.Close();
         }
 
-        public async static Task<string> Install(string urlName, string DomainDownload) {
+        private static string CreateErrorResponse(string message) {
+            return CreateResponse(ErrorCode, message);
+        }
+
+        private static string CreateSuccessResponse() {
+            return CreateResponse(SuccessCode, SuccessMessage);
+        }
+
+        public static string CreateResponse(string code = SuccessCode, string message = SuccessMessage) {
+            Dictionary<string, string> responseDict = new Dictionary<string, string>() {
+                {"code", code},
+                {"message", message},
+                {"interval", (DateTime.Now.Subtract(StartDate).TotalSeconds).ToString()},
+            };
+            return $"{JsonConvert.SerializeObject(responseDict)}\n";
+        }
+
+        public async static Task<string> Install(string urlName, string domainDownload) {
             try {
-                if (Path.GetExtension(urlName) == ".exe" && !fileMapService.ContainsKey(urlName)) {
-                    return Response("500", $"error params, info:{urlName}");
+                if (Path.GetExtension(urlName) == ".exe" && !FileMapService.ContainsKey(urlName)) {
+                    return CreateErrorResponse($"Invalid executable: {urlName}");
                 }
+
                 return await RestartService(urlName, async () => {
-                    PathInfo info = GetBinPathFilenameAndLogname(urlName);
-                    string url = $"{DomainDownload}/{info.filename}.exe";
+                    PathInfo info = GetPathInfo(urlName);
+                    string url = $"{domainDownload}/{info.filename}.exe";
+
                     switch (Path.GetExtension(urlName)) {
                         case ".exe":
-                            if (!fileMapService.ContainsKey(urlName)) {
-                                return Response("500", "error params");
-                            }
-                            await DownloadFileWithHttpWebRequest(url, info.binPath);
-                            break;
+                            return await HandleExeInstall(url, info);
                         case ".zip":
-                            switch (urlName) {
-                                case "AnonTokyoSiriusServerCbor.zip":
-                                    url = $"{DomainDownload}/{urlName}";
-                                    if (File.Exists(info.binPath)) {
-                                        File.Delete(info.binPath);
-                                    }
-                                    await DownloadFileWithHttpWebRequest(url, info.binPath);
-
-                                    if (Directory.Exists(GetBinPath() + "\\mastercbor")) {
-                                        Directory.Delete(GetBinPath() + "\\mastercbor", true);
-                                    }
-                                    ZipFile.ExtractToDirectory(info.binPath, GetBinPath());
-                                    break;
-                                case "AnontokyoDocs.zip":
-                                    url = $"{DomainDownload}/{urlName}";
-                                    if (File.Exists(info.binPath)) {
-                                        File.Delete(info.binPath);
-                                    }
-                                    await DownloadFileWithHttpWebRequest(url, info.binPath);
-                                    string wwwPath = "C:\\inetpub\\wwwroot";
-                                    if (Directory.Exists(wwwPath + "\\docs")) {
-                                        Directory.Delete(wwwPath + "\\docs", true);
-                                    }
-                                    ZipFile.ExtractToDirectory(info.binPath, wwwPath);
-                                    return Response();
-                            }
-                            break;
+                            return await HandleZipInstall(urlName, domainDownload, info);
                         default:
-                            return Response("500", "error params");
+                            return CreateErrorResponse("Unsupported file type");
                     }
-                    return "";
                 });
             } catch (Exception ex) {
-                return Response("500", $"操作失败: {ex.Message}");
+                return CreateErrorResponse($"操作失败: {ex.Message}");
             }
         }
 
-        public static async Task<string> RestartService(string urlName, Func<Task<string>> handdle) {
-            if (fileMapService[urlName].Length == 0) {
-                return await handdle();
+        private static async Task<string> HandleExeInstall(string url, PathInfo info) {
+            if (!FileMapService.ContainsKey(Path.GetFileName(url))) {
+                return CreateErrorResponse("Invalid executable");
             }
-            ServiceController specificService = new ServiceController(fileMapService[urlName]);
-            bool serviceExists = ServiceController.GetServices().Any(s => s.ServiceName.Equals(fileMapService[urlName], StringComparison.OrdinalIgnoreCase));
-            if (serviceExists && (specificService.Status == ServiceControllerStatus.Running || specificService.Status == ServiceControllerStatus.Paused)) {
-                specificService.Stop();
-                specificService.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(60));
+            await DownloadFileWithHttpWebRequest(url, info.binPath);
+            return "";
+        }
+
+        private static async Task<string> HandleZipInstall(string urlName, string domainDownload, PathInfo info) {
+            string url = $"{domainDownload}/{urlName}";
+            SafeDeleteFile(info.binPath);
+            await DownloadFileWithHttpWebRequest(url, info.binPath);
+
+            switch (urlName) {
+                case "AnonTokyoSiriusServerCbor.zip":
+                    string cborPath = Path.Combine(AppConfig.BinPath, AppConfig.CborDirectoryName);
+                    SafeDeleteDirectory(cborPath);
+                    ZipFile.ExtractToDirectory(info.binPath, AppConfig.BinPath);
+                    break;
+
+                case "AnontokyoDocs.zip":
+                    string docsPath = Path.Combine(AppConfig.DocsPath, "docs");
+                    SafeDeleteDirectory(docsPath);
+                    ZipFile.ExtractToDirectory(info.binPath, AppConfig.DocsPath);
+                    return CreateSuccessResponse();
             }
-            string result = await handdle();
-            if (result.Length > 0) {
+            return "";
+        }
+
+        private static void SafeDeleteDirectory(string path) {
+            if (Directory.Exists(path)) {
+                Directory.Delete(path, true);
+            }
+        }
+
+        public static async Task<string> RestartService(string urlName, Func<Task<string>> handler) {
+            if (string.IsNullOrEmpty(FileMapService[urlName])) {
+                return await handler();
+            }
+
+            string serviceName = FileMapService[urlName];
+            StopServiceIfRunning(serviceName);
+
+            string result = await handler();
+            if (!string.IsNullOrEmpty(result)) {
                 return result;
             }
-            if (!serviceExists && Path.GetExtension(urlName) == ".exe") {
-                string fullName = $"{GetBinPath()}\\{Path.GetFileName(urlName)}";
-                string serviceName = fileMapService[urlName];
-                string data = RegisterWindowService(GetNssmPath(), serviceName, fullName);
-                if (data.Length > 0) {
-                    return Response("500", data);
+
+            if (Path.GetExtension(urlName) == ".exe" && !ServiceExists(serviceName)) {
+                string fullPath = Path.Combine(AppConfig.BinPath, Path.GetFileName(urlName));
+                string nssmPath = GetNssmPath();
+                string data = RegisterWindowService(nssmPath, serviceName, fullPath);
+                if (!string.IsNullOrEmpty(data)) {
+                    return CreateErrorResponse(data);
                 }
             }
-            if (specificService.Status == ServiceControllerStatus.Stopped) {
-                specificService.Start();
-                specificService.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(30));
-            }
-            return Response();
+
+            StartServiceIfStopped(serviceName);
+            return CreateSuccessResponse();
         }
 
-        public static PathInfo GetBinPathFilenameAndLogname(string urlName) {
-            string binPath = $"{GetBinPath()}\\{urlName}";
-            if (File.Exists(binPath)) {
-                File.Delete(binPath);
+        private static bool ServiceExists(string serviceName) {
+            return ServiceController.GetServices()
+                .Any(s => s.ServiceName.Equals(serviceName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void StartServiceIfStopped(string serviceName) {
+            ServiceController service = new ServiceController(serviceName);
+            if (service.Status == ServiceControllerStatus.Stopped) {
+                service.Start();
+                service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(AppConfig.ProcessTimeout));
             }
+        }
+
+        public static PathInfo GetPathInfo(string urlName) {
+            string binPath = Path.Combine(AppConfig.BinPath, urlName);
+            SafeDeleteFile(binPath);
+
             string filename = Path.GetFileNameWithoutExtension(binPath);
-            string logPath = string.Format($"{GetBinPath()}\\{0}.log", filename);
+            string logPath = Path.Combine(AppConfig.BinPath, $"{filename}.log");
+
             if (!File.Exists(logPath)) {
-                File.Create(logPath);
+                File.Create(logPath).Dispose();
             }
+
             return new PathInfo() { binPath = binPath, filename = filename, logPath = logPath };
         }
 
         public static string Response(string code = "200", string message = "Service update successfully.") {
-            Dictionary<string, string> scores = new Dictionary<string, string>() {
-                {"code", code},
-                {"message", message },
-                {"interval", (DateTime.Now.Subtract(StartDate).TotalSeconds).ToString() },
-            };
-            return $"{JsonConvert.SerializeObject(scores)}\n";
+            return CreateResponse(code, message);
         }
 
         public async static Task DownloadFileWithHttpWebRequest(string url, string filePath) {
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
             request.UserAgent = "Mozilla/5.0";
-            request.Timeout = 60000;
-            HttpWebResponse response = (HttpWebResponse)await request.GetResponseAsync();
-            if (response.StatusCode == HttpStatusCode.OK) {
-                Stream responseStream = response.GetResponseStream();
-                FileStream fileStream = File.Create(filePath);
-                byte[] buffer = new byte[4096];
-                int bytesRead;
-                long totalBytesRead = 0;
-                while ((bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length)) > 0) {
-                    await fileStream.WriteAsync(buffer, 0, bytesRead);
-                    totalBytesRead += bytesRead;
+            request.Timeout = AppConfig.DefaultTimeout;
+
+            using (HttpWebResponse response = (HttpWebResponse)await request.GetResponseAsync()) {
+                if (response.StatusCode != HttpStatusCode.OK) {
+                    throw new Exception($"HTTP error: {response.StatusCode}");
                 }
-                fileStream.Close();
-            } else {
-                throw new Exception($"HTTP错误: {response.StatusCode}");
+
+                using (Stream responseStream = response.GetResponseStream())
+                using (FileStream fileStream = File.Create(filePath)) {
+                    byte[] buffer = new byte[4096];
+                    int bytesRead;
+                    while ((bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length)) > 0) {
+                        await fileStream.WriteAsync(buffer, 0, bytesRead);
+                    }
+                }
             }
         }
 
@@ -273,59 +381,84 @@ namespace ManageAnonTokyo {
             public string binPath, filename, logPath;
         }
 
-        public static string UnRegisterWindowService(string nPath, string serviceName) {
-            if (!File.Exists(nPath)) {
-                return Response("500", $"nssm.exe 未找到: {nPath}");
+        public static string UnRegisterWindowService(string nssmPath, string serviceName) {
+            if (!File.Exists(nssmPath)) {
+                return CreateErrorResponse($"nssm.exe not found: {nssmPath}");
             }
-            string installArgs = $"remove \"{serviceName}\" confirm";
-            if (RunNssmCommand(nPath, installArgs).Length > 0) {
-                return Response("500", "failed to uninstall window service");
+
+            string args = $"remove \"{serviceName}\" confirm";
+            if (!string.IsNullOrEmpty(RunNssmCommand(nssmPath, args))) {
+                return CreateErrorResponse("Failed to uninstall service");
             }
             return "";
         }
 
-        public static string RegisterWindowService(string nmPath, string serviceName, string executablePath, string arguments = "", string startType = "SERVICE_AUTO_START") {
-            if (!File.Exists(nmPath)) {
-                return Response("500", $"nssm.exe 未找到: {nmPath}");
+        public static string RegisterWindowService(string nssmPath, string serviceName, string executablePath, string arguments = "", string startType = "SERVICE_AUTO_START") {
+            if (!File.Exists(nssmPath)) {
+                return CreateErrorResponse($"nssm.exe not found: {nssmPath}");
             }
 
             if (!File.Exists(executablePath)) {
-                return Response("500", $"可执行文件未找到: {executablePath}");
+                return CreateErrorResponse($"Executable not found: {executablePath}");
             }
 
-            string installArgs = $"install \"{serviceName}\" \"{executablePath}\"";
-            if (!string.IsNullOrWhiteSpace(arguments)) {
-                installArgs += $" {arguments}";
-            }
-
-            if (RunNssmCommand(nmPath, installArgs).Length > 0) {
-                return Response("500", "failed to install window service");
-            }
-            if (RunNssmCommand(nmPath, $"set \"{serviceName}\" DisplayName \"{serviceName}\"").Length > 0) {
-                return Response("500", "failed to update service DisplayName");
-            }
-            if (RunNssmCommand(nmPath, $"set \"{serviceName}\" Description \"{serviceName}\"").Length > 0) {
-                return Response("500", "failed to update service Description");
-            }
-            if (Path.GetExtension(executablePath) == ".exe") {
-                string logPath = Path.GetDirectoryName(executablePath) + "\\" + Path.GetFileNameWithoutExtension(executablePath) + ".log";
-                if (!File.Exists(logPath)) {
-                    File.Create(logPath);
+            try {
+                string installArgs = BuildInstallArgs(serviceName, executablePath, arguments);
+                if (!TryRunNssmCommand(nssmPath, installArgs)) {
+                    return CreateErrorResponse("Failed to install service");
                 }
-                RunNssmCommand(nmPath, $"set \"{serviceName}\" AppStdin \"{logPath}\"");
-                RunNssmCommand(nmPath, $"set \"{serviceName}\" AppStdout \"{logPath}\"");
-                RunNssmCommand(nmPath, $"set \"{serviceName}\" AppStderr \"{logPath}\"");
+
+                SetServiceProperties(nssmPath, serviceName, executablePath, startType);
+                return "";
+            } catch (Exception ex) {
+                return CreateErrorResponse($"Service registration failed: {ex.Message}");
             }
-            if (!string.IsNullOrWhiteSpace(startType)) {
-                RunNssmCommand(nmPath, $"set \"{serviceName}\" Start {startType}");
-            }
-            RunNssmCommand(nmPath, $"set \"{serviceName}\" AppRestartDelay 5000");
-            return "";
         }
 
-        public static string RunNssmCommand(string nmPath, string arguments) {
+        private static string BuildInstallArgs(string serviceName, string executablePath, string arguments) {
+            string args = $"install \"{serviceName}\" \"{executablePath}\"";
+            if (!string.IsNullOrWhiteSpace(arguments)) {
+                args += $" {arguments}";
+            }
+            return args;
+        }
+
+        private static void SetServiceProperties(string nssmPath, string serviceName, string executablePath, string startType) {
+            RunNssmCommand(nssmPath, $"set \"{serviceName}\" DisplayName \"{serviceName}\"");
+            RunNssmCommand(nssmPath, $"set \"{serviceName}\" Description \"{serviceName}\"");
+
+            if (Path.GetExtension(executablePath) == ".exe") {
+                SetServiceLogPaths(nssmPath, serviceName, executablePath);
+            }
+
+            if (!string.IsNullOrWhiteSpace(startType)) {
+                RunNssmCommand(nssmPath, $"set \"{serviceName}\" Start {startType}");
+            }
+
+            RunNssmCommand(nssmPath, $"set \"{serviceName}\" AppRestartDelay 5000");
+        }
+
+        private static void SetServiceLogPaths(string nssmPath, string serviceName, string executablePath) {
+            string logPath = Path.Combine(
+                Path.GetDirectoryName(executablePath),
+                Path.GetFileNameWithoutExtension(executablePath) + ".log");
+
+            if (!File.Exists(logPath)) {
+                File.Create(logPath).Dispose();
+            }
+
+            RunNssmCommand(nssmPath, $"set \"{serviceName}\" AppStdin \"{logPath}\"");
+            RunNssmCommand(nssmPath, $"set \"{serviceName}\" AppStdout \"{logPath}\"");
+            RunNssmCommand(nssmPath, $"set \"{serviceName}\" AppStderr \"{logPath}\"");
+        }
+
+        private static bool TryRunNssmCommand(string nssmPath, string arguments) {
+            return string.IsNullOrEmpty(RunNssmCommand(nssmPath, arguments));
+        }
+
+        public static string RunNssmCommand(string nssmPath, string arguments) {
             var startInfo = new ProcessStartInfo {
-                FileName = nmPath,
+                FileName = nssmPath,
                 Arguments = arguments,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
@@ -333,8 +466,8 @@ namespace ManageAnonTokyo {
                 CreateNoWindow = true,
             };
 
-            bool needAdmin = !IsAdministrator();
-            if (needAdmin) {
+            bool needsAdmin = !IsAdministrator();
+            if (needsAdmin) {
                 startInfo.UseShellExecute = true;
                 startInfo.Verb = "runas";
                 startInfo.RedirectStandardOutput = false;
@@ -344,25 +477,29 @@ namespace ManageAnonTokyo {
             try {
                 using (var process = Process.Start(startInfo)) {
                     if (process == null) {
-                        return Response("500", "process == null");
+                        return "Process failed to start";
                     }
+
                     process.WaitForExit();
-                    if (!needAdmin) {
+
+                    if (!needsAdmin) {
                         string output = process.StandardOutput.ReadToEnd();
                         string error = process.StandardError.ReadToEnd();
+
                         if (!string.IsNullOrEmpty(output)) {
                             Console.WriteLine(output);
                         }
                         if (!string.IsNullOrEmpty(error)) {
-                            return Response("500", "错误: " + error);
+                            return $"Error: {error}";
                         }
                     }
+
                     if (process.ExitCode > 0) {
-                        return Response("500", $"nssm 命令执行失败，退出代码: {process.ExitCode}");
+                        return $"Command failed with exit code: {process.ExitCode}";
                     }
                 }
             } catch (Exception ex) {
-                return Response("500", $"执行 nssm 命令失败: {ex.Message}");
+                return $"Command execution failed: {ex.Message}";
             }
             return "";
         }
@@ -374,24 +511,29 @@ namespace ManageAnonTokyo {
         }
 
         public static string RunCommand(string command) {
-            Process process = new Process();
-            process.StartInfo.FileName = "cmd.exe";
-            process.StartInfo.Arguments = "/c " + command;
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.RedirectStandardError = true;
-            process.StartInfo.CreateNoWindow = true;
+            try {
+                using (Process process = new Process()) {
+                    process.StartInfo.FileName = "cmd.exe";
+                    process.StartInfo.Arguments = "/c " + command;
+                    process.StartInfo.UseShellExecute = false;
+                    process.StartInfo.RedirectStandardOutput = true;
+                    process.StartInfo.RedirectStandardError = true;
+                    process.StartInfo.CreateNoWindow = true;
 
-            StringBuilder output = new StringBuilder();
-            process.OutputDataReceived += (sender, e) => output.AppendLine(e.Data);
-            process.ErrorDataReceived += (sender, e) => output.AppendLine(e.Data);
+                    StringBuilder output = new StringBuilder();
+                    process.OutputDataReceived += (sender, e) => output.AppendLine(e.Data);
+                    process.ErrorDataReceived += (sender, e) => output.AppendLine(e.Data);
 
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-            process.WaitForExit();
+                    process.Start();
+                    process.BeginOutputReadLine();
+                    process.BeginErrorReadLine();
+                    process.WaitForExit();
 
-            return output.ToString();
+                    return output.ToString();
+                }
+            } catch (Exception ex) {
+                return $"Command execution failed: {ex.Message}";
+            }
         }
 
         public static string GetNssmPath() {
@@ -442,23 +584,8 @@ namespace ManageAnonTokyo {
             return dnsList.Distinct().ToList();
         }
 
-        public static string GetRuntimeDefaultProxy() {
-            IWebProxy defaultProxy = WebRequest.DefaultWebProxy;
-            if (defaultProxy != null) {
-                Uri testUri = new Uri("http://www.baidu.com");
-                Uri proxyUri = defaultProxy.GetProxy(testUri);
-                return proxyUri.ToString();
-            }
-            return "";
-        }
-        public static string GetDomainExpose() {
-            return "http://*:8082/deploy/";
-        }
-
-        public static string GetBinPath() {
-            return "D:\\bin\\bin";
-        }
     }
+
     public class SystemProxyInfo {
         public bool Enabled { get; set; }
         public string Server { get; set; }
