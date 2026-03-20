@@ -65,6 +65,7 @@ namespace ManageAnonTokyo {
             root.Subcommands.Add(service);
             service.Subcommands.Add(daemon);
             service.Subcommands.Add(netinfo);
+            service.Subcommands.Add(run);
 
             return root.Parse(args).Invoke();
         }
@@ -538,7 +539,6 @@ namespace ManageAnonTokyo {
         public static string GetNssmPath() {
             return RunCommand("where nssm").Trim();
         }
-<<<<<<< HEAD
 
         public static async Task<bool> IsTcpPortOpenAsync(string host, int port, int timeoutMilliseconds = 3000) {
             using (TcpClient client = new TcpClient()) {
@@ -584,76 +584,6 @@ namespace ManageAnonTokyo {
             return dnsList.Distinct().ToList();
         }
 
-        public static string GetRuntimeDefaultProxy() {
-            IWebProxy defaultProxy = WebRequest.DefaultWebProxy;
-            if (defaultProxy != null) {
-                Uri testUri = new Uri("http://www.baidu.com");
-                Uri proxyUri = defaultProxy.GetProxy(testUri);
-                return proxyUri.ToString();
-            }
-            return "";
-        }
-
-        public static async Task<bool> IsTcpPortOpenAsync(string host, int port, int timeoutMilliseconds = 3000) {
-            using (TcpClient client = new TcpClient()) {
-                try {
-                    var connectTask = client.ConnectAsync(host, port);
-                    var completedTask = await Task.WhenAny(connectTask, Task.Delay(timeoutMilliseconds));
-                    if (completedTask == connectTask) {
-                        await connectTask;
-                        return true;
-                    }
-                    return false;
-                } catch {
-                    return false;
-                }
-            }
-        }
-
-        public static IPAddress GetSubnetMaskForIp(IPAddress ip) {
-            foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces()) {
-                if (ni.OperationalStatus == OperationalStatus.Up) {
-                    foreach (UnicastIPAddressInformation ipInfo in ni.GetIPProperties().UnicastAddresses) {
-                        if (ipInfo.Address.Equals(ip)) {
-                            return ipInfo.IPv4Mask;
-                        }
-                    }
-                }
-            }
-            return null;
-        }
-
-        public static List<IPAddress> GetAllDnsServers() {
-            var dnsList = new List<IPAddress>();
-            foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces()) {
-                if (ni.OperationalStatus == OperationalStatus.Up && ni.NetworkInterfaceType != NetworkInterfaceType.Loopback) {
-                    IPInterfaceProperties ipProps = ni.GetIPProperties();
-                    foreach (var dns in ipProps.DnsAddresses) {
-                        if (dns.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork) {
-                            dnsList.Add(dns);
-                        }
-                    }
-                }
-            }
-            return dnsList.Distinct().ToList();
-        }
-
-        public static string GetRuntimeDefaultProxy() {
-            IWebProxy defaultProxy = WebRequest.DefaultWebProxy;
-            if (defaultProxy != null) {
-                Uri testUri = new Uri("http://www.baidu.com");
-                Uri proxyUri = defaultProxy.GetProxy(testUri);
-                return proxyUri.ToString();
-            }
-            return "";
-        }
-        public static string GetDomainExpose() {
-            return "http://*:8082/deploy/";
-        }
-
-        public static string GetBinPath() {
-            return "D:\\bin\\bin";
-        }
     }
 
     public class SystemProxyInfo {
