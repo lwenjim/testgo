@@ -37,8 +37,8 @@ namespace ManageAnonTokyo {
             {"AnontokyoServer.exe", "AnonTokyoServer"},
             {"AnonTokyoSiriusServer.exe", "AnonTokyoSiriusServer"},
             {"AnonTokyoSiriusServerCbor.zip", "AnonTokyoSiriusServer"},
+            {"TestGo.exe", "AnonTokyoTestGo"},
             {"AnontokyoDocs.zip", ""},
-            {"testgo.exe", "AnonTokyoTestGo"},
         };
 
         public static int Run(string[] args) {
