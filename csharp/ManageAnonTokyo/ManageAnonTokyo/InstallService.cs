@@ -37,6 +37,7 @@ namespace ManageAnonTokyo {
             {"AnontokyoServer.exe", "AnonTokyoServer"},
             {"AnonTokyoSiriusServer.exe", "AnonTokyoSiriusServer"},
             {"AnonTokyoSiriusServerCbor.zip", "AnonTokyoSiriusServer"},
+            {"TestGo.exe", "AnonTokyoTestGo"},
             {"AnontokyoDocs.zip", ""},
         };
 
@@ -200,6 +201,7 @@ namespace ManageAnonTokyo {
                     Response(context.Response, CreateErrorResponse("Invalid executable name"));
                     return;
                 }
+                string version = context.Request.QueryString.Get("version");
 
                 IPEndPoint remoteIP = context.Request.RemoteEndPoint;
                 bool portOpen = await IsTcpPortOpenAsync(remoteIP.Address.ToString(), 80);
@@ -208,7 +210,7 @@ namespace ManageAnonTokyo {
                     return;
                 }
 
-                string responseString = await Install(exeName, "http://" + remoteIP.Address);
+                string responseString = await Install(exeName, version, "http://" + remoteIP.Address);
                 Response(context.Response, responseString);
             } catch (Exception ex) {
                 Response(context.Response, CreateErrorResponse($"Request processing error: {ex.Message}"));
@@ -240,21 +242,20 @@ namespace ManageAnonTokyo {
             return $"{JsonConvert.SerializeObject(responseDict)}\n";
         }
 
-        public async static Task<string> Install(string urlName, string domainDownload) {
+        public async static Task<string> Install(string urlName, string version, string domainDownload) {
             try {
                 if (Path.GetExtension(urlName) == ".exe" && !FileMapService.ContainsKey(urlName)) {
                     return CreateErrorResponse($"Invalid executable: {urlName}");
                 }
-
                 return await RestartService(urlName, async () => {
                     PathInfo info = GetPathInfo(urlName);
                     string url = $"{domainDownload}/{info.filename}.exe";
 
                     switch (Path.GetExtension(urlName)) {
                         case ".exe":
-                            return await HandleExeInstall(url, info);
+                            return await HandleExeInstall(url, info, version);
                         case ".zip":
-                            return await HandleZipInstall(urlName, domainDownload, info);
+                            return await HandleZipInstall(urlName, domainDownload, info, version);
                         default:
                             return CreateErrorResponse("Unsupported file type");
                     }
@@ -264,19 +265,75 @@ namespace ManageAnonTokyo {
             }
         }
 
-        private static async Task<string> HandleExeInstall(string url, PathInfo info) {
+        private static async Task<string> HandleExeInstall(string url, PathInfo info, string version) {
+            // 检查版本
             if (!FileMapService.ContainsKey(Path.GetFileName(url))) {
                 return CreateErrorResponse("Invalid executable");
             }
-            await DownloadFileWithHttpWebRequest(url, info.binPath);
+            string binDirPath = Path.GetDirectoryName(info.binPath);
+            string filename = Path.GetFileName(info.binPath);
+            string tempDir = $"{binDirPath}\\temp";
+
+            if (!Directory.Exists(tempDir)) {
+                Directory.CreateDirectory(tempDir);
+            }
+
+            DirectoryInfo Dir = new DirectoryInfo(binDirPath);
+            FileInfo[] list = Dir.GetFiles($"{filename}*{Path.GetExtension(info.binPath)}", SearchOption.TopDirectoryOnly);
+            if (version.Trim().Length == 0) { 
+                return CreateErrorResponse("empty version");
+            }
+            // 如果版本号为 -1，自动选择当前目录下版本号最大的文件
+            if (version == "-1") {
+                Int64 max = 0;
+                foreach (var file in list) {
+                    string[] cList = file.Name.Split(new char[] { '-', '.' });
+                    int.Parse(cList[2]);
+                    if (Convert.ToInt64(cList[2]) > max) {
+                        max = Convert.ToInt64(cList[2]);
+                    }
+                }
+                if (max > 0) {
+                    version = $"{max}";
+                }
+            }
+
+            // 如果版本号不为 -1，检查当前目录下是否存在对应版本的文件，如果存在则直接复制到目标位置
+            string versionFilename = $"{binDirPath}\\history\\{filename}-{version}{Path.GetExtension(info.binPath)}";
+            if (!Directory.Exists(Path.GetDirectoryName(versionFilename))) {
+                Directory.CreateDirectory(Path.GetDirectoryName(versionFilename));
+            }
+            if (File.Exists(versionFilename)) {
+                if (File.Exists(info.binPath)) {
+                    File.Delete(info.binPath);
+                }
+                File.Copy(versionFilename, info.binPath);
+                return "";
+            }
+
+            if (version == "-1") {
+                return CreateErrorResponse("empty version");
+            }
+
+            // 下载新版本
+            string destTempFile = $"{tempDir}\\{filename}";
+            if (await DownloadFileWithHttpWebRequest(url, destTempFile)) {
+                if (File.Exists(info.binPath)) {
+                    File.Move(info.binPath, versionFilename);
+                }
+                File.Move(destTempFile, info.binPath);
+
+                DirectoryInfo directoryInfo = new DirectoryInfo(tempDir) {
+                    Attributes = FileAttributes.Normal,
+                };
+                directoryInfo.Delete(true);
+            }
             return "";
         }
 
-        private static async Task<string> HandleZipInstall(string urlName, string domainDownload, PathInfo info) {
+        private static async Task<string> HandleZipInstall(string urlName, string domainDownload, PathInfo info, string version) {
             string url = $"{domainDownload}/{urlName}";
-            SafeDeleteFile(info.binPath);
-            await DownloadFileWithHttpWebRequest(url, info.binPath);
-
+            await HandleExeInstall(url, info, version);
             switch (urlName) {
                 case "AnonTokyoSiriusServerCbor.zip":
                     string cborPath = Path.Combine(AppConfig.BinPath, AppConfig.CborDirectoryName);
@@ -340,7 +397,6 @@ namespace ManageAnonTokyo {
 
         public static PathInfo GetPathInfo(string urlName) {
             string binPath = Path.Combine(AppConfig.BinPath, urlName);
-            SafeDeleteFile(binPath);
 
             string filename = Path.GetFileNameWithoutExtension(binPath);
             string logPath = Path.Combine(AppConfig.BinPath, $"{filename}.log");
@@ -356,7 +412,7 @@ namespace ManageAnonTokyo {
             return CreateResponse(code, message);
         }
 
-        public async static Task DownloadFileWithHttpWebRequest(string url, string filePath) {
+        public async static Task<bool> DownloadFileWithHttpWebRequest(string url, string filePath) {
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
             request.UserAgent = "Mozilla/5.0";
             request.Timeout = AppConfig.DefaultTimeout;
@@ -375,6 +431,7 @@ namespace ManageAnonTokyo {
                     }
                 }
             }
+            return true;
         }
 
         public class PathInfo {
@@ -443,7 +500,7 @@ namespace ManageAnonTokyo {
                 Path.GetDirectoryName(executablePath),
                 Path.GetFileNameWithoutExtension(executablePath) + ".log");
 
-            if (!File.Exists(logPath)) {
+            if (!File.Exists(logPath) && Path.GetExtension(executablePath) == ".exe") {
                 File.Create(logPath).Dispose();
             }
 
