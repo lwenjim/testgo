@@ -3,8 +3,9 @@ deploy_window: deploy_window_do print_version
 deploy_window_do:
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnonTokyoSiriusServer.exe -v -x -gcflags "-N -l" ./cmd/server_app/main.go
 	@zip -r ~/Downloads/AnonTokyoSiriusServerCbor.zip  mastercbor
-	@curl http://10.27.6.27:8082/deploy\?execName\=AnonTokyoSiriusServerCbor.zip
-	@curl http://10.27.6.27:8082/deploy\?execName\=AnonTokyoSiriusServer.exe
+	version=$(shell date +"%s")
+	@curl http://10.27.6.27:8082/deploy\?execName\=AnonTokyoSiriusServerCbor.zip\&version\=$(version)
+	@curl http://10.27.6.27:8082/deploy\?execName\=AnonTokyoSiriusServer.exe\&version\=$(version)
 	@cp -f ~/Workdata/sirius_server_api/src/Makefile ~/Workdata/testgo/resources/SiriusMakefile
 
 convert_master: convert_master_do print_version

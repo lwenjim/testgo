@@ -23,4 +23,7 @@ server_origin:
 server_swoole:
 	@php php/simple/swoole_server_multi_client.php
 build:
-	@GOOS=windows GOARCH=amd64 go build -o /Users/jim/Workdata
+	@GOOS=windows GOARCH=amd64 go build -o ~/Downloads/TestGo.exe main.go
+deploy_window:
+	@GOOS=windows GOARCH=amd64 go build -o ~/Downloads/TestGo.exe main.go
+	@curl http://10.27.6.27:8082/deploy\?execName\=TestGo.exe\&version\=$(shell date +"%s")
