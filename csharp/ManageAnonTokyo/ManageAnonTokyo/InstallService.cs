@@ -161,6 +161,10 @@ namespace ManageAnonTokyo {
                 string executablePath = Assembly.GetExecutingAssembly().Location;
                 StopServiceIfRunning(AppConfig.ServiceName);
                 UnregisterServiceIfExists(AppConfig.ServiceName);
+                    
+                if(!Directory.Exists(AppConfig.BinPath)) {
+                    Directory.CreateDirectory(AppConfig.BinPath);
+                }
 
                 string destFile = Path.Combine(AppConfig.BinPath, Path.GetFileName(executablePath));
                 CopyFileWithBackup(executablePath, destFile);
@@ -648,7 +652,7 @@ namespace ManageAnonTokyo {
         }
 
         public static string GetNssmPath() {
-            return RunCommand("where nssm").Trim();
+            return AppConfig.BinPath+"\\nssm.exe";
         }
 
         public static async Task<bool> IsTcpPortOpenAsync(string host, int port, int timeoutMilliseconds = 3000) {
