@@ -7,8 +7,8 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{BAC9CEDC-4D16-49FA-991F-03C450FB3484}</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <RootNamespace>ManageAnonTokyo</RootNamespace>
-    <AssemblyName>ManageAnonTokyo</AssemblyName>
+    <RootNamespace>AnonTokyoManage</RootNamespace>
+    <AssemblyName>AnonTokyoManage</AssemblyName>
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
@@ -203,7 +203,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="install.bat" />
     <None Include="packages.config" />
+    <None Include="repair.bat" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include=".NETFramework,Version=v4.7.2">

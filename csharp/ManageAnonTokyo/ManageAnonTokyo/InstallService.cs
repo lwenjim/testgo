@@ -22,6 +22,7 @@ namespace ManageAnonTokyo {
         public const string DomainExpose = "http://*:8082/deploy/";
         public const string ServiceName = "AnonTokyoManage";
         public const string CborDirectoryName = "mastercbor";
+        public const string AtConfigDirectoryName = "config";
         public const int DefaultTimeout = 60000;
         public const int ProcessTimeout = 30;
     }
@@ -35,10 +36,14 @@ namespace ManageAnonTokyo {
 
         private static readonly Dictionary<string, string> FileMapService = new Dictionary<string, string>() {
             {"AnontokyoServer.exe", "AnonTokyoServer"},
+            {"AnonTokyoConfig.zip",  "AnonTokyoServer"},
             {"AnonTokyoSiriusServer.exe", "AnonTokyoSiriusServer"},
             {"AnonTokyoSiriusServerCbor.zip", "AnonTokyoSiriusServer"},
             {"TestGo.exe", "AnonTokyoTestGo"},
             {"AnontokyoDocs.zip", ""},
+            {"AnontokyoBuildCbor.exe", "" },
+            {"Mysql.zip", "" },
+            {"Redis.zip", "" },
         };
 
         public static int Run(string[] args) {
@@ -69,6 +74,71 @@ namespace ManageAnonTokyo {
             service.Subcommands.Add(run);
 
             return root.Parse(args).Invoke();
+        }
+        private static async Task<string> HandleZipInstall(string urlName, string domainDownload, PathInfo info, string version) {
+            string url = $"{domainDownload}/{urlName}";
+            await HandleExeInstall(url, info, version);
+            string fullPath, nssmPath, data;
+            switch (urlName) {
+                case "AnonTokyoSiriusServerCbor.zip":
+                    string cborPath = Path.Combine(AppConfig.BinPath, AppConfig.CborDirectoryName);
+                    SafeDeleteDirectory(cborPath);
+                    ZipFile.ExtractToDirectory(info.binPath, AppConfig.BinPath);
+                    break;
+                case "AnonTokyoConfig.zip":
+                    SafeDeleteDirectory(Path.Combine(AppConfig.BinPath, AppConfig.AtConfigDirectoryName));
+                    ZipFile.ExtractToDirectory(info.binPath, AppConfig.BinPath);
+                    break;
+                case "AnontokyoDocs.zip":
+                    string docsPath = Path.Combine(AppConfig.DocsPath, "docs");
+                    SafeDeleteDirectory(docsPath);
+                    ZipFile.ExtractToDirectory(info.binPath, AppConfig.DocsPath);
+                    return CreateSuccessResponse();
+                case "Mysql.zip":
+                    string mysqlServerName = "AnonTokyoMysql";
+                    string mysqlDir = $"{AppConfig.BinPath}\\mysql";
+                    if (!Directory.Exists(mysqlDir)) {
+                        ZipFile.ExtractToDirectory(info.binPath, AppConfig.BinPath);
+                    }
+                    var result = ExistsService(mysqlServerName);
+                    if (result.serviceExists) {
+                        StartServiceIfStopped(mysqlServerName);
+                        return CreateSuccessResponse();
+                    }
+                    string dataDir = $"{mysqlDir}\\data";
+                    if (!Directory.Exists(dataDir) && RunCommand($"{mysqlDir}\\bin\\mysqld", "--initialize --console") != 0) {
+                        return CreateErrorResponse("failed to initialize");
+                    }
+                    fullPath = $"{mysqlDir}\\bin\\mysqld.exe";
+                    nssmPath = GetNssmPath();
+                    data = RegisterWindowService(nssmPath, mysqlServerName, fullPath, $"--defaults-file=\"{mysqlDir}\\bin\\my.ini\"");
+                    if (!string.IsNullOrEmpty(data)) {
+                        return CreateErrorResponse(data);
+                    }
+                    StartServiceAndWait(mysqlServerName);
+                    return CreateSuccessResponse();
+                case "Redis.zip":
+                    string redisServerName = "AnonTokyoRedis";
+                    string redisDir = $"{AppConfig.BinPath}\\redis";
+                    StopServiceIfRunning(redisServerName);
+                    fullPath = $"{redisDir}\\redis-server.exe";
+                    nssmPath = GetNssmPath();
+                    if (!Directory.Exists(redisDir)) {
+                        ZipFile.ExtractToDirectory(info.binPath, AppConfig.BinPath);
+                    }
+                    var result2 = ExistsService(redisServerName);
+                    if (result2.serviceExists) {
+                        StartServiceIfStopped(redisServerName);
+                        return CreateSuccessResponse();
+                    }
+                    data = RegisterWindowService(nssmPath, redisServerName, fullPath, $"{redisDir}\\redis.windows.conf  --loglevel verbose");
+                    if (!string.IsNullOrEmpty(data)) {
+                        return CreateErrorResponse(data);
+                    }
+                    StartServiceAndWait(redisServerName);
+                    return CreateSuccessResponse();
+            }
+            return "";
         }
 
         public static async Task StartService() {
@@ -109,17 +179,20 @@ namespace ManageAnonTokyo {
         }
 
         private static void StopServiceIfRunning(string serviceName) {
-            ServiceController specificService = new ServiceController(serviceName);
-            bool serviceExists = ServiceController.GetServices()
-                .Any(s => s.ServiceName.Equals(serviceName, StringComparison.OrdinalIgnoreCase));
-
-            if (serviceExists) {
-                if (specificService.Status == ServiceControllerStatus.Running ||
-                    specificService.Status == ServiceControllerStatus.Paused) {
-                    specificService.Stop();
-                    specificService.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(60));
+            var result = ExistsService(serviceName);
+            if (result.serviceExists) {
+                if (result.specificService.Status == ServiceControllerStatus.Running ||
+                    result.specificService.Status == ServiceControllerStatus.Paused) {
+                    result.specificService.Stop();
+                    result.specificService.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(60));
                 }
             }
+        }
+
+        private static (ServiceController specificService, bool serviceExists) ExistsService(string serviceName) {
+            ServiceController specificService = new ServiceController(serviceName);
+            bool serviceExists = ServiceController.GetServices().Any(s => s.ServiceName.Equals(serviceName, StringComparison.OrdinalIgnoreCase));
+            return (specificService, serviceExists);
         }
 
         private static void UnregisterServiceIfExists(string serviceName) {
@@ -140,9 +213,9 @@ namespace ManageAnonTokyo {
             File.Copy(source, destination);
         }
 
-        private static void SafeDeleteFile(string path) {
-            if (File.Exists(path)) {
-                File.Delete(path);
+        private static void SafeDeleteFile(string filePath) {
+            if (File.Exists(filePath)) {
+                File.Delete(filePath);
             }
         }
 
@@ -250,7 +323,6 @@ namespace ManageAnonTokyo {
                 return await RestartService(urlName, async () => {
                     PathInfo info = GetPathInfo(urlName);
                     string url = $"{domainDownload}/{info.filename}.exe";
-
                     switch (Path.GetExtension(urlName)) {
                         case ".exe":
                             return await HandleExeInstall(url, info, version);
@@ -280,7 +352,7 @@ namespace ManageAnonTokyo {
 
             DirectoryInfo Dir = new DirectoryInfo(binDirPath);
             FileInfo[] list = Dir.GetFiles($"{filename}*{Path.GetExtension(info.binPath)}", SearchOption.TopDirectoryOnly);
-            if (version.Trim().Length == 0) { 
+            if (version.Trim().Length == 0) {
                 return CreateErrorResponse("empty version");
             }
             // 如果版本号为 -1，自动选择当前目录下版本号最大的文件
@@ -331,24 +403,6 @@ namespace ManageAnonTokyo {
             return "";
         }
 
-        private static async Task<string> HandleZipInstall(string urlName, string domainDownload, PathInfo info, string version) {
-            string url = $"{domainDownload}/{urlName}";
-            await HandleExeInstall(url, info, version);
-            switch (urlName) {
-                case "AnonTokyoSiriusServerCbor.zip":
-                    string cborPath = Path.Combine(AppConfig.BinPath, AppConfig.CborDirectoryName);
-                    SafeDeleteDirectory(cborPath);
-                    ZipFile.ExtractToDirectory(info.binPath, AppConfig.BinPath);
-                    break;
-
-                case "AnontokyoDocs.zip":
-                    string docsPath = Path.Combine(AppConfig.DocsPath, "docs");
-                    SafeDeleteDirectory(docsPath);
-                    ZipFile.ExtractToDirectory(info.binPath, AppConfig.DocsPath);
-                    return CreateSuccessResponse();
-            }
-            return "";
-        }
 
         private static void SafeDeleteDirectory(string path) {
             if (Directory.Exists(path)) {
@@ -358,7 +412,11 @@ namespace ManageAnonTokyo {
 
         public static async Task<string> RestartService(string urlName, Func<Task<string>> handler) {
             if (string.IsNullOrEmpty(FileMapService[urlName])) {
-                return await handler();
+                string result2 = await handler();
+                if (!string.IsNullOrEmpty(result2)) {
+                    return result2;
+                }
+                return CreateSuccessResponse();
             }
 
             string serviceName = FileMapService[urlName];
@@ -444,7 +502,7 @@ namespace ManageAnonTokyo {
             }
 
             string args = $"remove \"{serviceName}\" confirm";
-            if (!string.IsNullOrEmpty(RunNssmCommand(nssmPath, args))) {
+            if ((RunCommand(nssmPath, args)) != 0) {
                 return CreateErrorResponse("Failed to uninstall service");
             }
             return "";
@@ -481,18 +539,18 @@ namespace ManageAnonTokyo {
         }
 
         private static void SetServiceProperties(string nssmPath, string serviceName, string executablePath, string startType) {
-            RunNssmCommand(nssmPath, $"set \"{serviceName}\" DisplayName \"{serviceName}\"");
-            RunNssmCommand(nssmPath, $"set \"{serviceName}\" Description \"{serviceName}\"");
+            RunCommand(nssmPath, $"set \"{serviceName}\" DisplayName \"{serviceName}\"");
+            RunCommand(nssmPath, $"set \"{serviceName}\" Description \"{serviceName}\"");
 
             if (Path.GetExtension(executablePath) == ".exe") {
                 SetServiceLogPaths(nssmPath, serviceName, executablePath);
             }
 
             if (!string.IsNullOrWhiteSpace(startType)) {
-                RunNssmCommand(nssmPath, $"set \"{serviceName}\" Start {startType}");
+                RunCommand(nssmPath, $"set \"{serviceName}\" Start {startType}");
             }
 
-            RunNssmCommand(nssmPath, $"set \"{serviceName}\" AppRestartDelay 5000");
+            RunCommand(nssmPath, $"set \"{serviceName}\" AppRestartDelay 5000");
         }
 
         private static void SetServiceLogPaths(string nssmPath, string serviceName, string executablePath) {
@@ -504,16 +562,16 @@ namespace ManageAnonTokyo {
                 File.Create(logPath).Dispose();
             }
 
-            RunNssmCommand(nssmPath, $"set \"{serviceName}\" AppStdin \"{logPath}\"");
-            RunNssmCommand(nssmPath, $"set \"{serviceName}\" AppStdout \"{logPath}\"");
-            RunNssmCommand(nssmPath, $"set \"{serviceName}\" AppStderr \"{logPath}\"");
+            RunCommand(nssmPath, $"set \"{serviceName}\" AppStdin \"{logPath}\"");
+            RunCommand(nssmPath, $"set \"{serviceName}\" AppStdout \"{logPath}\"");
+            RunCommand(nssmPath, $"set \"{serviceName}\" AppStderr \"{logPath}\"");
         }
 
         private static bool TryRunNssmCommand(string nssmPath, string arguments) {
-            return string.IsNullOrEmpty(RunNssmCommand(nssmPath, arguments));
+            return (RunCommand(nssmPath, arguments)) == 0;
         }
 
-        public static string RunNssmCommand(string nssmPath, string arguments) {
+        public static int RunCommand(string nssmPath, string arguments) {
             var startInfo = new ProcessStartInfo {
                 FileName = nssmPath,
                 Arguments = arguments,
@@ -522,7 +580,6 @@ namespace ManageAnonTokyo {
                 RedirectStandardError = true,
                 CreateNoWindow = true,
             };
-
             bool needsAdmin = !IsAdministrator();
             if (needsAdmin) {
                 startInfo.UseShellExecute = true;
@@ -530,35 +587,32 @@ namespace ManageAnonTokyo {
                 startInfo.RedirectStandardOutput = false;
                 startInfo.RedirectStandardError = false;
             }
-
             try {
                 using (var process = Process.Start(startInfo)) {
                     if (process == null) {
-                        return "Process failed to start";
+                        Console.WriteLine("Process failed to start");
+                        return -2;
                     }
-
                     process.WaitForExit();
-
                     if (!needsAdmin) {
                         string output = process.StandardOutput.ReadToEnd();
                         string error = process.StandardError.ReadToEnd();
-
                         if (!string.IsNullOrEmpty(output)) {
                             Console.WriteLine(output);
                         }
                         if (!string.IsNullOrEmpty(error)) {
-                            return $"Error: {error}";
+                            Console.WriteLine(error);
                         }
                     }
-
                     if (process.ExitCode > 0) {
-                        return $"Command failed with exit code: {process.ExitCode}";
+                        Console.WriteLine($"Command failed with exit code: {process.ExitCode}");
                     }
+                    return process.ExitCode;
                 }
             } catch (Exception ex) {
-                return $"Command execution failed: {ex.Message}";
+                Console.WriteLine($"Command execution failed: {ex.Message}");
             }
-            return "";
+            return -1;
         }
 
         public static bool IsAdministrator() {
@@ -640,7 +694,6 @@ namespace ManageAnonTokyo {
             }
             return dnsList.Distinct().ToList();
         }
-
     }
 
     public class SystemProxyInfo {
@@ -664,5 +717,4 @@ namespace ManageAnonTokyo {
             return info;
         }
     }
-
 }
