@@ -1,10 +1,11 @@
+VERSION:=$(shell date +"%s")
 deploy_window: deploy_window_do print_version
 
 deploy_window_do:
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnonTokyoSiriusServer.exe -v -x -gcflags "-N -l" ./cmd/server_app/main.go
+	@GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnonTokyoSiriusServer.exe -v -x -gcflags "-N -l" ./cmd/server_app/main.go
 	@zip -r ~/Downloads/AnonTokyoSiriusServerCbor.zip  mastercbor
-	@curl http://10.27.6.27:8082/deploy\?execName\=AnonTokyoSiriusServerCbor.zip
-	@curl http://10.27.6.27:8082/deploy\?execName\=AnonTokyoSiriusServer.exe
+	@echo deploy AnonTokyoSiriusServer: $(shell curl -s http://10.27.6.27:8082/deploy\?execName\=AnonTokyoSiriusServer.exe\&version\=$(VERSION))
+	@echo deploy AnonTokyoSiriusServerCbor: $(shell curl -s http://10.27.6.27:8082/deploy\?execName\=AnonTokyoSiriusServerCbor.zip\&version\=$(VERSION))
 	@cp -f ~/Workdata/sirius_server_api/src/Makefile ~/Workdata/testgo/resources/SiriusMakefile
 
 convert_master: convert_master_do print_version
@@ -14,8 +15,8 @@ convert_master_do:
 
 print_version:
 	@cat mastercbor/Version;echo
-	@grpcurl -plaintext 10.27.6.27:8080 app.masterdata.MasterdataService.Version|jq -c
-	@grpcurl l4-dev-all-gs-sirius.bilibiligame.net:443 app.player.PlayerService.Register|jq -c
+	@echo getLocalTestVersion: $(shell grpcurl -plaintext 10.27.6.27:8080 app.masterdata.MasterdataService.Version|jq -c)
+	@echo getTestVersion: $(shell grpcurl l4-dev-all-gs-sirius.bilibiligame.net:443 app.player.PlayerService.Register|jq -c)
 
 proto:
 	@go run cmd/proto/main.go

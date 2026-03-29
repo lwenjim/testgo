@@ -1,3 +1,4 @@
+VERSION:=$(shell date +"%s")
 # 代码规范扫描
 lint:
 	@echo Lint
@@ -19,7 +20,7 @@ cover: test
 mock:
 	@echo mock
 	@rm -rf mocks/*.go
-	@mockery --all --dir=./gen/rpc
+	@mockery --all --dir=./gen/app/bilibili/anontokyo
 
 # 嵌入git客户端的脚本, 提交前审核, commit text 审核
 pre_commit:
@@ -30,7 +31,7 @@ pre_commit:
 convert_master:
 	@echo covert_master
 	@go run cmd/convert_master/main.go
-	@cat configs/mastercbor/Version;echo
+	@cat config/atmastercbor/Version;echo
 	@grpcurl -plaintext 10.27.6.27:9090 app.bilibili.anontokyo.MasterdataService.Version|jq -c
 	@grpcurl anontokyo-dev-all-sirius.bilibiligame.net:443 app.bilibili.anontokyo.MasterdataService.Version|jq -c
 
@@ -38,6 +39,7 @@ convert_master:
 proto:
 	@echo proto
 	@make -C proto proto
+
 
 # 模型变更
 generate_shard_sql:
@@ -61,25 +63,37 @@ deploy_window_do:
 	@mysql -uroot -h10.27.6.27 -e "show databases"|egrep -e "anontokyo_shard_\d"|xargs -I {} echo "\"mysql -h10.27.6.27 -uroot -e 'drop database "{}"'\""|xargs -I {} sh -c {}
 	@cat /tmp/load_data.txt|xargs -I {} echo 'mysql -uroot -P3306 -h10.27.6.27  <'{} >/tmp/data.txt
 	@cat /tmp/data.txt|xargs -I {} bash -c {}
-	@curl http://10.27.6.27:8082/deploy\?execName\=AnontokyoServer.exe
+	@zip -r ~/Downloads/AnonTokyoConfig.zip  config
+	@curl http://10.27.6.27:8082/deploy\?execName\=AnonTokyoConfig.zip\&version\=$(VERSION)
+	@curl http://10.27.6.27:8082/deploy\?execName\=AnontokyoServer.exe\&version\=$(VERSION)
 
 print_version:
-	@cat configs/mastercbor/Version;echo
+	@cat config/atmastercbor/Version;echo
 	@grpcurl -plaintext 10.27.6.27:9090 app.bilibili.anontokyo.MasterdataService.Version|jq -c
 	@grpcurl anontokyo-dev-all-sirius.bilibiligame.net:443 app.bilibili.anontokyo.MasterdataService.Version|jq -c
 	@cp -f ~/Workdata/anontokyo_server/Makefile ~/Workdata/testgo/resources/AnontokyoMakefile
 
 deploy_release:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp -v -x -trimpath -ldflags "-s -w" .
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp -v -x -trimpath -ldflags "-s -w" .
 
 build:
 	@go build .
 run:
 	@go run main.go
 
+buildCover:
+	@GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnontokyoBuildCbor.exe -v -x -gcflags "-N -l" cmd/convert_master/main.go
+	@curl http://10.27.6.27:8082/deploy\?execName\=AnontokyoBuildCbor.exe\&version\=$(VERSION)
+
+redis:
+	@curl http://10.27.6.27:8082/deploy\?execName\=Redis.zip\&version\=$(VERSION)
+
+mysql:
+	@curl http://10.27.6.27:8082/deploy\?execName\=Mysql.zip\&version\=$(VERSION)
+
 clean:
 	@rm -f *.coverprofile
 	@rm -f coverage.*
 	@echo Clean Finish
 
-.PHONY: lint test cover build install clean proto move generate_shard_sql generate_gorm_model run create_database_shard_from_sql convert_master update_model run deploy deploy_window deploy_release import_database
+.PHONY: lint test cover build install clean proto move generate_shard_sql generate_gorm_model run create_database_shard_from_sql convert_master update_model run deploy deploy_window deploy_release import_database buildCover
