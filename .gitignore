@@ -7,3 +7,6 @@ obj/
 packages/
 .vs
 helloworld
+*.log
+*.jtl
+csharp/ManageAnonTokyo/ManageAnonTokyo/report
