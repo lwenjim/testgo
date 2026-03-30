@@ -5,7 +5,7 @@ if not exist "%workdata%" (
     echo 目录不存在，正在创建...
     mkdir "%workdata%"
 )
-
+d:
 cd "%workdata%"
 set "filename=AnonTokyoManage.exe"
 if not exist "%filename%" (

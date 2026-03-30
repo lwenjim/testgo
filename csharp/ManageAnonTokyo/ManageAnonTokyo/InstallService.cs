@@ -42,6 +42,7 @@ namespace ManageAnonTokyo {
             {"TestGo.exe", "AnonTokyoTestGo"},
             {"AnontokyoDocs.zip", ""},
             {"AnontokyoBuildCbor.exe", "" },
+            {"AnontokyoSiriusBuildCbor.exe", "" },
             {"Mysql.zip", "" },
             {"Redis.zip", "" },
         };
@@ -161,8 +162,8 @@ namespace ManageAnonTokyo {
                 string executablePath = Assembly.GetExecutingAssembly().Location;
                 StopServiceIfRunning(AppConfig.ServiceName);
                 UnregisterServiceIfExists(AppConfig.ServiceName);
-                    
-                if(!Directory.Exists(AppConfig.BinPath)) {
+
+                if (!Directory.Exists(AppConfig.BinPath)) {
                     Directory.CreateDirectory(AppConfig.BinPath);
                 }
 
@@ -652,7 +653,7 @@ namespace ManageAnonTokyo {
         }
 
         public static string GetNssmPath() {
-            return AppConfig.BinPath+"\\nssm.exe";
+            return AppConfig.BinPath + "\\nssm.exe";
         }
 
         public static async Task<bool> IsTcpPortOpenAsync(string host, int port, int timeoutMilliseconds = 3000) {
