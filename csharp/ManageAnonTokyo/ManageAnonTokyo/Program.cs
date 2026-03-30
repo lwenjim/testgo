@@ -1,7 +1,9 @@
-﻿namespace ManageAnonTokyo {
+﻿using AnonTokyoManage;
+
+namespace ManageAnonTokyo {
     internal class Program {
-        static int Main(string[] args) {
-            return InstallService.Run(args);
+        static void Main(string[] args) {
+            Jmeter.Run();
         }
     }
 }

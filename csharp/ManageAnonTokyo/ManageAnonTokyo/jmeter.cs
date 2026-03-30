@@ -1,16 +1,18 @@
-﻿using System;
+﻿using ManageAnonTokyo;
+using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
+using System.IO;
 using System.Net;
 using System.Security.Claims;
 using System.Text;
 using System.Threading;
-using Microsoft.IdentityModel.Tokens;
-using Newtonsoft.Json;
 
 
 namespace AnonTokyoManage {
-    internal class jmeter {
+    internal class Jmeter {
         static Dictionary<string, Int64> tokens = new Dictionary<string, Int64>();
         public static void Run() {
             HttpListener listener = new HttpListener();
@@ -55,10 +57,26 @@ namespace AnonTokyoManage {
                     Response(response, 200, "ok");
                     return;
             }
-            Response(response, 500, "empty");
+            string filename = $"{AppConfig.BinPath}\\{request.Url.AbsolutePath}";
+            if (File.Exists(filename)) {
+                response.ContentType = "application/octet-stream";
+                response.OutputStream.Write(File.ReadAllBytes(filename), 0, (int)new FileInfo(filename).Length);
+                response.OutputStream.Close();
+                return;
+            }
+            response.ContentType = "text/html; charset=utf-8";
+            DirectoryInfo info = new DirectoryInfo(AppConfig.BinPath);
+            StringBuilder sb = new StringBuilder();
+            foreach (var item in info.GetFiles()) {
+                sb.AppendLine($"<a href=\"{item.Name}\">{item.Name}</a><br>");
+            }
+            string data = $"<html><body>{sb.ToString()}</body></html>";
+            byte[] buffer = Encoding.UTF8.GetBytes(data);
+            response.ContentLength64 = buffer.Length;
+            response.OutputStream.Write(buffer, 0, buffer.Length);
+            response.OutputStream.Close();
             return;
         }
-
         public class Result {
             public string Code { get; set; }
             public string Data { get; set; }

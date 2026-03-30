@@ -238,12 +238,11 @@
   <ItemGroup>
     <Compile Include="InstallService.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="Jmeter.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <None Include="restart.bat" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-    <None Include="install.bat" />
     <None Include="packages.config" />
     <None Include="test.csv" />
     <None Include="test.jmx" />
