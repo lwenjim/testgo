@@ -245,8 +245,6 @@
     <None Include="App.config" />
     <None Include="install.bat" />
     <None Include="packages.config" />
-    <None Include="repair.bat" />
-    <None Include="result.jtl" />
     <None Include="test.csv" />
     <None Include="test.jmx" />
   </ItemGroup>
