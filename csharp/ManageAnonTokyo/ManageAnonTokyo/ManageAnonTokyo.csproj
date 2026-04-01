@@ -238,7 +238,6 @@
   <ItemGroup>
     <Compile Include="InstallService.cs" />
     <Compile Include="Program.cs" />
-    <Compile Include="Jmeter.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

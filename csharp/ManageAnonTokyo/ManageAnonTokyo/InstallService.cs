@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.CommandLine;
 using System.Diagnostics;
+using System.IdentityModel.Tokens.Jwt;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -9,9 +10,11 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Security.Claims;
 using System.ServiceProcess;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.Win32;
 using Newtonsoft.Json;
 
@@ -19,7 +22,7 @@ namespace ManageAnonTokyo {
     public static class AppConfig {
         public const string BinPath = "D:\\bin\\bin";
         public const string DocsPath = "C:\\inetpub\\wwwroot";
-        public const string DomainExpose = "http://*:8082/deploy/";
+        public const string DomainExpose = "http://*:8082/";
         public const string ServiceName = "AnonTokyoManage";
         public const string CborDirectoryName = "mastercbor";
         public const string AtConfigDirectoryName = "config";
@@ -31,7 +34,7 @@ namespace ManageAnonTokyo {
         private const string SuccessCode = "200";
         private const string ErrorCode = "500";
         private const string SuccessMessage = "Service update successfully.";
-
+        private static Dictionary<string, Int64> tokens = new Dictionary<string, Int64>();
         public readonly static DateTime StartDate = DateTime.Now;
 
         private static readonly Dictionary<string, string> FileMapService = new Dictionary<string, string>() {
@@ -76,6 +79,7 @@ namespace ManageAnonTokyo {
 
             return root.Parse(args).Invoke();
         }
+
         private static async Task<string> HandleZipInstall(string urlName, string domainDownload, PathInfo info, string version) {
             string url = $"{domainDownload}/{urlName}";
             await HandleExeInstall(url, info, version);
@@ -150,7 +154,7 @@ namespace ManageAnonTokyo {
             try {
                 while (true) {
                     HttpListenerContext context = await listener.GetContextAsync();
-                    _ = ProcessRequest(context); // Fire and forget
+                    _ = ProcessRequest2(context); // Fire and forget
                 }
             } finally {
                 listener?.Close();
@@ -272,27 +276,137 @@ namespace ManageAnonTokyo {
             Console.WriteLine($"Proxy Server:   {proxyInfo.Server}");
         }
 
-        public static async Task ProcessRequest(HttpListenerContext context) {
+        public static async Task ProcessRequest2(HttpListenerContext context) {
             try {
-                string exeName = context.Request.QueryString.Get("execName");
-                if (string.IsNullOrEmpty(exeName)) {
-                    Response(context.Response, CreateErrorResponse("Invalid executable name"));
-                    return;
-                }
-                string version = context.Request.QueryString.Get("version");
-
-                IPEndPoint remoteIP = context.Request.RemoteEndPoint;
-                bool portOpen = await IsTcpPortOpenAsync(remoteIP.Address.ToString(), 80);
-                if (!portOpen) {
-                    Response(context.Response, CreateErrorResponse($"Port 80 not open on {remoteIP.Address}"));
-                    return;
-                }
-
-                string responseString = await Install(exeName, version, "http://" + remoteIP.Address);
-                Response(context.Response, responseString);
+                await ProcessRequest(context);
             } catch (Exception ex) {
                 Response(context.Response, CreateErrorResponse($"Request processing error: {ex.Message}"));
             }
+        }
+
+        private static async Task ProcessRequest(HttpListenerContext context) {
+            var request = context.Request;
+            var response = context.Response;
+            switch (request.Url.AbsolutePath) {
+                case "/deploy":
+                    string exeName = context.Request.QueryString.Get("execName");
+                    if (string.IsNullOrEmpty(exeName)) {
+                        Response(context.Response, CreateErrorResponse("Invalid executable name"));
+                        return;
+                    }
+                    string version = context.Request.QueryString.Get("version");
+
+                    IPEndPoint remoteIP = context.Request.RemoteEndPoint;
+                    bool portOpen = await IsTcpPortOpenAsync(remoteIP.Address.ToString(), 80);
+                    if (!portOpen) {
+                        Response(context.Response, CreateErrorResponse($"Port 80 not open on {remoteIP.Address}"));
+                        return;
+                    }
+
+                    string responseString = await Install(exeName, version, "http://" + remoteIP.Address);
+                    Response(context.Response, responseString);
+                    return;
+                case "/login":
+                    string[] usernames = request.QueryString.GetValues("username");
+                    string[] passwords = request.QueryString.GetValues("password");
+                    if (usernames.Length == 0 || passwords.Length == 0) {
+                        Response(response, 500, "error params");
+                        return;
+                    }
+                    var token = GenerateToken();
+                    tokens.Add(token, DateTimeOffset.Now.ToUnixTimeSeconds());
+                    response.Headers.Add("token", token);
+                    Response(response, 200, token);
+                    return;
+                case "/info":
+                    string[] t = request.QueryString.GetValues("token");
+                    if (t.Length == 0 || t[0].Length == 0) {
+                        Response(response, 500, "error params");
+                        return;
+                    }
+                    if (!tokens.ContainsKey(t[0])) {
+                        Response(response, 500, "not exists");
+                        return;
+                    }
+                    if (DateTimeOffset.Now.ToUnixTimeSeconds() - tokens[t[0]] > 300) {
+                        Response(response, 500, "token expired");
+                        return;
+                    }
+                    Response(response, 200, "ok");
+                    return;
+            }
+            string filename = $"{AppConfig.BinPath}\\{request.Url.AbsolutePath}";
+            if (File.Exists(filename)) {
+                if (Path.GetExtension(filename) != ".html") {
+                    response.ContentType = "application/octet-stream";
+                } else {
+                    response.ContentType = "text/html";
+                }
+                response.OutputStream.Write(File.ReadAllBytes(filename), 0, (int)new FileInfo(filename).Length);
+                response.OutputStream.Close();
+                return;
+            }
+            response.ContentType = "text/html; charset=utf-8";
+            DirectoryInfo info = new DirectoryInfo(AppConfig.BinPath);
+            StringBuilder sb = new StringBuilder();
+            foreach (var item in info.GetFiles().OrderByDescending(f => f.LastWriteTime).ToArray()) {
+                sb.AppendLine($"<div class=\"directory-header\"><a href=\"{item.Name}\" class=\"name\">{item.Name}</a><div class=\"size\">{item.Length.ToString("N0")}b</div><div class=\"modified\">{item.LastWriteTime.ToString()}</div></div>");
+            }
+            string data = $@"
+<style>
+.directory {{
+    font-family: monospace;
+    width: 100%;
+    max-width: 800px;
+}}
+
+.directory-header {{
+    display: grid;
+    grid-template-columns: 3fr 1fr 1.5fr;
+    background: #f0f0f0;
+    padding: 8px;
+    font-weight: bold;
+    border-bottom: 2px solid #ccc;
+}}
+
+.directory-row {{
+    display: grid;
+    grid-template-columns: 3fr 1fr 1.5fr;
+    padding: 6px 8px;
+    border-bottom: 1px solid #eee;
+}}
+
+.directory-row:hover {{
+    background-color: #f5f5f5;
+}}
+
+.name {{
+    text-align: left;
+}}
+
+.size {{
+    text-align: right;
+}}
+
+.modified {{
+    text-align: right;
+    color: #666;
+}}
+</style>
+
+<div class=""directory"">
+    <div class=""directory-header"">
+        <div class=""name"">文件名</div>
+        <div class=""size"">大小</div>
+        <div class=""modified"">修改时间</div>
+    </div>
+ {sb.ToString()}   
+</div>";
+            byte[] buffer = Encoding.UTF8.GetBytes(data);
+            response.ContentLength64 = buffer.Length;
+            response.OutputStream.Write(buffer, 0, buffer.Length);
+            response.OutputStream.Close();
+            return;
         }
 
         public static void Response(HttpListenerResponse response, string responseString) {
@@ -699,6 +813,51 @@ namespace ManageAnonTokyo {
             }
             return dnsList.Distinct().ToList();
         }
+
+        public class Result {
+            public string Code { get; set; }
+            public string Data { get; set; }
+            public string Message { get; set; }
+        }
+
+        private static void Response(HttpListenerResponse response, Int32 code, string responseString) {
+            var data = new Result {
+                Code = $"{code}",
+                Data = responseString,
+                Message = "success"
+            };
+
+            byte[] buffer = Encoding.UTF8.GetBytes($"{JsonConvert.SerializeObject(data)}\n");
+            response.ContentType = "text/html; charset=utf-8";
+            response.ContentLength64 = buffer.Length;
+            response.OutputStream.Write(buffer, 0, buffer.Length);
+            response.OutputStream.Close();
+        }
+
+        public static string GenerateToken() {
+            var secretKey = "your-256-bit-secret-key-here-which-is-long-enough";
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+            var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var claims = new[]{
+            new Claim(JwtRegisteredClaimNames.Sub, "user123"),
+            new Claim(JwtRegisteredClaimNames.Email, "user@example.com"),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim("role", "admin")
+            };
+
+            var token = new JwtSecurityToken(
+                issuer: "your-app-name",
+                audience: "your-api",
+                claims: claims,
+                expires: DateTime.UtcNow.AddHours(1),
+                signingCredentials: credentials
+            );
+
+            var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+            return tokenString;
+        }
+
     }
 
     public class SystemProxyInfo {
