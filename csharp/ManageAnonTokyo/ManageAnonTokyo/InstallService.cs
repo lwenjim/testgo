@@ -340,17 +340,25 @@ namespace ManageAnonTokyo {
                 if (Path.GetExtension(filename) != ".html") {
                     response.ContentType = "application/octet-stream";
                 } else {
-                    response.ContentType = "text/html";
+                    response.ContentType = "text/html; charset=utf-8";
                 }
                 response.OutputStream.Write(File.ReadAllBytes(filename), 0, (int)new FileInfo(filename).Length);
                 response.OutputStream.Close();
                 return;
             }
+            string ReadDir = AppConfig.BinPath;
+            if (Directory.Exists(filename)) { 
+                ReadDir = filename;
+            }
             response.ContentType = "text/html; charset=utf-8";
-            DirectoryInfo info = new DirectoryInfo(AppConfig.BinPath);
+            DirectoryInfo info = new DirectoryInfo(ReadDir);
             StringBuilder sb = new StringBuilder();
-            foreach (var item in info.GetFiles().OrderByDescending(f => f.LastWriteTime).ToArray()) {
-                sb.AppendLine($"<div class=\"directory-header\"><a href=\"{item.Name}\" class=\"name\">{item.Name}</a><div class=\"size\">{item.Length.ToString("N0")}b</div><div class=\"modified\">{item.LastWriteTime.ToString()}</div></div>");
+            foreach (var item in info.GetFileSystemInfos().OrderByDescending(f => f.LastWriteTime).ToArray()) {
+                string sizeStr = "-";
+                if (item is FileInfo file) {
+                    sizeStr = file.Length.ToString("N0")+"b";
+                }
+                sb.AppendLine($"<div class=\"directory-header\"><a href=\"{request.Url.AbsolutePath+"\\"+item.Name}\" class=\"name\">{item.Name}</a><div class=\"size\">{sizeStr}</div><div class=\"modified\">{item.LastWriteTime.ToString()}</div></div>");
             }
             string data = $@"
 <style>
