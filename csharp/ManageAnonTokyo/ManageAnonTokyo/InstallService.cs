@@ -22,7 +22,7 @@ namespace ManageAnonTokyo {
     public static class AppConfig {
         public const string BinPath = "D:\\bin\\bin";
         public const string DocsPath = "C:\\inetpub\\wwwroot";
-        public const string DomainExpose = "http://*:8082/";
+        public const string DomainExpose = "http://*:80/";
         public const string ServiceName = "AnonTokyoManage";
         public const string CborDirectoryName = "mastercbor";
         public const string AtConfigDirectoryName = "config";
