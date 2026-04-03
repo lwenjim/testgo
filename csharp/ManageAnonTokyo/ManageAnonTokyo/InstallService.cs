@@ -24,6 +24,7 @@ namespace ManageAnonTokyo {
         public const string DocsPath = "C:\\inetpub\\wwwroot";
         public const string DomainExpose = "http://*:80/";
         public const string ServiceName = "AnonTokyoManage";
+        public const string DefaultIndex = "index.html";
         public const string CborDirectoryName = "mastercbor";
         public const string AtConfigDirectoryName = "config";
         public const int DefaultTimeout = 60000;
@@ -35,8 +36,7 @@ namespace ManageAnonTokyo {
         private const string ErrorCode = "500";
         private const string SuccessMessage = "Service update successfully.";
         private static Dictionary<string, Int64> tokens = new Dictionary<string, Int64>();
-        public readonly static DateTime StartDate = DateTime.Now;
-
+        public static DateTime StartDate = DateTime.Now;
         private static readonly Dictionary<string, string> FileMapService = new Dictionary<string, string>() {
             {"AnontokyoServer.exe", "AnonTokyoServer"},
             {"AnonTokyoConfig.zip",  "AnonTokyoServer"},
@@ -50,34 +50,178 @@ namespace ManageAnonTokyo {
             {"Redis.zip", "" },
         };
 
-        public static int Run(string[] args) {
-            var root = new RootCommand("MyApplication");
-            var service = new Command("service", "Configure the application");
-            var daemon = new Command("daemon", "install window service");
-            var run = new Command("run", "deploy and run window service");
-            var netinfo = new Command("info", "print network information");
+        private static async Task ProcessRequest(HttpListenerContext context) {
+            var request = context.Request;
+            var response = context.Response;
+            StartDate = DateTime.Now;
+            switch (request.Url.AbsolutePath) {
+                case "/deploy":
+                    string exeName = context.Request.QueryString.Get("execName");
+                    if (string.IsNullOrEmpty(exeName)) {
+                        Response(context.Response, CreateErrorResponse("Invalid executable name"));
+                        return;
+                    }
+                    string version = context.Request.QueryString.Get("version");
 
-            run.SetAction(async (@params) => {
-                await StartService();
-            });
+                    IPEndPoint remoteIP = context.Request.RemoteEndPoint;
+                    bool portOpen = await IsTcpPortOpenAsync(remoteIP.Address.ToString(), 80);
+                    if (!portOpen) {
+                        Response(context.Response, CreateErrorResponse($"Port 80 not open on {remoteIP.Address}"));
+                        return;
+                    }
 
-            daemon.SetAction((@params) => {
-                string result = InstallDaemon();
-                if (!string.IsNullOrEmpty(result)) {
-                    Console.WriteLine(result);
+                    string responseString = await Install(exeName, version, "http://" + remoteIP.Address);
+                    Response(context.Response, responseString);
+                    return;
+                case "/login":
+                    string[] usernames = request.QueryString.GetValues("username");
+                    string[] passwords = request.QueryString.GetValues("password");
+                    if (usernames.Length == 0 || passwords.Length == 0) {
+                        Response(response, 500, "error params");
+                        return;
+                    }
+                    var token = GenerateToken();
+                    tokens.Add(token, DateTimeOffset.Now.ToUnixTimeSeconds());
+                    response.Headers.Add("token", token);
+                    Response(response, 200, token);
+                    return;
+                case "/info":
+                    string[] t = request.QueryString.GetValues("token");
+                    if (t.Length == 0 || t[0].Length == 0) {
+                        Response(response, 500, "error params");
+                        return;
+                    }
+                    if (!tokens.ContainsKey(t[0])) {
+                        Response(response, 500, "not exists");
+                        return;
+                    }
+                    if (DateTimeOffset.Now.ToUnixTimeSeconds() - tokens[t[0]] > 300) {
+                        Response(response, 500, "token expired");
+                        return;
+                    }
+                    Response(response, 200, "ok");
+                    return;
+            }
+            string filename = $"{AppConfig.BinPath}\\{request.Url.AbsolutePath}";
+            if (File.Exists(filename)) {
+                response.ContentType = "text/html; charset=utf-8";
+                if (IsBinaryFile(filename)) {
+                    response.ContentType = "application/octet-stream";
                 }
-            });
+                byte[] buff = ReadAllBytes(filename);
+                response.OutputStream.Write(buff, 0, buff.Length);
+                response.OutputStream.Close();
+                return;
+            }
+            string ReadDir = AppConfig.BinPath;
+            if (Directory.Exists(filename)) {
+                ReadDir = filename;
+            }
+            if (File.Exists(filename + "\\" + AppConfig.DefaultIndex)) {
+                response.ContentType = "text/html; charset=utf-8";
+                byte[] buff = ReadAllBytes(filename + "\\" + AppConfig.DefaultIndex);
+                response.OutputStream.Write(buff, 0, buff.Length);
+                response.OutputStream.Close();
+                return;
+            }
+            response.ContentType = "text/html; charset=utf-8";
+            DirectoryInfo info = new DirectoryInfo(ReadDir);
+            StringBuilder sb = new StringBuilder();
+            foreach (var item in info.GetFileSystemInfos().OrderByDescending(f => f.LastWriteTime).ToArray()) {
+                string sizeStr = "-";
+                if (item is FileInfo file) {
+                    sizeStr = file.Length.ToString("N0");
+                }
+                string href = request.Url.AbsolutePath + "/" + item.Name;
+                sb.AppendLine($"<div class=\"directory-header\"><div class=\"name\"><a href=\"{href.Replace("//", "/")}\">{item.Name}</a></div><div class=\"size\">{sizeStr}</div><div class=\"modified\">{item.LastWriteTime.ToString()}</div></div>");
+            }
+            string data = $@"
+<style>
+.directory {{
+    font-family: monospace;
+    width: 100%;
+    max-width: 800px;
+}}
 
-            netinfo.SetAction((@params) => {
-                PrintNetInfo();
-            });
+.directory-header {{
+    display: grid;
+    grid-template-columns: 3fr 1fr 1.5fr;
+    padding: 8px;
+    font-weight: bold;
+    border-bottom: 1px dashed #ccc;
+}}
 
-            root.Subcommands.Add(service);
-            service.Subcommands.Add(daemon);
-            service.Subcommands.Add(netinfo);
-            service.Subcommands.Add(run);
+.directory-row {{
+    display: grid;
+    grid-template-columns: 3fr 1fr 1.5fr;
+    padding: 6px 8px;
+    border-bottom: 1px dashed #eee;
+}}
 
-            return root.Parse(args).Invoke();
+.directory-row:hover {{
+    background-color: #f5f5f5;
+}}
+
+.name {{
+    text-align: left;
+}}
+
+.size {{
+    text-align: right;
+}}
+
+.modified {{
+    text-align: right;
+    color: #666;
+}}
+</style>
+
+<div class=""directory"">
+    <div class=""directory-header"">
+        <div class=""name"">文件名</div>
+        <div class=""size"">大小(byte)</div>
+        <div class=""modified"">修改时间</div>
+    </div>
+ {sb.ToString()}   
+</div>";
+            byte[] buffer = Encoding.UTF8.GetBytes(data);
+            response.ContentLength64 = buffer.Length;
+            response.OutputStream.Write(buffer, 0, buffer.Length);
+            response.OutputStream.Close();
+            return;
+        }
+
+        private static byte[] ReadAllBytes(string path) {
+            var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var reader = new StreamReader(fs);
+            return Encoding.UTF8.GetBytes(reader.ReadToEnd());
+        }
+
+        public static bool IsBinaryFile(string filePath, int sampleSize = 4096, double nonTextThreshold = 0.3) {
+            if (!File.Exists(filePath))
+                throw new FileNotFoundException("文件不存在", filePath);
+
+            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
+                int size = (int)Math.Min(fs.Length, sampleSize);
+                if (size == 0) return false;   // 空文件视为文本
+
+                byte[] buffer = new byte[size];
+                fs.Read(buffer, 0, size);
+
+                int nonTextCount = 0;
+                foreach (byte b in buffer) {
+                    // 空字节是二进制文件的强烈信号
+                    if (b == 0x00)
+                        return true;
+
+                    // 非可打印字符（不包括换行、回车、制表符等常见文本控制字符）
+                    if (b < 0x20 && b != 0x09 && b != 0x0A && b != 0x0D)
+                        nonTextCount++;
+                }
+
+                double ratio = (double)nonTextCount / size;
+                return ratio > nonTextThreshold;
+            }
         }
 
         private static async Task<string> HandleZipInstall(string urlName, string domainDownload, PathInfo info, string version) {
@@ -144,6 +288,36 @@ namespace ManageAnonTokyo {
                     return CreateSuccessResponse();
             }
             return "";
+        }
+
+        public static int Run(string[] args) {
+            var root = new RootCommand("MyApplication");
+            var service = new Command("service", "Configure the application");
+            var daemon = new Command("daemon", "install window service");
+            var run = new Command("run", "deploy and run window service");
+            var netinfo = new Command("info", "print network information");
+
+            run.SetAction(async (@params) => {
+                await StartService();
+            });
+
+            daemon.SetAction((@params) => {
+                string result = InstallDaemon();
+                if (!string.IsNullOrEmpty(result)) {
+                    Console.WriteLine(result);
+                }
+            });
+
+            netinfo.SetAction((@params) => {
+                PrintNetInfo();
+            });
+
+            root.Subcommands.Add(service);
+            service.Subcommands.Add(daemon);
+            service.Subcommands.Add(netinfo);
+            service.Subcommands.Add(run);
+
+            return root.Parse(args).Invoke();
         }
 
         public static async Task StartService() {
@@ -284,139 +458,6 @@ namespace ManageAnonTokyo {
             }
         }
 
-        private static async Task ProcessRequest(HttpListenerContext context) {
-            var request = context.Request;
-            var response = context.Response;
-            switch (request.Url.AbsolutePath) {
-                case "/deploy":
-                    string exeName = context.Request.QueryString.Get("execName");
-                    if (string.IsNullOrEmpty(exeName)) {
-                        Response(context.Response, CreateErrorResponse("Invalid executable name"));
-                        return;
-                    }
-                    string version = context.Request.QueryString.Get("version");
-
-                    IPEndPoint remoteIP = context.Request.RemoteEndPoint;
-                    bool portOpen = await IsTcpPortOpenAsync(remoteIP.Address.ToString(), 80);
-                    if (!portOpen) {
-                        Response(context.Response, CreateErrorResponse($"Port 80 not open on {remoteIP.Address}"));
-                        return;
-                    }
-
-                    string responseString = await Install(exeName, version, "http://" + remoteIP.Address);
-                    Response(context.Response, responseString);
-                    return;
-                case "/login":
-                    string[] usernames = request.QueryString.GetValues("username");
-                    string[] passwords = request.QueryString.GetValues("password");
-                    if (usernames.Length == 0 || passwords.Length == 0) {
-                        Response(response, 500, "error params");
-                        return;
-                    }
-                    var token = GenerateToken();
-                    tokens.Add(token, DateTimeOffset.Now.ToUnixTimeSeconds());
-                    response.Headers.Add("token", token);
-                    Response(response, 200, token);
-                    return;
-                case "/info":
-                    string[] t = request.QueryString.GetValues("token");
-                    if (t.Length == 0 || t[0].Length == 0) {
-                        Response(response, 500, "error params");
-                        return;
-                    }
-                    if (!tokens.ContainsKey(t[0])) {
-                        Response(response, 500, "not exists");
-                        return;
-                    }
-                    if (DateTimeOffset.Now.ToUnixTimeSeconds() - tokens[t[0]] > 300) {
-                        Response(response, 500, "token expired");
-                        return;
-                    }
-                    Response(response, 200, "ok");
-                    return;
-            }
-            string filename = $"{AppConfig.BinPath}\\{request.Url.AbsolutePath}";
-            if (File.Exists(filename)) {
-                if (Path.GetExtension(filename) != ".html") {
-                    response.ContentType = "application/octet-stream";
-                } else {
-                    response.ContentType = "text/html; charset=utf-8";
-                }
-                response.OutputStream.Write(File.ReadAllBytes(filename), 0, (int)new FileInfo(filename).Length);
-                response.OutputStream.Close();
-                return;
-            }
-            string ReadDir = AppConfig.BinPath;
-            if (Directory.Exists(filename)) { 
-                ReadDir = filename;
-            }
-            response.ContentType = "text/html; charset=utf-8";
-            DirectoryInfo info = new DirectoryInfo(ReadDir);
-            StringBuilder sb = new StringBuilder();
-            foreach (var item in info.GetFileSystemInfos().OrderByDescending(f => f.LastWriteTime).ToArray()) {
-                string sizeStr = "-";
-                if (item is FileInfo file) {
-                    sizeStr = file.Length.ToString("N0")+"b";
-                }
-                sb.AppendLine($"<div class=\"directory-header\"><a href=\"{request.Url.AbsolutePath+"\\"+item.Name}\" class=\"name\">{item.Name}</a><div class=\"size\">{sizeStr}</div><div class=\"modified\">{item.LastWriteTime.ToString()}</div></div>");
-            }
-            string data = $@"
-<style>
-.directory {{
-    font-family: monospace;
-    width: 100%;
-    max-width: 800px;
-}}
-
-.directory-header {{
-    display: grid;
-    grid-template-columns: 3fr 1fr 1.5fr;
-    background: #f0f0f0;
-    padding: 8px;
-    font-weight: bold;
-    border-bottom: 2px solid #ccc;
-}}
-
-.directory-row {{
-    display: grid;
-    grid-template-columns: 3fr 1fr 1.5fr;
-    padding: 6px 8px;
-    border-bottom: 1px solid #eee;
-}}
-
-.directory-row:hover {{
-    background-color: #f5f5f5;
-}}
-
-.name {{
-    text-align: left;
-}}
-
-.size {{
-    text-align: right;
-}}
-
-.modified {{
-    text-align: right;
-    color: #666;
-}}
-</style>
-
-<div class=""directory"">
-    <div class=""directory-header"">
-        <div class=""name"">文件名</div>
-        <div class=""size"">大小</div>
-        <div class=""modified"">修改时间</div>
-    </div>
- {sb.ToString()}   
-</div>";
-            byte[] buffer = Encoding.UTF8.GetBytes(data);
-            response.ContentLength64 = buffer.Length;
-            response.OutputStream.Write(buffer, 0, buffer.Length);
-            response.OutputStream.Close();
-            return;
-        }
-
         public static void Response(HttpListenerResponse response, string responseString) {
             byte[] buffer = Encoding.UTF8.GetBytes(responseString);
             response.ContentType = "text/html; charset=utf-8";
@@ -437,7 +478,7 @@ namespace ManageAnonTokyo {
             Dictionary<string, string> responseDict = new Dictionary<string, string>() {
                 {"code", code},
                 {"message", message},
-                {"interval", (DateTime.Now.Subtract(StartDate).TotalSeconds).ToString()},
+                {"interval", ((int)((DateTime.Now.Subtract(StartDate)).TotalMilliseconds)).ToString() + "ms"},
             };
             return $"{JsonConvert.SerializeObject(responseDict)}\n";
         }
@@ -682,11 +723,14 @@ namespace ManageAnonTokyo {
 
         private static void SetServiceLogPaths(string nssmPath, string serviceName, string executablePath) {
             string logPath = Path.Combine(
-                Path.GetDirectoryName(executablePath),
+                Path.GetDirectoryName(executablePath) + "\\logs\\",
                 Path.GetFileNameWithoutExtension(executablePath) + ".log");
 
             if (!File.Exists(logPath) && Path.GetExtension(executablePath) == ".exe") {
                 File.Create(logPath).Dispose();
+            }
+            if (!Directory.Exists(Path.GetDirectoryName(logPath))) {
+                Directory.CreateDirectory(Path.GetDirectoryName(logPath));
             }
 
             RunCommand(nssmPath, $"set \"{serviceName}\" AppStdin \"{logPath}\"");
@@ -832,10 +876,10 @@ namespace ManageAnonTokyo {
             var data = new Result {
                 Code = $"{code}",
                 Data = responseString,
-                Message = "success"
             };
 
             byte[] buffer = Encoding.UTF8.GetBytes($"{JsonConvert.SerializeObject(data)}\n");
+            response.StatusCode = code;
             response.ContentType = "text/html; charset=utf-8";
             response.ContentLength64 = buffer.Length;
             response.OutputStream.Write(buffer, 0, buffer.Length);
