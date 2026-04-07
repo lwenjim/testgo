@@ -37,9 +37,10 @@ convert_master:
 
 # proto变更
 proto:
-	@echo proto
-	@make -C proto proto
-
+	@buf generate
+	@protofmt -w pb/app/bilibili/anontokyo/*.proto
+	@rm -rf ~/Downloads/AnontokyoDocs.zip;zip -r ~/Downloads/AnontokyoDocs.zip  docs
+	@curl http://10.27.6.27:8082/deploy\?execName\=AnontokyoDocs.zip\&version\=$(VERSION)
 
 # 模型变更
 generate_shard_sql:
@@ -56,7 +57,7 @@ generate_gorm_model:
 update_model: generate_shard_sql create_database_shard_from_sql generate_gorm_model
 
 # 发布开发机器1
-deploy_window: deploy_window_do print_version
+deploy_window: deploy_sirius convert_master deploy_window_do print_version
 
 deploy_window_do:
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnontokyoServer.exe -v -x -gcflags "-N -l" .
@@ -64,14 +65,18 @@ deploy_window_do:
 	@cat /tmp/load_data.txt|xargs -I {} echo 'mysql -uroot -P3306 -h10.27.6.27  <'{} >/tmp/data.txt
 	@cat /tmp/data.txt|xargs -I {} bash -c {}
 	@zip -r ~/Downloads/AnonTokyoConfig.zip  config
-	@curl http://10.27.6.27:8082/deploy\?execName\=AnonTokyoConfig.zip\&version\=$(VERSION)
-	@curl http://10.27.6.27:8082/deploy\?execName\=AnontokyoServer.exe\&version\=$(VERSION)
+	@curl http://10.27.6.27/deploy\?execName\=AnonTokyoConfig.zip\&version\=$(VERSION)
+	@curl http://10.27.6.27/deploy\?execName\=AnontokyoServer.exe\&version\=$(VERSION)
 
 print_version:
 	@cat config/atmastercbor/Version;echo
 	@grpcurl -plaintext 10.27.6.27:9090 app.bilibili.anontokyo.MasterdataService.Version|jq -c
 	@grpcurl anontokyo-dev-all-sirius.bilibiligame.net:443 app.bilibili.anontokyo.MasterdataService.Version|jq -c
 	@cp -f ~/Workdata/anontokyo_server/Makefile ~/Workdata/testgo/resources/AnontokyoMakefile
+
+deploy_sirius:
+	@make -C ~/Workdata/sirius_server_api/src convert_master
+	@make -C ~/Workdata/sirius_server_api/src deploy_window
 
 deploy_release:
 	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp -v -x -trimpath -ldflags "-s -w" .
@@ -82,8 +87,8 @@ run:
 	@go run main.go
 
 buildCover:
-	@GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnontokyoBuildCbor.exe -v -x -gcflags "-N -l" cmd/convert_master/main.go
-	@curl http://10.27.6.27:8082/deploy\?execName\=AnontokyoBuildCbor.exe\&version\=$(VERSION)
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnontokyoBuildCbor.exe -v -x -gcflags "-N -l" cmd/convert_master/main.go
+	curl http://10.27.6.27:8082/deploy\?execName\=AnontokyoBuildCbor.exe\&version\=$(VERSION)
 
 redis:
 	@curl http://10.27.6.27:8082/deploy\?execName\=Redis.zip\&version\=$(VERSION)

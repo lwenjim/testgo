@@ -61,3 +61,5 @@ test.json
 .history*
 .DS_Store
 *.exe
+sirius_master_data
+sirius_protobuffer
