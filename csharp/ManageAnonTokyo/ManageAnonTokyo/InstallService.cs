@@ -21,7 +21,6 @@ using Newtonsoft.Json;
 namespace ManageAnonTokyo {
     public static class AppConfig {
         public const string BinPath = "D:\\bin\\bin";
-        public const string DocsPath = "C:\\inetpub\\wwwroot";
         public const string DomainExpose = "http://*:80/";
         public const string ServiceName = "AnonTokyoManage";
         public const string DefaultIndex = "index.html";
@@ -198,27 +197,25 @@ namespace ManageAnonTokyo {
         }
 
         public static bool IsBinaryFile(string filePath, int sampleSize = 4096, double nonTextThreshold = 0.3) {
-            if (!File.Exists(filePath))
+            if (!File.Exists(filePath)) { 
                 throw new FileNotFoundException("文件不存在", filePath);
-
+            }
             using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
                 int size = (int)Math.Min(fs.Length, sampleSize);
                 if (size == 0) return false;   // 空文件视为文本
-
                 byte[] buffer = new byte[size];
                 fs.Read(buffer, 0, size);
-
                 int nonTextCount = 0;
                 foreach (byte b in buffer) {
                     // 空字节是二进制文件的强烈信号
-                    if (b == 0x00)
+                    if (b == 0x00) {
                         return true;
-
+                    }
                     // 非可打印字符（不包括换行、回车、制表符等常见文本控制字符）
-                    if (b < 0x20 && b != 0x09 && b != 0x0A && b != 0x0D)
+                    if (b < 0x20 && b != 0x09 && b != 0x0A && b != 0x0D) {                     
                         nonTextCount++;
+                    }
                 }
-
                 double ratio = (double)nonTextCount / size;
                 return ratio > nonTextThreshold;
             }
@@ -239,9 +236,9 @@ namespace ManageAnonTokyo {
                     ZipFile.ExtractToDirectory(info.binPath, AppConfig.BinPath);
                     break;
                 case "AnontokyoDocs.zip":
-                    string docsPath = Path.Combine(AppConfig.DocsPath, "docs");
+                    string docsPath = Path.Combine(AppConfig.BinPath, "docs");
                     SafeDeleteDirectory(docsPath);
-                    ZipFile.ExtractToDirectory(info.binPath, AppConfig.DocsPath);
+                    ZipFile.ExtractToDirectory(info.binPath, AppConfig.BinPath);
                     return CreateSuccessResponse();
                 case "Mysql.zip":
                     string mysqlServerName = "AnonTokyoMysql";
