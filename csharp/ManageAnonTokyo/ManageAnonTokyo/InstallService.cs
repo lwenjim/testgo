@@ -107,8 +107,10 @@ namespace ManageAnonTokyo {
                 if (IsBinaryFile(filename)) {
                     response.ContentType = "application/octet-stream";
                 }
-                byte[] buff = ReadAllBytes(filename);
-                response.OutputStream.Write(buff, 0, buff.Length);
+                using (FileStream fs = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
+                    response.ContentLength64 = fs.Length;
+                    fs.CopyTo(response.OutputStream);
+                }
                 response.OutputStream.Close();
                 return;
             }
@@ -118,8 +120,10 @@ namespace ManageAnonTokyo {
             }
             if (File.Exists(filename + "\\" + AppConfig.DefaultIndex)) {
                 response.ContentType = "text/html; charset=utf-8";
-                byte[] buff = ReadAllBytes(filename + "\\" + AppConfig.DefaultIndex);
-                response.OutputStream.Write(buff, 0, buff.Length);
+                using (FileStream fs = new FileStream(filename + "\\" + AppConfig.DefaultIndex, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
+                    response.ContentLength64 = fs.Length;
+                    fs.CopyTo(response.OutputStream);
+                }
                 response.OutputStream.Close();
                 return;
             }
@@ -190,14 +194,8 @@ namespace ManageAnonTokyo {
             return;
         }
 
-        private static byte[] ReadAllBytes(string path) {
-            var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            var reader = new StreamReader(fs);
-            return Encoding.UTF8.GetBytes(reader.ReadToEnd());
-        }
-
         public static bool IsBinaryFile(string filePath, int sampleSize = 4096, double nonTextThreshold = 0.3) {
-            if (!File.Exists(filePath)) { 
+            if (!File.Exists(filePath)) {
                 throw new FileNotFoundException("文件不存在", filePath);
             }
             using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
@@ -212,7 +210,7 @@ namespace ManageAnonTokyo {
                         return true;
                     }
                     // 非可打印字符（不包括换行、回车、制表符等常见文本控制字符）
-                    if (b < 0x20 && b != 0x09 && b != 0x0A && b != 0x0D) {                     
+                    if (b < 0x20 && b != 0x09 && b != 0x0A && b != 0x0D) {
                         nonTextCount++;
                     }
                 }
@@ -723,11 +721,12 @@ namespace ManageAnonTokyo {
                 Path.GetDirectoryName(executablePath) + "\\logs\\",
                 Path.GetFileNameWithoutExtension(executablePath) + ".log");
 
-            if (!File.Exists(logPath) && Path.GetExtension(executablePath) == ".exe") {
-                File.Create(logPath).Dispose();
-            }
             if (!Directory.Exists(Path.GetDirectoryName(logPath))) {
                 Directory.CreateDirectory(Path.GetDirectoryName(logPath));
+            }
+
+            if (!File.Exists(logPath) && Path.GetExtension(executablePath) == ".exe") {
+                File.Create(logPath).Dispose();
             }
 
             RunCommand(nssmPath, $"set \"{serviceName}\" AppStdin \"{logPath}\"");
