@@ -8,7 +8,7 @@ setlocal enabledelayedexpansion
 
 d:
 if not exist "%workdata%" (
-    echo 目录不存在，正在创建...
+    echo "%workdata%"目录不存在，正在创建...
     mkdir "%workdata%"  >nul 2>&1
     if %ERRORLEVEL% gtr 0 (
         echo 命令执行失败，错误码：%ERRORLEVEL%
