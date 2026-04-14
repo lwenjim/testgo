@@ -1,4 +1,17 @@
-VERSION:=$(shell date +"%s")
+VERSION       := $(shell date +"%s")
+DEVHOST       := 10.27.6.27
+MASTER_HOST   := 127.0.0.1
+SIRIUS_DIR    := ~/Workdata/sirius_server_api/src
+GRPC_ENDPOINT := anontokyo-dev-all-sirius.bilibiligame.net:443
+
+# Go 构建参数
+GO_BUILD_FLAGS_DEBUG   := -v -x -gcflags "-N -l"
+GO_BUILD_FLAGS_RELEASE := -v -x -trimpath -ldflags "-s -w"
+
+# ========== 复合目标 ==========
+deploy_window: deploy_sirius convert_master deploy_window_do print_version
+update_model: generate_shard_sql create_database_shard_from_sql generate_gorm_model
+
 # 代码规范扫描
 lint:
 	@echo Lint
@@ -8,7 +21,7 @@ lint:
 test: clean
 	@echo Test
 	@go list -f '{{if gt (len .TestGoFiles) 0}}"go test -tags test -covermode count -coverprofile {{.Name}}.coverprofile -coverpkg ./... {{.ImportPath}}"{{end}}' ./... | xargs -I {} sh -c {}
-	@gocovmerge `ls *.coverprofile` | grep -v ".pb.go" | grep -v ".gen.go"> coverage.out
+	@gocovmerge `ls *.coverprofile` | grep -v ".pb.go" | grep -v ".gen.go" > coverage.out
 	@go tool cover -func coverage.out | grep total
 
 # 查看单元测试覆盖率
@@ -16,89 +29,118 @@ cover: test
 	@echo cover
 	@go tool cover -html coverage.out
 
-# mock外部调用
+# mock 外部调用
 mock:
 	@echo mock
 	@rm -rf mocks/*.go
 	@mockery --all --dir=./gen/app/bilibili/anontokyo
 
-# 嵌入git客户端的脚本, 提交前审核, commit text 审核
+# ========== Git Hooks ==========
+
+# 嵌入 git 客户端的脚本, 提交前审核, commit text 审核
 pre_commit:
 	@echo pre_commit
 	@cp shell/{commit-msg,pre-commit} .git/hooks
 
+# ========== 配表 / Proto / 模型 ==========
+
 # 配表变更
 convert_master:
-	@echo covert_master
+	@echo convert_master
 	@go run cmd/convert_master/main.go
-	@cat config/atmastercbor/Version;echo
-	@grpcurl -plaintext 10.27.6.27:9090 app.bilibili.anontokyo.MasterdataService.Version|jq -c
-	@grpcurl anontokyo-dev-all-sirius.bilibiligame.net:443 app.bilibili.anontokyo.MasterdataService.Version|jq -c
+	$(call print_version_info)
 
-# proto变更
+# proto 变更
 proto:
 	@buf generate
 	@protofmt -w pb/app/bilibili/anontokyo/*.proto
-	@rm -rf ~/Downloads/AnontokyoDocs.zip;zip -r ~/Downloads/AnontokyoDocs.zip  docs
-	@curl http://10.27.6.27:8082/deploy\?execName\=AnontokyoDocs.zip\&version\=$(VERSION)
+	@protoc-go-inject-tag -input="./gen/app/bilibili/anontokyo/*.pb.go"
+	@rm -rf ~/Downloads/AnontokyoDocs.zip; zip -r ~/Downloads/AnontokyoDocs.zip docs
+	$(call deploy_to_dev,AnontokyoDocs.zip)
 
 # 模型变更
 generate_shard_sql:
 	@go run cmd/gorm_gen/create_table/main.go
 
 create_database_shard_from_sql:
-	@mysql -uroot -h127.0.0.1 -e "show databases"|egrep -e "anontokyo_shard_\d"|xargs -I {} echo "\"mysql -h127.0.0.1 -uroot -e 'drop database "{}"'\""|xargs -I {} sh -c {}
-	@cat /tmp/load_data.txt|xargs -I {} echo 'mysql -uroot -P3306 -h127.0.0.1  <'{} >/tmp/data.txt
-	@cat /tmp/data.txt|xargs -I {} bash -c {}
+	$(call rebuild_shard_db,$(MASTER_HOST))
 
 generate_gorm_model:
 	@cd cmd/gorm_gen/gen_code && go run main.go
 
-update_model: generate_shard_sql create_database_shard_from_sql generate_gorm_model
+json_key_convert:
+	@cd cmd/json_key_convert/ && go run main.go
 
-# 发布开发机器1
-deploy_window: deploy_sirius convert_master deploy_window_do print_version
-
-deploy_window_do:
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnontokyoServer.exe -v -x -gcflags "-N -l" .
-	@mysql -uroot -h10.27.6.27 -e "show databases"|egrep -e "anontokyo_shard_\d"|xargs -I {} echo "\"mysql -h10.27.6.27 -uroot -e 'drop database "{}"'\""|xargs -I {} sh -c {}
-	@cat /tmp/load_data.txt|xargs -I {} echo 'mysql -uroot -P3306 -h10.27.6.27  <'{} >/tmp/data.txt
-	@cat /tmp/data.txt|xargs -I {} bash -c {}
-	@zip -r ~/Downloads/AnonTokyoConfig.zip  config
-	@curl http://10.27.6.27/deploy\?execName\=AnonTokyoConfig.zip\&version\=$(VERSION)
-	@curl http://10.27.6.27/deploy\?execName\=AnontokyoServer.exe\&version\=$(VERSION)
-
-print_version:
-	@cat config/atmastercbor/Version;echo
-	@grpcurl -plaintext 10.27.6.27:9090 app.bilibili.anontokyo.MasterdataService.Version|jq -c
-	@grpcurl anontokyo-dev-all-sirius.bilibiligame.net:443 app.bilibili.anontokyo.MasterdataService.Version|jq -c
-	@cp -f ~/Workdata/anontokyo_server/Makefile ~/Workdata/testgo/resources/AnontokyoMakefile
-
-deploy_sirius:
-	@make -C ~/Workdata/sirius_server_api/src convert_master
-	@make -C ~/Workdata/sirius_server_api/src deploy_window
-
-deploy_release:
-	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp -v -x -trimpath -ldflags "-s -w" .
+# ========== 构建 / 运行 ==========
 
 build:
 	@go build .
+
 run:
 	@go run main.go
 
-buildCover:
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnontokyoBuildCbor.exe -v -x -gcflags "-N -l" cmd/convert_master/main.go
-	curl http://10.27.6.27:8082/deploy\?execName\=AnontokyoBuildCbor.exe\&version\=$(VERSION)
+deploy_release:
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /tmp $(GO_BUILD_FLAGS_RELEASE) .
+
+# ========== 部署 ==========
+
+deploy_sirius:
+	@$(MAKE) -C $(SIRIUS_DIR) convert_master
+	@$(MAKE) -C $(SIRIUS_DIR) deploy_window
+
+deploy_window_do:
+	@GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnontokyoServer.exe $(GO_BUILD_FLAGS_DEBUG) .
+	$(call rebuild_shard_db,$(DEVHOST))
+	@zip -q -r ~/Downloads/AnonTokyoConfig.zip config
+	$(call deploy_to_dev,AnonTokyoConfig.zip)
+	$(call deploy_to_dev,AnontokyoServer.exe)
+
+print_version:
+	$(call print_version_info)
+	@cp -f ~/Workdata/anontokyo_server/Makefile ~/Workdata/testgo/resources/AnontokyoMakefile
+
+update_cover_tool:
+	@GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnontokyoBuildCbor.exe $(GO_BUILD_FLAGS_DEBUG) cmd/convert_master/main.go
+	$(call deploy_to_dev,AnontokyoBuildCbor.exe)
 
 redis:
-	@curl http://10.27.6.27:8082/deploy\?execName\=Redis.zip\&version\=$(VERSION)
+	$(call deploy_to_dev,Redis.zip)
 
 mysql:
-	@curl http://10.27.6.27:8082/deploy\?execName\=Mysql.zip\&version\=$(VERSION)
+	$(call deploy_to_dev,Mysql.zip)
+
+# ========== 清理 ==========
 
 clean:
 	@rm -f *.coverprofile
 	@rm -f coverage.*
 	@echo Clean Finish
 
-.PHONY: lint test cover build install clean proto move generate_shard_sql generate_gorm_model run create_database_shard_from_sql convert_master update_model run deploy deploy_window deploy_release import_database buildCover
+# ========== 可复用函数 ==========
+
+# 打印版本信息 (本地 + dev + sirius)
+define print_version_info
+	@cat config/atmastercbor/Version; echo
+	@grpcurl -plaintext $(DEVHOST):9090 app.bilibili.anontokyo.MasterdataService.Version | jq -c
+	@grpcurl $(GRPC_ENDPOINT) app.bilibili.anontokyo.MasterdataService.Version | jq -c
+endef
+
+# 重建分片数据库: $(1) = 目标主机
+define rebuild_shard_db
+	@mysql -uroot -h$(1) -e "show databases" | egrep -e "anontokyo_shard_\d" | xargs -I {} echo "\"mysql -h$(1) -uroot -e 'drop database \"{}\"'\"" | xargs -I {} sh -c {}
+	@cat /tmp/load_data.txt | xargs -I {} echo 'mysql -uroot -P3306 -h$(1) <'{} > /tmp/data.txt
+	@cat /tmp/data.txt | xargs -I {} bash -c {}
+endef
+
+# 部署文件到 dev 服务器: $(1) = 文件名
+define deploy_to_dev
+	@curl http://$(DEVHOST)/deploy\?execName\=$(1)\&version\=$(VERSION)
+endef
+
+# ========== PHONY ==========
+
+.PHONY: lint test cover mock pre_commit \
+        convert_master proto generate_shard_sql create_database_shard_from_sql generate_gorm_model \
+        build run deploy_release \
+        deploy_sirius deploy_window deploy_window_do print_version \
+        update_model update_cover_tool redis mysql clean

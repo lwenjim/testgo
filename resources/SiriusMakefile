@@ -1,15 +1,16 @@
 VERSION:=$(shell date +"%s")
-DEVHOST=10.27.6.27
+DEVHOST=10.27.6.47
 
 deploy_window: convert_master deploy_window_do print_version
 
 convert_master: convert_master_do print_version
 
 deploy_window_do:
-	@GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnonTokyoSiriusServer.exe -v -x -gcflags "-N -l" ./cmd/server_app/main.go
-	@zip -r ~/Downloads/AnonTokyoSiriusServerCbor.zip  mastercbor
-	@echo deploy AnonTokyoSiriusServer: $(shell curl -s http://$(DEVHOST)/deploy\?execName\=AnonTokyoSiriusServer.exe\&version\=$(VERSION))
+	@GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnonTokyoSiriusServer.exe -x -gcflags "-N -l" ./cmd/server_app/main.go
+	@rm -f ~/Downloads/AnonTokyoSiriusServerCbor.zip >/dev/null
+	@zip -q -r ~/Downloads/AnonTokyoSiriusServerCbor.zip  mastercbor
 	@echo deploy AnonTokyoSiriusServerCbor: $(shell curl -s http://$(DEVHOST)/deploy\?execName\=AnonTokyoSiriusServerCbor.zip\&version\=$(VERSION))
+	@echo deploy AnonTokyoSiriusServer: $(shell curl -s http://$(DEVHOST)/deploy\?execName\=AnonTokyoSiriusServer.exe\&version\=$(VERSION))
 	@cp -f ~/Workdata/sirius_server_api/src/Makefile ~/Workdata/testgo/resources/SiriusMakefile
 
 convert_master_do:
