@@ -2,8 +2,8 @@
 set domain[-1]=http://10.27.6.27/
 set domain[0]=http://192.168.50.154/
 set "tempWorkData=D:\bin\bin\temp"
-set "filename=AnonTokyoManage.exe"
-set "nssmpath=nssm.exe"
+set "managerBin=AnonTokyoManage.exe"
+set "nssmBin=nssm.exe"
 set "atCbor=AnontokyoBuildCbor.exe"
 set "siriusCbor=AnontokyoSiriusBuildCbor.exe"
 set "atServer=AnonTokyoServer"
