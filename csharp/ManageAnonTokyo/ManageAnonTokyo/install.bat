@@ -1,15 +1,19 @@
 @echo off
-set domain[0]=http://10.27.6.27/
-set domain[1]=http://192.168.50.154/
-set "workdata=D:\bin\bin\temp"
-set "filename=AnonTokyoManage.exe"
-set "nssmpath=nssm.exe"
+set domain[-1]=http://10.27.6.27/
+set domain[0]=http://192.168.50.154/
+set "tempWorkData=D:\bin\bin\temp"
+set "managerBin=AnonTokyoManage.exe"
+set "nssmBin=nssm.exe"
+set "atCbor=AnontokyoBuildCbor.exe"
+set "siriusCbor=AnontokyoSiriusBuildCbor.exe"
+set "atServer=AnonTokyoServer"
+set "siriusServer=AnonTokyoSiriusServer"
 setlocal enabledelayedexpansion
 
 d:
-if not exist "%workdata%" (
-    echo "%workdata%"目录不存在，正在创建...
-    mkdir "%workdata%"  >nul 2>&1
+if not exist "%tempWorkData%" (
+    echo "%tempWorkData%"目录不存在，正在创建...
+    mkdir "%tempWorkData%"  >nul 2>&1
     if %ERRORLEVEL% gtr 0 (
         echo 命令执行失败，错误码：%ERRORLEVEL%
         pause
@@ -17,21 +21,21 @@ if not exist "%workdata%" (
     )
 )
 
-cd "%workdata%"
-if not exist "%filename%" (
-    echo %filename%文件不存在，正在下载...
-    call :download %filename%
-    copy %filename% ..
+cd "%tempWorkData%"
+if not exist "%managerBin%" (
+    echo %managerBin%文件不存在，正在下载...
+    call :download %managerBin%
+    copy %managerBin% ..
 )
 
-if not exist "%nssmpath%" (
-    echo %nssmpath%文件不存在，正在下载...
-    call :download %nssmpath%
-    copy %nssmpath% ..
+if not exist "%nssmBin%" (
+    echo %nssmBin%文件不存在，正在下载...
+    call :download %nssmBin%
+    copy %nssmBin% ..
 )
 
-cd "%workdata%"
-%filename% service daemon
+cd ..
+%managerBin% service daemon
 if %ERRORLEVEL% gtr 0 (
     echo 命令执行失败，错误码：%ERRORLEVEL%
     pause
@@ -39,6 +43,7 @@ if %ERRORLEVEL% gtr 0 (
 )
 echo 恭喜你 安装成功!!!
 pause
+goto :eof
 
 :download
     set count=2
@@ -54,4 +59,5 @@ pause
             exit /b 102
         )
     )
-    exit /b
+    exit /b 105
+
