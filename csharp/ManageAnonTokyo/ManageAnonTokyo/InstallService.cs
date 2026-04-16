@@ -1,4 +1,7 @@
-﻿using System;
+﻿using Microsoft.IdentityModel.Tokens;
+using Microsoft.Win32;
+using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.CommandLine;
 using System.Diagnostics;
@@ -13,10 +16,9 @@ using System.Reflection;
 using System.Security.Claims;
 using System.ServiceProcess;
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.Win32;
-using Newtonsoft.Json;
 
 namespace ManageAnonTokyo {
     public static class AppConfig {
@@ -45,14 +47,15 @@ namespace ManageAnonTokyo {
             {"AnontokyoDocs.zip", ""},
             {"AnontokyoBuildCbor.exe", "" },
             {"AnontokyoSiriusBuildCbor.exe", "" },
-            {"Mysql.zip", "" },
-            {"Redis.zip", "" },
+            {"Mysql.zip", "Mysql" },
+            {"Redis.zip", "Redis" },
         };
 
         private static async Task ProcessRequest(HttpListenerContext context) {
             var request = context.Request;
             var response = context.Response;
             StartDate = DateTime.Now;
+            Console.WriteLine($"Received request: {request.HttpMethod} {request.Url.AbsolutePath} from {context.Request.RemoteEndPoint}");
             switch (request.Url.AbsolutePath) {
                 case "/deploy":
                     string exeName = context.Request.QueryString.Get("execName");
@@ -63,6 +66,7 @@ namespace ManageAnonTokyo {
                     string version = context.Request.QueryString.Get("version");
 
                     IPEndPoint remoteIP = context.Request.RemoteEndPoint;
+                    Console.WriteLine(remoteIP.ToString());
                     bool portOpen = await IsTcpPortOpenAsync(remoteIP.Address.ToString(), 80);
                     if (!portOpen) {
                         Response(context.Response, CreateErrorResponse($"Port 80 not open on {remoteIP.Address}"));
@@ -70,7 +74,9 @@ namespace ManageAnonTokyo {
                     }
 
                     string responseString = await Install(exeName, version, "http://" + remoteIP.Address);
+                    Console.WriteLine($"Install response: {responseString}");
                     Response(context.Response, responseString);
+                    Console.WriteLine($"Handled deploy request for {exeName} version {version} from {remoteIP.Address}");
                     return;
                 case "/login":
                     string[] usernames = request.QueryString.GetValues("username");
@@ -100,11 +106,21 @@ namespace ManageAnonTokyo {
                     }
                     Response(response, 200, "ok");
                     return;
+                case "/reset":
+                    // 卸载所有服务，清理所有文件，重置到初始状态
+                    FileMapService.Values.Distinct().ToList().ForEach(serviceName => {
+                        if (!string.IsNullOrEmpty(serviceName)) {
+                            StopServiceIfRunning(serviceName);
+                            UnregisterServiceIfExists(serviceName);
+                        }
+                    });
+                    Response(response, 200, "ok");
+                    return;
             }
             string filename = $"{AppConfig.BinPath}\\{request.Url.AbsolutePath}";
             if (File.Exists(filename)) {
                 response.ContentType = "text/html; charset=utf-8";
-                if (IsBinaryFile(filename)) {
+                if (IsBinaryFile(filename) || Path.GetExtension(filename) == ".bat") {
                     response.ContentType = "application/octet-stream";
                 }
                 using (FileStream fs = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
@@ -221,22 +237,32 @@ namespace ManageAnonTokyo {
 
         private static async Task<string> HandleZipInstall(string urlName, string domainDownload, PathInfo info, string version) {
             string url = $"{domainDownload}/{urlName}";
+            Console.WriteLine($"Handling zip install for {urlName} from {url}");
             await HandleExeInstall(url, info, version);
+            Console.WriteLine($"Downloaded zip file for {urlName}, now processing...");
             string fullPath, nssmPath, data;
             switch (urlName) {
                 case "AnonTokyoSiriusServerCbor.zip":
                     string cborPath = Path.Combine(AppConfig.BinPath, AppConfig.CborDirectoryName);
+                    Console.WriteLine($"Extracting CBOR to {cborPath}");
                     SafeDeleteDirectory(cborPath);
+                    Console.WriteLine($"Extracting {info.binPath} to {AppConfig.BinPath}");
                     ZipFile.ExtractToDirectory(info.binPath, AppConfig.BinPath);
-                    break;
+                    Console.WriteLine($"CBOR extraction completed for {urlName}");
+                    return CreateSuccessResponse();
                 case "AnonTokyoConfig.zip":
+                    Console.WriteLine($"Extracting config to {AppConfig.BinPath}");
                     SafeDeleteDirectory(Path.Combine(AppConfig.BinPath, AppConfig.AtConfigDirectoryName));
+                    Console.WriteLine($"Extracting {info.binPath} to {AppConfig.BinPath}");
                     ZipFile.ExtractToDirectory(info.binPath, AppConfig.BinPath);
-                    break;
+                    Console.WriteLine($"Config extraction completed for {urlName}");
+                    return CreateSuccessResponse();
                 case "AnontokyoDocs.zip":
                     string docsPath = Path.Combine(AppConfig.BinPath, "docs");
                     SafeDeleteDirectory(docsPath);
+                    Console.WriteLine($"Extracting {info.binPath} to {AppConfig.BinPath}");
                     ZipFile.ExtractToDirectory(info.binPath, AppConfig.BinPath);
+                    Console.WriteLine($"Docs extraction completed for {urlName}");
                     return CreateSuccessResponse();
                 case "Mysql.zip":
                     string mysqlServerName = "AnonTokyoMysql";
@@ -249,17 +275,47 @@ namespace ManageAnonTokyo {
                         StartServiceIfStopped(mysqlServerName);
                         return CreateSuccessResponse();
                     }
+                    Console.WriteLine($"Initializing MySQL data directory at {mysqlDir}");
                     string dataDir = $"{mysqlDir}\\data";
-                    if (!Directory.Exists(dataDir) && RunCommand($"{mysqlDir}\\bin\\mysqld", "--initialize --console") != 0) {
+                    var resultData = (RunCommand($"{mysqlDir}\\bin\\mysqld", "--initialize --console"));
+                    if (!Directory.Exists(dataDir) && resultData.Item1 != 0) {
                         return CreateErrorResponse("failed to initialize");
                     }
+
+                    Console.WriteLine($"MySQL initialization output: {resultData.Item3}");
+                    Match match = Regex.Match(resultData.Item3, @"A temporary password is generated for root@localhost:(.+)");
+                    if (!match.Success) {
+                        Console.WriteLine("Failed to extract temporary password from mysqld output:");
+                        return CreateErrorResponse(resultData.Item3);
+                    }
+                    string tempPassword = match.Groups[1].Value.Trim();
+
+                    Console.WriteLine($"Registering MySQL service with NSSM");
                     fullPath = $"{mysqlDir}\\bin\\mysqld.exe";
                     nssmPath = GetNssmPath();
                     data = RegisterWindowService(nssmPath, mysqlServerName, fullPath, $"--defaults-file=\"{mysqlDir}\\bin\\my.ini\"");
                     if (!string.IsNullOrEmpty(data)) {
                         return CreateErrorResponse(data);
                     }
+                    Console.WriteLine($"Starting MySQL service and waiting for it to be running");
                     StartServiceAndWait(mysqlServerName);
+
+                    // 等待3306端口开放，表示MySQL服务已完全启动
+                    bool ready = PortWatcher.WaitForPort("localhost", 3306, timeoutSeconds: 60);
+                    if (!ready) {
+                        Console.WriteLine("MySQL did not start within the expected time.");
+                        return CreateErrorResponse("MySQL did not start within the expected time.");
+                    }
+
+                    // 清空mysql密码，允许空密码登录
+                    Console.WriteLine($"Resetting MySQL root password");
+                    RunCommand($"{mysqlDir}\\bin\\mysql", $"-u root --connect-expired-password -p\"{tempPassword}\" -e \"ALTER USER 'root'@'localhost' IDENTIFIED BY '';\"");
+
+                    // 允许远程连接
+                    Console.WriteLine($"Granting remote access to MySQL root user");
+                    RunCommand($"{mysqlDir}\\bin\\mysql", $"-u root -e \"create USER 'root'@'%' IDENTIFIED BY '';\"");
+                    RunCommand($"{mysqlDir}\\bin\\mysql", $"-u root -e \"GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION; FLUSH PRIVILEGES;\"");
+
                     return CreateSuccessResponse();
                 case "Redis.zip":
                     string redisServerName = "AnonTokyoRedis";
@@ -320,40 +376,40 @@ namespace ManageAnonTokyo {
             listener.Prefixes.Add(AppConfig.DomainExpose);
             listener.Start();
             Console.WriteLine($"Listen: {AppConfig.DomainExpose}");
-            try {
-                while (true) {
-                    HttpListenerContext context = await listener.GetContextAsync();
-                    _ = ProcessRequest2(context); // Fire and forget
-                }
-            } finally {
-                listener?.Close();
+            //try {
+            while (true) {
+                HttpListenerContext context = await listener.GetContextAsync();
+                _ = ProcessRequest2(context); // Fire and forget
             }
+            //} finally {
+            //    listener?.Close();
+            //}
         }
 
         public static string InstallDaemon() {
-            try {
-                string executablePath = Assembly.GetExecutingAssembly().Location;
-                StopServiceIfRunning(AppConfig.ServiceName);
-                UnregisterServiceIfExists(AppConfig.ServiceName);
+            //try {
+            string executablePath = Assembly.GetExecutingAssembly().Location;
+            StopServiceIfRunning(AppConfig.ServiceName);
+            UnregisterServiceIfExists(AppConfig.ServiceName);
 
-                if (!Directory.Exists(AppConfig.BinPath)) {
-                    Directory.CreateDirectory(AppConfig.BinPath);
-                }
-
-                string destFile = Path.Combine(AppConfig.BinPath, Path.GetFileName(executablePath));
-                CopyFileWithBackup(executablePath, destFile);
-
-                string nssmPath = GetNssmPath();
-                string result = RegisterWindowService(nssmPath, AppConfig.ServiceName, destFile, "service run");
-                if (!string.IsNullOrEmpty(result)) {
-                    return CreateErrorResponse(result);
-                }
-
-                StartServiceAndWait(AppConfig.ServiceName);
-                return "";
-            } catch (Exception ex) {
-                return CreateErrorResponse($"服务安装失败: {ex.Message}");
+            if (!Directory.Exists(AppConfig.BinPath)) {
+                Directory.CreateDirectory(AppConfig.BinPath);
             }
+
+            string destFile = Path.Combine(AppConfig.BinPath, Path.GetFileName(executablePath));
+            CopyFileWithBackup(executablePath, destFile);
+
+            string nssmPath = GetNssmPath();
+            string result = RegisterWindowService(nssmPath, AppConfig.ServiceName, destFile, "service run");
+            if (!string.IsNullOrEmpty(result)) {
+                return CreateErrorResponse(result);
+            }
+
+            StartServiceAndWait(AppConfig.ServiceName);
+            return "";
+            //} catch (Exception ex) {
+            //    return CreateErrorResponse($"服务安装失败: {ex.Message}");
+            //}
         }
 
         private static void StopServiceIfRunning(string serviceName) {
@@ -446,14 +502,18 @@ namespace ManageAnonTokyo {
         }
 
         public static async Task ProcessRequest2(HttpListenerContext context) {
-            try {
-                await ProcessRequest(context);
-            } catch (Exception ex) {
-                Response(context.Response, CreateErrorResponse($"Request processing error: {ex.Message}"));
-            }
+            //try {
+            await ProcessRequest(context);
+            //} catch (Exception ex) {
+            //    Response(context.Response, CreateErrorResponse($"Request processing error: {ex.Message}"));
+            //}
         }
 
         public static void Response(HttpListenerResponse response, string responseString) {
+            if (string.IsNullOrEmpty(responseString)) {
+                response.OutputStream.Close();
+                return;
+            }
             byte[] buffer = Encoding.UTF8.GetBytes(responseString);
             response.ContentType = "text/html; charset=utf-8";
             response.ContentLength64 = buffer.Length;
@@ -479,25 +539,26 @@ namespace ManageAnonTokyo {
         }
 
         public async static Task<string> Install(string urlName, string version, string domainDownload) {
-            try {
-                if (Path.GetExtension(urlName) == ".exe" && !FileMapService.ContainsKey(urlName)) {
-                    return CreateErrorResponse($"Invalid executable: {urlName}");
-                }
-                return await RestartService(urlName, async () => {
-                    PathInfo info = GetPathInfo(urlName);
-                    string url = $"{domainDownload}/{info.filename}.exe";
-                    switch (Path.GetExtension(urlName)) {
-                        case ".exe":
-                            return await HandleExeInstall(url, info, version);
-                        case ".zip":
-                            return await HandleZipInstall(urlName, domainDownload, info, version);
-                        default:
-                            return CreateErrorResponse("Unsupported file type");
-                    }
-                });
-            } catch (Exception ex) {
-                return CreateErrorResponse($"操作失败: {ex.Message}");
+            //try {
+            if (Path.GetExtension(urlName) == ".exe" && !FileMapService.ContainsKey(urlName)) {
+                return CreateErrorResponse($"Invalid executable: {urlName}");
             }
+            return await RestartService(urlName, async () => {
+                PathInfo info = GetPathInfo(urlName);
+                string url = $"{domainDownload}/{info.filename}.exe";
+                switch (Path.GetExtension(urlName)) {
+                    case ".exe":
+                        return await HandleExeInstall(url, info, version);
+                    case ".zip":
+                        Console.WriteLine($"Handling zip install for {urlName}");
+                        return await HandleZipInstall(urlName, domainDownload, info, version);
+                    default:
+                        return CreateErrorResponse("Unsupported file type");
+                }
+            });
+            //} catch (Exception ex) {
+            //    return CreateErrorResponse($"操作失败: {ex.Message}");
+            //}
         }
 
         private static async Task<string> HandleExeInstall(string url, PathInfo info, string version) {
@@ -665,7 +726,7 @@ namespace ManageAnonTokyo {
             }
 
             string args = $"remove \"{serviceName}\" confirm";
-            if ((RunCommand(nssmPath, args)) != 0) {
+            if ((RunCommand(nssmPath, args)).Item1 != 0) {
                 return CreateErrorResponse("Failed to uninstall service");
             }
             return "";
@@ -680,17 +741,17 @@ namespace ManageAnonTokyo {
                 return CreateErrorResponse($"Executable not found: {executablePath}");
             }
 
-            try {
-                string installArgs = BuildInstallArgs(serviceName, executablePath, arguments);
-                if (!TryRunNssmCommand(nssmPath, installArgs)) {
-                    return CreateErrorResponse("Failed to install service");
-                }
-
-                SetServiceProperties(nssmPath, serviceName, executablePath, startType);
-                return "";
-            } catch (Exception ex) {
-                return CreateErrorResponse($"Service registration failed: {ex.Message}");
+            //try {
+            string installArgs = BuildInstallArgs(serviceName, executablePath, arguments);
+            if (!TryRunNssmCommand(nssmPath, installArgs)) {
+                return CreateErrorResponse("Failed to install service");
             }
+
+            SetServiceProperties(nssmPath, serviceName, executablePath, startType);
+            return "";
+            //} catch (Exception ex) {
+            //    return CreateErrorResponse($"Service registration failed: {ex.Message}");
+            //}
         }
 
         private static string BuildInstallArgs(string serviceName, string executablePath, string arguments) {
@@ -714,6 +775,7 @@ namespace ManageAnonTokyo {
             }
 
             RunCommand(nssmPath, $"set \"{serviceName}\" AppRestartDelay 5000");
+            RunCommand(nssmPath, $"set \"{serviceName}\" Environment \"SERVER_PORT=8080\"");
         }
 
         private static void SetServiceLogPaths(string nssmPath, string serviceName, string executablePath) {
@@ -735,10 +797,10 @@ namespace ManageAnonTokyo {
         }
 
         private static bool TryRunNssmCommand(string nssmPath, string arguments) {
-            return (RunCommand(nssmPath, arguments)) == 0;
+            return (RunCommand(nssmPath, arguments)).Item1 == 0;
         }
 
-        public static int RunCommand(string nssmPath, string arguments) {
+        public static (int, string, string) RunCommand(string nssmPath, string arguments) {
             var startInfo = new ProcessStartInfo {
                 FileName = nssmPath,
                 Arguments = arguments,
@@ -754,32 +816,27 @@ namespace ManageAnonTokyo {
                 startInfo.RedirectStandardOutput = false;
                 startInfo.RedirectStandardError = false;
             }
-            try {
-                using (var process = Process.Start(startInfo)) {
-                    if (process == null) {
-                        Console.WriteLine("Process failed to start");
-                        return -2;
-                    }
-                    process.WaitForExit();
-                    if (!needsAdmin) {
-                        string output = process.StandardOutput.ReadToEnd();
-                        string error = process.StandardError.ReadToEnd();
-                        if (!string.IsNullOrEmpty(output)) {
-                            Console.WriteLine(output);
-                        }
-                        if (!string.IsNullOrEmpty(error)) {
-                            Console.WriteLine(error);
-                        }
-                    }
-                    if (process.ExitCode > 0) {
-                        Console.WriteLine($"Command failed with exit code: {process.ExitCode}");
-                    }
-                    return process.ExitCode;
+            //try {
+            using (var process = Process.Start(startInfo)) {
+                if (process == null) {
+                    Console.WriteLine("Process failed to start");
+                    return (-2, string.Empty, string.Empty);
                 }
-            } catch (Exception ex) {
-                Console.WriteLine($"Command execution failed: {ex.Message}");
+                process.WaitForExit();
+                string output = process.StandardOutput.ReadToEnd();
+                string error = process.StandardError.ReadToEnd();
+                Console.WriteLine($"Command: {nssmPath} {arguments}, {process.ExitCode}");
+                if (process.ExitCode > 0) {
+                    Console.WriteLine($"Command failed with exit code: {process.ExitCode}");
+                }
+                Console.WriteLine($"Output: {output.Trim()}\r\n");
+                Console.WriteLine($"Error: {error.Trim()}\r\n");
+                return (process.ExitCode, output, error);
             }
-            return -1;
+            //} catch (Exception ex) {
+            //    Console.WriteLine($"Command execution failed: {ex.Message}");
+            //}
+            return (-1, string.Empty, string.Empty);
         }
 
         public static bool IsAdministrator() {
@@ -789,29 +846,29 @@ namespace ManageAnonTokyo {
         }
 
         public static string RunCommand(string command) {
-            try {
-                using (Process process = new Process()) {
-                    process.StartInfo.FileName = "cmd.exe";
-                    process.StartInfo.Arguments = "/c " + command;
-                    process.StartInfo.UseShellExecute = false;
-                    process.StartInfo.RedirectStandardOutput = true;
-                    process.StartInfo.RedirectStandardError = true;
-                    process.StartInfo.CreateNoWindow = true;
+            //try {
+            using (Process process = new Process()) {
+                process.StartInfo.FileName = "cmd.exe";
+                process.StartInfo.Arguments = "/c " + command;
+                process.StartInfo.UseShellExecute = false;
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.RedirectStandardError = true;
+                process.StartInfo.CreateNoWindow = true;
 
-                    StringBuilder output = new StringBuilder();
-                    process.OutputDataReceived += (sender, e) => output.AppendLine(e.Data);
-                    process.ErrorDataReceived += (sender, e) => output.AppendLine(e.Data);
+                StringBuilder output = new StringBuilder();
+                process.OutputDataReceived += (sender, e) => output.AppendLine(e.Data);
+                process.ErrorDataReceived += (sender, e) => output.AppendLine(e.Data);
 
-                    process.Start();
-                    process.BeginOutputReadLine();
-                    process.BeginErrorReadLine();
-                    process.WaitForExit();
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                process.WaitForExit();
 
-                    return output.ToString();
-                }
-            } catch (Exception ex) {
-                return $"Command execution failed: {ex.Message}";
+                return output.ToString();
             }
+            //} catch (Exception ex) {
+            //    return $"Command execution failed: {ex.Message}";
+            //}
         }
 
         public static string GetNssmPath() {
@@ -820,17 +877,17 @@ namespace ManageAnonTokyo {
 
         public static async Task<bool> IsTcpPortOpenAsync(string host, int port, int timeoutMilliseconds = 3000) {
             using (TcpClient client = new TcpClient()) {
-                try {
-                    var connectTask = client.ConnectAsync(host, port);
-                    var completedTask = await Task.WhenAny(connectTask, Task.Delay(timeoutMilliseconds));
-                    if (completedTask == connectTask) {
-                        await connectTask;
-                        return true;
-                    }
-                    return false;
-                } catch {
-                    return false;
+                //try {
+                var connectTask = client.ConnectAsync(host, port);
+                var completedTask = await Task.WhenAny(connectTask, Task.Delay(timeoutMilliseconds));
+                if (completedTask == connectTask) {
+                    await connectTask;
+                    return true;
                 }
+                return false;
+                //} catch {
+                //    return false;
+                //}
             }
         }
 
@@ -927,6 +984,76 @@ namespace ManageAnonTokyo {
                 }
             }
             return info;
+        }
+    }
+
+    public static class PortWatcher {
+        /// <summary>
+        /// 等待指定主机的端口变为监听状态（同步方式）
+        /// </summary>
+        /// <param name="host">主机名或IP地址</param>
+        /// <param name="port">端口号</param>
+        /// <param name="timeoutSeconds">总超时时间（秒）</param>
+        /// <param name="retryIntervalMilliseconds">每次重试间隔（毫秒）</param>
+        /// <returns>超时前端口开放返回 true，否则返回 false</returns>
+        public static bool WaitForPort(string host, int port, int timeoutSeconds = 30, int retryIntervalMilliseconds = 1000) {
+            var startTime = DateTime.Now;
+            var timeout = TimeSpan.FromSeconds(timeoutSeconds);
+
+            while (DateTime.Now - startTime < timeout) {
+                if (IsPortOpen(host, port, retryIntervalMilliseconds / 2)) // 单次检测超时设短一些
+                {
+                    return true;
+                }
+                Thread.Sleep(retryIntervalMilliseconds);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 异步等待端口开放（推荐，避免阻塞线程）
+        /// </summary>
+        public static async Task<bool> WaitForPortAsync(string host, int port, int timeoutSeconds = 30, int retryIntervalMilliseconds = 1000, CancellationToken cancellationToken = default) {
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+
+            while (!cts.Token.IsCancellationRequested) {
+                if (await IsPortOpenAsync(host, port, retryIntervalMilliseconds / 2)) {
+                    return true;
+                }
+                await Task.Delay(retryIntervalMilliseconds, cts.Token);
+            }
+            return false;
+        }
+
+        // 单次检测端口是否开放（同步）
+        private static bool IsPortOpen(string host, int port, int timeoutMs) {
+            try {
+                var tcpClient = new TcpClient();
+                var task = tcpClient.ConnectAsync(host, port);
+                if (task.Wait(timeoutMs) && tcpClient.Connected)
+                    return true;
+                return false;
+            } catch {
+                return false;
+            }
+        }
+
+        // 单次检测端口是否开放（异步）
+        private static async Task<bool> IsPortOpenAsync(string host, int port, int timeoutMs) {
+            try {
+                var tcpClient = new TcpClient();
+                var connectTask = tcpClient.ConnectAsync(host, port);
+                var timeoutTask = Task.Delay(timeoutMs);
+                var completedTask = await Task.WhenAny(connectTask, timeoutTask);
+                if (completedTask == connectTask && tcpClient.Connected) {
+                    await connectTask; // 捕获可能的异常
+                    return true;
+                }
+                return false;
+            } catch {
+                return false;
+            }
         }
     }
 }
