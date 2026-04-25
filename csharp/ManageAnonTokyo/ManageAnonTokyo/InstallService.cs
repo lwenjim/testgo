@@ -1,4 +1,4 @@
-﻿using Microsoft.IdentityModel.Tokens;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.Win32;
 using Newtonsoft.Json;
 using System;
@@ -118,6 +118,14 @@ namespace ManageAnonTokyo {
                     return;
             }
             string filename = $"{AppConfig.BinPath}\\{request.Url.AbsolutePath}";
+            if (filename.IndexOf("/sirius/dev/master") > -1) {
+                string dir = $"D:\\workdata\\sirius-client-dev\\bili-tools\\master-tools\\master_output";
+                if (Path.GetExtension(filename) == ".zip") {
+                    filename = $"{dir}\\{Path.GetFileName(filename)}";
+                } else {
+                    filename = dir;
+                }
+            }
             if (File.Exists(filename)) {
                 response.ContentType = "text/html; charset=utf-8";
                 if (IsBinaryFile(filename) || Path.GetExtension(filename) == ".bat") {

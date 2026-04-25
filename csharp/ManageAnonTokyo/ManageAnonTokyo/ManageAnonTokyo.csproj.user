@@ -17,7 +17,7 @@
     <StartArguments>service daemon</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
-    <StartArguments>service run</StartArguments>
+    <StartArguments>service daemon</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
     <StartArguments>service daemon</StartArguments>
