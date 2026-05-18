@@ -106,16 +106,6 @@ namespace ManageAnonTokyo {
                     }
                     Response(response, 200, "ok");
                     return;
-                case "/reset":
-                    // 卸载所有服务，清理所有文件，重置到初始状态
-                    FileMapService.Values.Distinct().ToList().ForEach(serviceName => {
-                        if (!string.IsNullOrEmpty(serviceName)) {
-                            StopServiceIfRunning(serviceName);
-                            UnregisterServiceIfExists(serviceName);
-                        }
-                    });
-                    Response(response, 200, "ok");
-                    return;
             }
             string filename = $"{AppConfig.BinPath}\\{request.Url.AbsolutePath}";
             if (filename.IndexOf("/sirius/dev/master") > -1) {
