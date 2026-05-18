@@ -27,7 +27,7 @@ namespace ManageAnonTokyo {
         public const string ServiceName = "AnonTokyoManage";
         public const string DefaultIndex = "index.html";
         public const string CborDirectoryName = "mastercbor";
-        public const string AtConfigDirectoryName = "config";
+        public const string AtConfigDirectoryName = "atmastercbor";
         public const int DefaultTimeout = 60000;
         public const int ProcessTimeout = 30;
     }
@@ -612,7 +612,7 @@ namespace ManageAnonTokyo {
                     File.Delete(info.binPath);
                 }
                 File.Copy(versionFilename, info.binPath);
-                return "";
+                return CreateSuccessResponse();
             }
 
             if (version == "-1") {
@@ -632,7 +632,7 @@ namespace ManageAnonTokyo {
                 };
                 directoryInfo.Delete(true);
             }
-            return "";
+            return CreateSuccessResponse();
         }
 
 
@@ -655,10 +655,6 @@ namespace ManageAnonTokyo {
             StopServiceIfRunning(serviceName);
 
             string result = await handler();
-            if (!string.IsNullOrEmpty(result)) {
-                return result;
-            }
-
             if (Path.GetExtension(urlName) == ".exe" && !ServiceExists(serviceName)) {
                 string fullPath = Path.Combine(AppConfig.BinPath, Path.GetFileName(urlName));
                 string nssmPath = GetNssmPath();
@@ -669,7 +665,7 @@ namespace ManageAnonTokyo {
             }
 
             StartServiceIfStopped(serviceName);
-            return CreateSuccessResponse();
+            return result;
         }
 
         private static bool ServiceExists(string serviceName) {
