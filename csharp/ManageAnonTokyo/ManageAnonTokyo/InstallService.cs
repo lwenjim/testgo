@@ -321,16 +321,23 @@ namespace ManageAnonTokyo {
                     StopServiceIfRunning(redisServerName);
                     fullPath = $"{redisDir}\\redis-server.exe";
                     nssmPath = GetNssmPath();
+
                     if (!Directory.Exists(redisDir)) {
+                        Console.WriteLine($"Extracting Redis to {redisDir}");
                         ZipFile.ExtractToDirectory(info.binPath, AppConfig.BinPath);
                     }
+                    Console.WriteLine($"Checking if Redis service already exists");
                     var result2 = ExistsService(redisServerName);
                     if (result2.serviceExists) {
+                        Console.WriteLine($"Redis service already exists, starting if stopped");
                         StartServiceIfStopped(redisServerName);
+                        Console.WriteLine($"Redis service is running");
                         return CreateSuccessResponse();
                     }
-                    data = RegisterWindowService(nssmPath, redisServerName, fullPath, $"{redisDir}\\redis.windows.conf  --loglevel verbose");
+                    Console.WriteLine($"Registering Redis service with NSSM");
+                    data = RegisterWindowService(nssmPath, redisServerName, fullPath, $"\"{redisDir}\\redis.windows.conf\"");
                     if (!string.IsNullOrEmpty(data)) {
+                        Console.WriteLine($"Failed to register Redis service: {data}");
                         return CreateErrorResponse(data);
                     }
                     StartServiceAndWait(redisServerName);
@@ -568,10 +575,11 @@ namespace ManageAnonTokyo {
             string filename = Path.GetFileName(info.binPath);
             string tempDir = $"{binDirPath}\\temp";
 
+            Console.WriteLine($"Preparing to install {filename} from {url} with version {version}");
             if (!Directory.Exists(tempDir)) {
                 Directory.CreateDirectory(tempDir);
             }
-
+            Console.WriteLine($"Checking for existing versions of {filename} in {binDirPath}");
             DirectoryInfo Dir = new DirectoryInfo(binDirPath);
             FileInfo[] list = Dir.GetFiles($"{filename}*{Path.GetExtension(info.binPath)}", SearchOption.TopDirectoryOnly);
             if (version.Trim().Length == 0) {
@@ -591,7 +599,7 @@ namespace ManageAnonTokyo {
                     version = $"{max}";
                 }
             }
-
+            Console.WriteLine($"Selected version for {filename}: {version}");
             // 如果版本号不为 -1，检查当前目录下是否存在对应版本的文件，如果存在则直接复制到目标位置
             string versionFilename = $"{binDirPath}\\history\\{filename}-{version}{Path.GetExtension(info.binPath)}";
             if (!Directory.Exists(Path.GetDirectoryName(versionFilename))) {
@@ -608,7 +616,7 @@ namespace ManageAnonTokyo {
             if (version == "-1") {
                 return CreateErrorResponse("empty version");
             }
-
+            Console.WriteLine($"No existing version found for {filename} with version {version}, proceeding to download from {url}");
             // 下载新版本
             string destTempFile = $"{tempDir}\\{filename}";
             if (await DownloadFileWithHttpWebRequest(url, destTempFile)) {
@@ -634,26 +642,30 @@ namespace ManageAnonTokyo {
 
         public static async Task<string> RestartService(string urlName, Func<Task<string>> handler) {
             if (string.IsNullOrEmpty(FileMapService[urlName])) {
+                Console.WriteLine($"No associated service for {urlName}, skipping service restart");
                 string result2 = await handler();
+                Console.WriteLine($"Handler result for {urlName}: {result2}");
                 if (!string.IsNullOrEmpty(result2)) {
                     return result2;
                 }
                 return CreateSuccessResponse();
             }
-
+            Console.WriteLine($"Restarting service for {urlName}");
             string serviceName = FileMapService[urlName];
+            Console.WriteLine($"Stopping service {serviceName} if it is running");
             StopServiceIfRunning(serviceName);
 
             string result = await handler();
             if (Path.GetExtension(urlName) == ".exe" && !ServiceExists(serviceName)) {
                 string fullPath = Path.Combine(AppConfig.BinPath, Path.GetFileName(urlName));
                 string nssmPath = GetNssmPath();
+                Console.WriteLine($"Registering service {serviceName} with NSSM at {nssmPath} for executable {fullPath}");
                 string data = RegisterWindowService(nssmPath, serviceName, fullPath);
                 if (!string.IsNullOrEmpty(data)) {
                     return CreateErrorResponse(data);
                 }
             }
-
+            Console.WriteLine($"Starting service {serviceName} if it exists");
             StartServiceIfStopped(serviceName);
             return result;
         }
@@ -666,8 +678,10 @@ namespace ManageAnonTokyo {
         private static void StartServiceIfStopped(string serviceName) {
             ServiceController service = new ServiceController(serviceName);
             if (service.Status == ServiceControllerStatus.Stopped) {
+                Console.WriteLine($"Starting service {serviceName}");
                 service.Start();
                 service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(AppConfig.ProcessTimeout));
+                Console.WriteLine($"Service {serviceName} is now running");
             }
         }
 
@@ -692,7 +706,7 @@ namespace ManageAnonTokyo {
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
             request.UserAgent = "Mozilla/5.0";
             request.Timeout = AppConfig.DefaultTimeout;
-
+            Console.WriteLine($"Starting download from {url} to {filePath}");
             using (HttpWebResponse response = (HttpWebResponse)await request.GetResponseAsync()) {
                 if (response.StatusCode != HttpStatusCode.OK) {
                     throw new Exception($"HTTP error: {response.StatusCode}");
@@ -728,10 +742,12 @@ namespace ManageAnonTokyo {
 
         public static string RegisterWindowService(string nssmPath, string serviceName, string executablePath, string arguments = "", string startType = "SERVICE_AUTO_START") {
             if (!File.Exists(nssmPath)) {
+                Console.WriteLine($"NSSM executable not found at path: {nssmPath}");
                 return CreateErrorResponse($"nssm.exe not found: {nssmPath}");
             }
 
             if (!File.Exists(executablePath)) {
+                Console.WriteLine($"Executable not found at path: {executablePath}");
                 return CreateErrorResponse($"Executable not found: {executablePath}");
             }
 
@@ -801,36 +817,25 @@ namespace ManageAnonTokyo {
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                CreateNoWindow = true,
+                CreateNoWindow = true
             };
-            bool needsAdmin = !IsAdministrator();
-            if (needsAdmin) {
-                startInfo.UseShellExecute = true;
-                startInfo.Verb = "runas";
-                startInfo.RedirectStandardOutput = false;
-                startInfo.RedirectStandardError = false;
-            }
-            //try {
-            using (var process = Process.Start(startInfo)) {
-                if (process == null) {
-                    Console.WriteLine("Process failed to start");
-                    return (-2, string.Empty, string.Empty);
+            Console.WriteLine($"Running command: {nssmPath} {arguments}");
+
+            //【重點：服務執行直接移除runas/needsAdmin判斷，LocalSystem本身全權限】
+            //刪除所有 if(!IsAdministrator()) runas相關程式碼
+
+            try {
+                using (var process = Process.Start(startInfo)) {
+                    if (process == null) return (-2, "", "啟動進程失敗");
+                    process.WaitForExit();
+                    string output = process.StandardOutput.ReadToEnd();
+                    string error = process.StandardError.ReadToEnd();
+                    Console.WriteLine($"Exit:{process.ExitCode},Out:{output},Err:{error}");
+                    return (process.ExitCode, output, error);
                 }
-                process.WaitForExit();
-                string output = process.StandardOutput.ReadToEnd();
-                string error = process.StandardError.ReadToEnd();
-                Console.WriteLine($"Command: {nssmPath} {arguments}, {process.ExitCode}");
-                if (process.ExitCode > 0) {
-                    Console.WriteLine($"Command failed with exit code: {process.ExitCode}");
-                }
-                Console.WriteLine($"Output: {output.Trim()}\r\n");
-                Console.WriteLine($"Error: {error.Trim()}\r\n");
-                return (process.ExitCode, output, error);
+            } catch (Exception ex) {
+                return (-99, "", ex.Message);
             }
-            //} catch (Exception ex) {
-            //    Console.WriteLine($"Command execution failed: {ex.Message}");
-            //}
-            return (-1, string.Empty, string.Empty);
         }
 
         public static bool IsAdministrator() {
