@@ -13,7 +13,12 @@
             "args": ["service", "run"],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
-            "console":"internalConsole"
+            "console":"internalConsole",
+            "logging": {
+                "moduleLoad": false,      // 不显示模块加载/卸载信息
+                "exceptions": true,       // 保留异常信息（建议保留）
+                "processExit": false,     // 不显示进程退出信息（可选）
+            }
         },
         {
             "name": ".NET Core Attach",

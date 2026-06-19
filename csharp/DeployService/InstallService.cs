@@ -58,11 +58,6 @@ namespace ManageAnonTokyo {
             Console.WriteLine($"Received request: {request.HttpMethod} {request.Url.AbsolutePath} from {context.Request.RemoteEndPoint}");
             switch (request.Url.AbsolutePath) {
                 case "/deploy":
-                    if (context.Request.QueryString == null)
-                    {
-                        Response(context.Response, CreateErrorResponse("Invalid executable name"));
-                        return;
-                    }
                     string exeName = context.Request.QueryString.Get("execName");
                     if (string.IsNullOrEmpty(exeName)) {
                         Response(context.Response, CreateErrorResponse("Invalid executable name"));
@@ -86,30 +81,30 @@ namespace ManageAnonTokyo {
                 case "/login":
                     string[] usernames = request.QueryString.GetValues("username");
                     string[] passwords = request.QueryString.GetValues("password");
-                    if (usernames == null || usernames.Length == 0 || passwords == null || passwords.Length == 0) {
-                        Response(response, CreateErrorResponse("error params"));
+                    if (usernames.Length == 0 || passwords.Length == 0) {
+                        Response(response, 500, "error params");
                         return;
                     }
                     var token = GenerateToken();
                     tokens.Add(token, DateTimeOffset.Now.ToUnixTimeSeconds());
                     response.Headers.Add("token", token);
-                    Response(response, CreateResponse("200", token));
+                    Response(response, 200, token);
                     return;
                 case "/info":
                     string[] t = request.QueryString.GetValues("token");
-                    if (t == null || t.Length == 0 || t[0].Length == 0) {
-                        Response(response, CreateErrorResponse("error params"));
+                    if (t.Length == 0 || t[0].Length == 0) {
+                        Response(response, 500, "error params");
                         return;
                     }
                     if (!tokens.ContainsKey(t[0])) {
-                        Response(response, CreateErrorResponse("not exists"));
+                        Response(response, 500, "not exists");
                         return;
                     }
                     if (DateTimeOffset.Now.ToUnixTimeSeconds() - tokens[t[0]] > 300) {
-                        Response(response, CreateErrorResponse("token expired"));
+                        Response(response, 500, "token expired");
                         return;
                     }
-                    Response(response, CreateSuccessResponse());
+                    Response(response, 200, "ok");
                     return;
             }
             string filename = $"{AppConfig.BinPath}\\{request.Url.AbsolutePath}";
@@ -204,7 +199,7 @@ namespace ManageAnonTokyo {
         <div class=""size"">大小(byte)</div>
         <div class=""modified"">修改时间</div>
     </div>
- {sb.ToString()}
+ {sb.ToString()}   
 </div>";
             byte[] buffer = Encoding.UTF8.GetBytes(data);
             response.ContentLength64 = buffer.Length;
@@ -241,22 +236,8 @@ namespace ManageAnonTokyo {
         private static async Task<string> HandleZipInstall(string urlName, string domainDownload, PathInfo info, string version) {
             string url = $"{domainDownload}/{urlName}";
             Console.WriteLine($"Handling zip install for {urlName} from {url}");
-
-            // 下载 ZIP 文件
-            string tempDir = Path.Combine(AppConfig.BinPath, "temp");
-            if (!Directory.Exists(tempDir)) {
-                Directory.CreateDirectory(tempDir);
-            }
-            string tempZipPath = Path.Combine(tempDir, urlName);
-
-            try {
-                Console.WriteLine($"Downloading zip file to {tempZipPath}");
-                await DownloadFileWithHttpWebRequest(url, tempZipPath);
-                Console.WriteLine($"Downloaded zip file for {urlName}, now processing...");
-                info.binPath = tempZipPath; // 更新 binPath 为下载的 ZIP 文件路径
-            } catch (Exception ex) {
-                return CreateErrorResponse($"Failed to download zip file: {ex.Message}");
-            }
+            await HandleExeInstall(url, info, version);
+            Console.WriteLine($"Downloaded zip file for {urlName}, now processing...");
             string fullPath, nssmPath, data;
             switch (urlName) {
                 case "AnonTokyoSiriusServerCbor.zip":
@@ -362,7 +343,7 @@ namespace ManageAnonTokyo {
                     StartServiceAndWait(redisServerName);
                     return CreateSuccessResponse();
             }
-            return CreateErrorResponse($"Unsupported zip file: {urlName}");
+            return "";
         }
 
         public static int Run(string[] args) {
@@ -569,8 +550,7 @@ namespace ManageAnonTokyo {
             }
             return await RestartService(urlName, async () => {
                 PathInfo info = GetPathInfo(urlName);
-                // 使用原始文件扩展名构建URL
-                string url = $"{domainDownload}/{urlName}";
+                string url = $"{domainDownload}/{info.filename}.exe";
                 switch (Path.GetExtension(urlName)) {
                     case ".exe":
                         return await HandleExeInstall(url, info, version);
@@ -602,21 +582,17 @@ namespace ManageAnonTokyo {
             Console.WriteLine($"Checking for existing versions of {filename} in {binDirPath}");
             DirectoryInfo Dir = new DirectoryInfo(binDirPath);
             FileInfo[] list = Dir.GetFiles($"{filename}*{Path.GetExtension(info.binPath)}", SearchOption.TopDirectoryOnly);
-            // 检查版本号是否为空
-            if (string.IsNullOrWhiteSpace(version)) {
+            if (version.Trim().Length == 0) {
                 return CreateErrorResponse("empty version");
             }
-
             // 如果版本号为 -1，自动选择当前目录下版本号最大的文件
             if (version == "-1") {
                 Int64 max = 0;
                 foreach (var file in list) {
                     string[] cList = file.Name.Split(new char[] { '-', '.' });
-                    // 确保数组索引有效并且能正确解析版本号
-                    if (cList.Length > 2 && long.TryParse(cList[2], out long versionNumber)) {
-                        if (versionNumber > max) {
-                            max = versionNumber;
-                        }
+                    int.Parse(cList[2]);
+                    if (Convert.ToInt64(cList[2]) > max) {
+                        max = Convert.ToInt64(cList[2]);
                     }
                 }
                 if (max > 0) {
@@ -665,8 +641,7 @@ namespace ManageAnonTokyo {
         }
 
         public static async Task<string> RestartService(string urlName, Func<Task<string>> handler) {
-            // 检查 urlName 是否在 FileMapService 中
-            if (!FileMapService.TryGetValue(urlName, out string serviceName) || string.IsNullOrEmpty(serviceName)) {
+            if (string.IsNullOrEmpty(FileMapService[urlName])) {
                 Console.WriteLine($"No associated service for {urlName}, skipping service restart");
                 string result2 = await handler();
                 Console.WriteLine($"Handler result for {urlName}: {result2}");
@@ -676,6 +651,7 @@ namespace ManageAnonTokyo {
                 return CreateSuccessResponse();
             }
             Console.WriteLine($"Restarting service for {urlName}");
+            string serviceName = FileMapService[urlName];
             Console.WriteLine($"Stopping service {serviceName} if it is running");
             StopServiceIfRunning(serviceName);
 
