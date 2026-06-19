@@ -1,0 +1,5 @@
+{
+    "powershell.debugging.createTemporaryIntegratedConsole": true,
+    "dotnet.preferCSharpExtension": true,
+    "dotnet.defaultSolution": "csharp/ManageAnonTokyo/ManageAnonTokyo.sln"
+}

@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": ".NET Framework Launch",
+            "type": "clr",
+            "request": "launch",
+            "program": "${workspaceFolder}/ManageAnonTokyo/bin/x64/Debug/AnonTokyoManage.exe",
+            "args": [
+                "service",
+                "run"
+            ],
+            "cwd": "${workspaceFolder}/ManageAnonTokyo",
+            "stopAtEntry": false,
+            "justMyCode": false
+        }
+    ]
+}
