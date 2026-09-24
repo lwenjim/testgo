@@ -3,9 +3,6 @@ Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'SirVer/ultisnips'
 Plug 'vim-airline/vim-airline'
 Plug 'vim-airline/vim-airline-themes'
-Plug 'joshdick/onedark.vim'
-Plug 'ctrlpvim/ctrlp.vim'
-Plug 'tomasr/molokai'
 Plug 'Yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
 Plug 'airblade/vim-rooter'
 Plug 'fatih/vim-go', { 'for' : ['go'] }
@@ -14,11 +11,9 @@ Plug 'rust-lang/rust.vim'
 Plug 'kana/vim-operator-user'
 Plug 'tomasiser/vim-code-dark'
 Plug 'dart-lang/dart-vim-plugin'
-Plug 'Pocco81/auto-save.nvim'
-Plug 'leafOfTree/vim-matchtag'
+Plug 'leafOfTree/vim-matchtag', { 'for': ['html', 'xml', 'vue'] }
 Plug 'tpope/vim-commentary'
 Plug 'mhinz/vim-startify'
-Plug 'morhetz/gruvbox'
 Plug 'neoclide/jsonc.vim'
 Plug 'junegunn/fzf.vim'
 Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
@@ -51,16 +46,17 @@ nnoremap <f2>   :GoFillStruct<cr>
 nnoremap <f3>   :GoAlternate<cr>
 nnoremap <f4>   :GoDecls<cr>
 nnoremap <s-f4> :GoRename<cr>
-let g:go_imports_autosave = 1
+" go_fmt_command=goimports 已包含 imports 整理，避免保存时重复执行
+let g:go_imports_autosave = 0
 let g:go_debug_windows = {'vars':'rightbelow 60vnew','stack':'rightbelow 10new'}
 let g:lightline = {'colorscheme': 'molokai'}
 let g:onedark_termcolors=256
 let g:rehash256 = 1
-let g:go_auto_type_info = 1
+let g:go_auto_type_info = 0
 let g:go_auto_use_cmpfunc = 1
 let g:go_fmt_fail_silently = 1
 let g:go_metalinter_enabled = ["vet", "errcheck", "golangci-lint"]
-let g:go_metalinter_autosave = 1
+let g:go_metalinter_autosave = 0
 let g:go_metalinter_autosave_enabled = ["vet", "errcheck", "golangci-lint"]
 let g:go_metalinter_deadline = "10s"
 let g:go_metalinter_fast = 1
@@ -74,16 +70,20 @@ let g:go_decls_includes = "func,type"
 let g:go_list_type = "quickfix"
 let g:go_test_timeout = '10s'
 let g:go_highlight_types = 1
-let g:go_highlight_fields = 1
+let g:go_highlight_fields = 0
 let g:go_highlight_functions = 1
-let g:go_highlight_function_calls = 1
-let g:go_highlight_operators = 1
+let g:go_highlight_function_calls = 0
+let g:go_highlight_operators = 0
 let g:go_highlight_extra_types = 1
 let g:go_highlight_build_constraints = 1
 let g:go_highlight_generate_tags = 1
 let g:go_fmt_autosave = 1
 let g:go_gopls_options = ['-remote', "127.0.0.1:39999"]
-let g:go_completion_enabled = 1
+" 补全/跳转/诊断/悬停交给 coc，vim-go 仅保留 gopls 供 GoFillStruct/GoRename 等命令使用
+let g:go_code_completion_enabled = 0
+let g:go_def_mapping_enabled = 0
+let g:go_doc_keywordprg_enabled = 0
+let g:go_diagnostics_level = 0
 let g:coc_disable_transparent_cursor = 1
 "let g:go_code_completion_autobuild = 1
 "let g:go_complete_enabled = 1
@@ -94,12 +94,10 @@ let g:coc_disable_transparent_cursor = 1
 "--------------
 "
 set cursorline
-set cursorcolumn
 set hidden
 set nobackup
 set nowritebackup
 set cmdheight=2
-set updatetime=300
 set shortmess+=c
 let g:coc_settings_path = "a"
 let g:coc_user_config = "b"
@@ -155,20 +153,7 @@ command! -nargs=? Fold :call     CocAction('fold', <f-args>)
 command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organizeImport')
 nnoremap <silent><nowait> <space>a  :<C-u>CocList diagnostics<cr>
 
-"--------------
-" crip config
-"--------------
-let g:ctrlp_map = '<c-p>'
-let g:ctrlp_cmd = 'CtrlP /Users/jim/Workdata/goland/src/jspp'
-let g:ctrlp_working_path_mode = 'w'
-let g:ctrlp_root_markers = ['pom.xml', '.p4ignore']
-let g:ctrlp_user_command = 'find %s -type f'
-let g:ctrlp_user_command = 'dir %s /-n /b /s /a-d'
-let g:ctrlp_user_command = ['.git', 'cd %s && git ls-files -co --exclude-standard']
 set wildignore+="*/tmp/*,*.so,*.swp,*.zip"
-let g:ctrlp_switch_buffer = 'et'
-let g:ctrlp_custom_ignore = '\v[\/]\.(git|hg|svn)$'
-let g:ctrlp_custom_ignore = {'dir':  '\v[\/]\.(git|hg|svn)$','file': '\v\.(exe|so|dll)$','link': 'some_bad_symbolic_links',}
 
 "--------------
 " LeaderF start
@@ -187,13 +172,12 @@ let g:Lf_PopupHeight = float2nr(&lines * 0.3)
 let g:Lf_CacheDirectory = "/tmp"
 let g:Lf_StlColorscheme = 'molokai'
 let g:Lf_PopupAutoAdjustHeight = 1
-let g:Lf_GtagsAutoGenerate = 1
-let g:Lf_GtagsGutentags = 1
+let g:Lf_GtagsAutoGenerate = 0
+let g:Lf_GtagsGutentags = 0
 let g:Lf_ShortcutF = '<s-space>'
 let g:Lf_ShortcutB = '<c-l>'
 let g:Lf_PreviewResult = {'Function': 20, 'BufTag': 20 }
 let g:Lf_NumberOfCache = 10000
-let g:Lf_GtagsAutoGenerate = 1
 let g:Lf_GtagsSource = 1
 let g:Lf_Gtagsconf = '/usr/local/opt/global/share/gtags/gtags.conf'
 let g:Lf_Gtagslabel = 'native-pygments'
@@ -270,8 +254,6 @@ set smartcase
 set spell spelllang=en_us
 set nobackup
 set noswapfile
-set undofile
-set autochdir
 set history=10000
 set autoread
 set wildmenu
@@ -285,7 +267,7 @@ set splitright
 set noundofile
 set hidden
 set shortmess+=c
-set updatetime=100
+set updatetime=300
 set laststatus=2
 set tags=./.tags;,.tags
 set fileencoding=utf-8
@@ -296,12 +278,10 @@ set cindent
 set termguicolors
 set autowrite
 set nospell
-set foldmethod=indent
-set foldenable
+set foldmethod=manual
 set foldcolumn=0
 set foldlevel=1
 set foldlevelstart=99
-set updatetime=100
 set cursorline
 set fileformats=unix,dos,mac
 set list
@@ -318,8 +298,6 @@ filetype plugin indent on
 
 let g:vim_fold_background = 0
 let g:netrw_winsize = 25
-let g:auto_save = 1
-let g:auto_save_events = ["InsertLeave", "TextChanged", "TextChangedI", "CursorHoldI", "CompleteDone"]
 let g:rehash256 = 1
 let g:molokai_original = 1
 let g:syntastic_mode_map = {'mode': 'active', 'passive_filetypes': ['go', 'java', 'py', 'json', 'js', 'sql', 'c', 'h', 'cpp', 'rs', 'rb', 'lisp', 'lua'] }
@@ -353,8 +331,6 @@ match ExtraWhitespace /\s\+$/
 set encoding=utf-8
 set fileencoding=utf-8
 set fileformats=unix,dos,mac
-
-autocmd VimEnter * silent! call coc#rpc#start_server()
 
 nnoremap @ #
 nnoremap ! *
