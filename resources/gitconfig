@@ -69,6 +69,7 @@
     line-numbers=false
 [merge]
     conflictstyle = diff3
+	tool = bc
 #[diff]
 #    colorMoved = default
 [http]
@@ -80,3 +81,15 @@
 	smudge = git-lfs smudge -- %f
 	process = git-lfs filter-process
 	required = true
+[diff]
+	tool = bc
+[difftool]
+	prompt = false
+[mergetool]
+	keepBackup = false
+	prompt = false
+[difftool "bc"]
+	path = /usr/local/bin/bcomp
+[mergetool "bc"]
+	path = /usr/local/bin/bcomp
+	trustExitCode = true
