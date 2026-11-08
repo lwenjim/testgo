@@ -1,24 +1,46 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": ".NET Core Launch (console)",
+            "name": "Debug DeployService",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/bin/Debug/net8.0/DeployService.dll",
-            "args": ["service", "run"],
+            "program": "${workspaceFolder}/bin/Debug/net8.0-windows/DeployService.dll",
+            "args": [
+                "service",
+                "run"
+            ],
             "cwd": "${workspaceFolder}",
+            "env": {
+                "DOTNET_ROOT": "d:\\bin"
+            },
+            "console": "integratedTerminal",
             "stopAtEntry": false,
-            "console":"internalConsole",
+            "justMyCode": true,
             "logging": {
-                "moduleLoad": false,      // 不显示模块加载/卸载信息
-                "exceptions": true,       // 保留异常信息（建议保留）
-                "processExit": false,     // 不显示进程退出信息（可选）
+                "moduleLoad": false,
+                "exceptions": true,
+                "processExit": false
             }
+        },
+        {
+            "name": ".NET Core Launch (terminal)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/bin/Debug/net8.0-windows/DeployService.dll",
+            "args": [
+                "service",
+                "run"
+            ],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "DOTNET_ROOT": "d:\\bin"
+            },
+            "stopAtEntry": false,
+            "justMyCode": true,
+            "console": "integratedTerminal"
         },
         {
             "name": ".NET Core Attach",
