@@ -54,3 +54,8 @@ fi
 
 # OpenClaw Completion
 source "/Users/jim/.openclaw/completions/openclaw.zsh"
+# The following lines have been added by Docker Desktop to enable Docker CLI completions.
+fpath=(/Users/jim/.docker/completions $fpath)
+autoload -Uz compinit
+compinit
+# End of Docker CLI completions

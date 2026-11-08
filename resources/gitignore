@@ -63,3 +63,5 @@ test.json
 *.exe
 sirius_master_data
 sirius_protobuffer
+
+**/.claude/settings.local.json

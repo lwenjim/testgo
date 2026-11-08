@@ -1,30 +1,77 @@
 VERSION:=$(shell date +"%s")
-deploy_window: deploy_window_do print_version
+DEVHOST :=10.27.6.168
+# DEVHOST :=10.27.7.168
+# DEVHOST :=10.27.6.27
+MASTER_HOST := 127.0.0.1
 
-deploy_window_do:
-	@GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnonTokyoSiriusServer.exe -v -x -gcflags "-N -l" ./cmd/server_app/main.go
-	@zip -r ~/Downloads/AnonTokyoSiriusServerCbor.zip  mastercbor
-	@echo deploy AnonTokyoSiriusServer: $(shell curl -s http://10.27.6.27/deploy\?execName\=AnonTokyoSiriusServer.exe\&version\=$(VERSION))
-	@echo deploy AnonTokyoSiriusServerCbor: $(shell curl -s http://10.27.6.27/deploy\?execName\=AnonTokyoSiriusServerCbor.zip\&version\=$(VERSION))
-	@cp -f ~/Workdata/sirius_server_api/src/Makefile ~/Workdata/testgo/resources/SiriusMakefile
+deploy_window: convert_master deploy_window_do
 
 convert_master: convert_master_do print_version
 
+version:
+	@cat mastercbor/Version;echo
+
+run:
+	@go run cmd/server_app/main.go
+
+build_tocbor:
+	@GOOS=linux GOARCH=amd64 CGO_ENABLED=0  go build -o ~/Downloads/tomastercbor cmd/convert_master/main.go
+
+switch_to_dev:
+	@gsed -i 's/127.0.0.1/10.27.6.27/' "./config/roles/local/config.yml"
+
+switch_to_local:
+	@gsed -i 's/10.27.6.27/127.0.0.1/' "./config/roles/local/config.yml"
+
+switch_to_dev2:
+	@gsed -i 's/127.0.0.1/10.27.7.168/' "./config/roles/local/config.yml"
+
+switch_to_local2:
+	@gsed -i 's/10.27.7.168/127.0.0.1/' "./config/roles/local/config.yml"
+
+deploy_table:
+	@rm -f ~/Downloads/AnonTokyoSiriusServerCbor.zip >/dev/null
+	@zip -q -r ~/Downloads/AnonTokyoSiriusServerCbor.zip  mastercbor
+	@touch mastercbor/Version
+	@echo 发布配表: $(shell curl -s http://$(DEVHOST)/deploy\?execName\=AnonTokyoSiriusServerCbor.zip\&version\=$(VERSION))
+
+deploy_program:
+	@GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnonTokyoSiriusServer.exe -x -gcflags "-N -l" ./cmd/server_app/main.go
+	@echo 发布主游戏: $(shell curl -s http://$(DEVHOST)/deploy\?execName\=AnonTokyoSiriusServer.exe\&version\=$(VERSION))
+
+deploy_window_do: deploy_table deploy_program
+
+async_csv:
+	@~/master_data/{MasterForbiddenWord.csv,MasterBiliServerList.csv} master_data_repos
+	@cp ~/master_data/{MasterBiliServerList.json,MasterForbiddenWord.json} master_data_repos/Json
+
+deploy_config:
+	@echo 发布配表: $(shell curl -s http://$(DEVHOST)/deploy\?execName\=AnonTokyoSiriusServerCbor.zip\&version\=$(VERSION))
+
 convert_master_do:
-	@go run cmd/local_convert_master/main.go
+	@cd mastercbor&&rm -rf ./*
+	@rm -f ~/Downloads/AnonTokyoSiriusServerCbor.zip >/dev/null
+	@go run cmd/convert_master/main.go
+	@zip -q -r ~/Downloads/AnonTokyoSiriusServerCbor.zip  mastercbor
 
 print_version:
-	@cat mastercbor/Version;echo
-	@echo getLocalTestVersion: $(shell grpcurl -plaintext 10.27.6.27:8080 app.masterdata.MasterdataService.Version|jq -c)
-	@echo getTestVersion: $(shell grpcurl l4-dev-all-gs-sirius.bilibiligame.net:443 app.player.PlayerService.Register|jq -c)
+	@echo 开发版本: $(shell cat mastercbor/Version;echo)
+	@echo 本地版本: $(shell grpcurl -plaintext $(DEVHOST):8080 app.masterdata.MasterdataService.Version|jq -c)
+	@echo 测试版本: $(shell grpcurl l4-dev-all-gs-sirius.bilibiligame.net:443 app.player.PlayerService.Register|jq -c)
 
 proto:
-# 	@buf generate
-# 	@protofmt -w pb/app/bilibili/anontokyo/*.proto
+	@buf generate
+	@protofmt -w pb/app/bilibili/anontokyo/*.proto
 	@cp Makefile ~/Workdata/testgo/resources
 
-buildCover:
-	@GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnontokyoSiriusBuildCbor.exe -v -x -gcflags "-N -l" cmd/convert_master/main.go
-	@curl http://10.27.6.27/deploy\?execName\=AnontokyoSiriusBuildCbor.exe\&version\=$(VERSION)
+update_cover_tool:
+	@GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o ~/Downloads/AnontokyoSiriusBuildCbor.exe -v -x -gcflags "-N -l" cmd/local_convert_master/main.go
+	@curl http://$(DEVHOST)/deploy\?execName\=AnontokyoSiriusBuildCbor.exe\&version\=$(VERSION)
 
-.PHONY: convert_master proto deploy_window
+mysqldump:
+	@mysqldump -uroot -P3306 -h$(MASTER_HOST) --databases sirius_dev --no-data --skip-comments >~/mysqldump.sql
+	@mysql -h$(DEVHOST) -uroot -P3306 -e "drop database if exists sirius_dev"
+	@mysql -h$(DEVHOST) -uroot -P3306 -e "create database sirius_dev"
+	@mysql -h$(DEVHOST) -uroot -P3306 sirius_dev <~/mysqldump.sql
+
+.PHONY: convert_master proto deploy_window deploy_window_do convert_master_do print_version update_cover_tool version
