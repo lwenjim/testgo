@@ -5,7 +5,7 @@ if ($socket === false) {
     die("failed to create socket");
 }
 
-$address = '127.0.0.1';
+$address = '192.168.50.29';
 $port = 9501;
 
 if (!socket_bind($socket, $address, $port)) {
