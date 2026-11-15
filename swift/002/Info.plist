@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>weixin</string>
+		<string>mqq</string>
+		<string>sinaweibo</string>
+		<string>xhsdiscover</string>
+		<string>zhihu</string>
+		<string>douban</string>
+		<string>tieba</string>
+		<string>dingtalk</string>
+		<string>wxwork</string>
+		<string>lark</string>
+		<string>wemeet</string>
+		<string>qqmail</string>
+		<string>mailmaster</string>
+		<string>alipay</string>
+		<string>taobao</string>
+		<string>tmall</string>
+		<string>openapp.jdmobile</string>
+		<string>pinduoduo</string>
+		<string>vipshop</string>
+		<string>fleamarket</string>
+		<string>imeituan</string>
+		<string>dianping</string>
+		<string>eleme</string>
+		<string>ctrip</string>
+		<string>iosamap</string>
+		<string>baidumap</string>
+		<string>qqmap</string>
+		<string>diditaxi</string>
+		<string>snssdk1128</string>
+		<string>kwai</string>
+		<string>snssdk143</string>
+		<string>baiduboxapp</string>
+		<string>bilibili</string>
+		<string>iqiyi</string>
+		<string>tenvideo</string>
+		<string>youku</string>
+		<string>mgtv</string>
+		<string>orpheus</string>
+		<string>qqmusic</string>
+		<string>ximalaya</string>
+		<string>weread</string>
+		<string>cmbmobilebank</string>
+		<string>upwallet</string>
+		<string>whatsapp</string>
+		<string>tg</string>
+		<string>instagram</string>
+		<string>youtube</string>
+		<string>twitter</string>
+		<string>amihexin</string>
+		<string>emscheme</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>用于在同一 Wi-Fi 下发现附近的神算子设备，设备之间直接点对点聊天，不经过任何服务器。</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_shensuanzi-chat._tcp</string>
+		<string>_shensuanzi-chat._udp</string>
+	</array>
+</dict>
+</plist>
