@@ -52,6 +52,8 @@ struct ChatGroup: Identifiable, Codable, Equatable {
     var unread: Int = 0
     /// 已邀请、还没同意加入的设备。nil = 好友验证之前建的旧群（不做验证）
     var pending: [String]?
+    /// 建群的人。成员表以发起人的为准；nil = 旧数据（谁发都当参考，只做并集）
+    var owner: String?
 
     var lastMessage: ChatMessage? { messages.last }
 
@@ -258,6 +260,8 @@ final class LANChatModel: NSObject, ObservableObject {
     //   2. 停止 / 重启发现串行化，同一时刻只有一个待执行任务；
     //   3. 会话退役后先 disconnect，延迟 8 秒再释放。
     private var discoveryActive = false
+    /// 浏览器是否已经 start。一旦 true，运行期不再 stop（见 activateDiscovery 的注释）
+    private var browserStarted = false
     private var discoveryWork: DispatchWorkItem?
     private var retiredObjects: [(Date, AnyObject)] = []
     private var lastDiscoveryRestart = Date.distantPast
@@ -326,22 +330,33 @@ final class LANChatModel: NSObject, ObservableObject {
         startReconnectTicker()
     }
 
-    /// 拉起 Bonjour 广播 + 发现（幂等）
+    /// 拉起广播 + 发现。浏览器全程只 start 一次，运行期再也不 stop / 重启。
+    ///
+    /// 反复 stop→start 浏览器就是闪退的唯一来源：CFNetwork 的 CFNetServiceBrowser 会给
+    /// DNS-SD 的 socket 挂一个 run loop source，多次 stop/start 后旧 source 留在 run loop 里
+    /// 没人摘掉，之后被 fire 到就进了 _BrowserCancel，对着已经释放的 browser 调
+    /// CFRunLoopSourceInvalidate → _CFAssertMismatchedTypeID（SIGTRAP）。
+    /// 真机日志里三份崩溃（01:15 / 01:21 / 01:27）栈完全一致，间隔约 6 分钟，
+    /// 正好对上 60s→120s→240s 的发现重启节奏，所以「重启」这个动作本身必须去掉。
+    /// 广播（DNSServiceRegister，走自己的 syncQueue，没有 run loop source）可以重启。
     private func activateDiscovery() {
-        guard running, !discoveryActive else { return }
+        guard running else { return }
+        if !browserStarted, let b = browser {
+            browserStarted = true
+            b.startBrowsingForPeers()
+        }
+        guard discoveryWork == nil, !discoveryActive else { return }
         discoveryActive = true
         advertiser?.startAdvertisingPeer()
-        browser?.startBrowsingForPeers()
     }
 
-    /// 暂停 Bonjour 广播 + 发现，但保留对象（绝不在这里释放它们）
+    /// 暂停广播，但保留对象（绝不在这里释放它们，也不动浏览器）
     private func suspendDiscovery() {
         discoveryWork?.cancel()
         discoveryWork = nil
         guard discoveryActive else { return }
         discoveryActive = false
         advertiser?.stopAdvertisingPeer()
-        browser?.stopBrowsingForPeers()
     }
 
     /// 后台时暂停发现，省电；已连接的会话保持
@@ -351,9 +366,8 @@ final class LANChatModel: NSObject, ObservableObject {
 
     func resumeDiscovery() {
         guard running else { return }
-        // 回前台必须 stop → start 重启一遍：从后台回来时 MC 内部状态已经失效，
-        // 只调 start 常常是空操作（表现为"再也搜不到对方"）。重启走串行任务，避免和
-        // 重连拍子里的重启撞车（两次 stop/start 交叠正是抖动的来源）。
+        // 回前台只重启「广播」，让对方重新发现我；浏览器不再 stop/start（那是闪退来源）。
+        // 广播走 DNSServiceRegister 自己的 syncQueue，没有 run loop source，重启是安全的。
         discoveryBackoff = 60
         restartDiscovery(minInterval: 0)
         // 回到前台：清掉上一轮失败计数，给所有断线会话一次重连机会
@@ -372,6 +386,11 @@ final class LANChatModel: NSObject, ObservableObject {
 
     func stop() {
         suspendDiscovery()
+        // 只在真正销毁时停一次浏览（「重置连接」/改昵称才走到这里，不是运行期循环）
+        if browserStarted {
+            browserStarted = false
+            browser?.stopBrowsingForPeers()
+        }
         for (_, s) in sessions { s.disconnect() }
         // 会话与发现对象都延迟释放：CFNetService 的回调可能还在队列里
         retire(Array(sessions.values))
@@ -590,8 +609,7 @@ final class LANChatModel: NSObject, ObservableObject {
         }
     }
 
-    /// 重启 Bonjour 广播/发现（不动已连好的会话），用来冲掉发现失效的状态。
-    /// 串行化：先取消上一个待执行的重启，再排新的，避免 stop/start 交叠。
+    /// 重启广播（不动浏览器，也不动已连好的会话），用来让对方重新发现我
     private func restartDiscovery(minInterval: TimeInterval) {
         guard running, advertiser != nil, browser != nil else { return }
         guard Date().timeIntervalSince(lastDiscoveryRestart) >= minInterval else { return }
@@ -599,16 +617,16 @@ final class LANChatModel: NSObject, ObservableObject {
         // 下次再重启就等更久（有人重新被发现 / 连上时会重置回 60s）
         discoveryBackoff = min(max(discoveryBackoff, 60) * 2, 600)
         discoveryWork?.cancel()
+        discoveryWork = nil
         if discoveryActive {
             discoveryActive = false
             advertiser?.stopAdvertisingPeer()
-            browser?.stopBrowsingForPeers()
         }
         let work = DispatchWorkItem { [weak self] in
-            guard let self, self.running else { return }
-            self.discoveryActive = true
-            self.advertiser?.startAdvertisingPeer()
-            self.browser?.startBrowsingForPeers()
+            guard let self else { return }
+            self.discoveryWork = nil
+            guard self.running else { return }
+            self.activateDiscovery()
         }
         discoveryWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: work)
@@ -728,7 +746,8 @@ final class LANChatModel: NSObject, ObservableObject {
                           name: trimmed.isEmpty ? "新群聊" : trimmed,
                           members: [],
                           messages: [],
-                          pending: members)
+                          pending: members,
+                          owner: nickname)
         DispatchQueue.main.async {
             self.groups.insert(g, at: 0)
             self.persistGroups()
@@ -785,7 +804,8 @@ final class LANChatModel: NSObject, ObservableObject {
 
         var g = ChatGroup(id: invite.groupId,
                           name: invite.groupName,
-                          members: invite.members.filter { $0 != nickname })
+                          members: invite.members.filter { $0 != nickname },
+                          owner: invite.inviter)
         g.updatedAt = Date()
         groups.insert(g, at: 0)
         persistGroups()
@@ -839,17 +859,20 @@ final class LANChatModel: NSObject, ObservableObject {
 
     private func receiveGroupJoin(_ env: ChatEnvelope, from name: String) {
         guard let gid = env.groupId, let i = groups.firstIndex(where: { $0.id == gid }) else { return }
+        let wasMember = groups[i].members.contains(name)
         groups[i].pending?.removeAll { $0 == name }
-        if !groups[i].members.contains(name) {
-            groups[i].members.append(name)
-        }
+        if !wasMember { groups[i].members.append(name) }
         groups[i].members.sort()
         groups[i].updatedAt = Date()
         let g = groups[i]
         persistGroups()
         broadcastMembers(g)
-        if online.contains(name) { syncHistory(with: name, force: true) }
-        showToast("\(name) 已加入「\(g.name)」")
+        // join 现在每次连上都会补发一遍（用来修丢包造成的成员缺失），
+        // 只有真的新成员才同步历史 / 弹提示，避免反复重连时刷屏
+        if !wasMember {
+            if online.contains(name) { syncHistory(with: name, force: true) }
+            showToast("\(name) 已加入「\(g.name)」")
+        }
     }
 
     private func receiveGroupReject(_ env: ChatEnvelope, from name: String) {
@@ -865,6 +888,12 @@ final class LANChatModel: NSObject, ObservableObject {
         // 只接受成员的名单更新；自己永远在名单里
         var next = snapshot.filter { $0 != nickname }
         if !next.contains(name) { next.append(name) }
+        // 非发起人的名单只做并集，别拿一份旧表把别人踢掉。
+        // 之前是无条件覆盖：谁的表旧（丢过一条 group.join，或崩过重启读到旧缓存）就覆盖谁，
+        // 结果同一时刻三台显示 2 / 2 / 1 —— 发起人那份少了个人，还被自己反复覆盖回去。
+        if groups[i].owner != name {
+            next = Array(Set(groups[i].members).union(next))
+        }
         next.sort()
         guard next != groups[i].members else { return }
         groups[i].members = next
@@ -1495,6 +1524,16 @@ extension LANChatModel: MCSessionDelegate {
                 // 群邀请补发：对方上线后，把还没答复的邀请再送一次
                 for g in self.groups where (g.pending ?? []).contains(name) {
                     self.sendGroupInvite(g, to: name)
+                }
+                // 连上对方就把共同群的身份对一遍：把「我在这个群里」重发一次。
+                // join 是幂等的（已经在名单里就当无事发生），用来修当初那条 join 在崩溃/
+                // 断线窗口里丢掉、导致某台（比如发起人）名单里永远少一个成员的问题。
+                // 旧数据（owner == nil）也走这条路，无需迁移。
+                for g in self.groups where g.members.contains(name) || g.owner == name {
+                    self.sendEnv(ChatEnvelope(kind: "group.join", text: "", sender: self.nickname,
+                                              date: Date(), groupId: g.id, groupName: g.name,
+                                              groupMembers: [self.nickname] + g.members),
+                                 to: name)
                 }
                 // 我同意加入时发起人不在线：现在补发「我已加入」
                 if let gid = self.pendingJoins[name], let g = self.group(gid) {
@@ -2256,7 +2295,7 @@ struct LANChatView: View {
                         Text(g.name)
                             .font(.system(size: 15, weight: .medium))
                             .lineLimit(1)
-                        Text(count > 0 ? "\(count) 人在线" : "无人在线")
+                        Text(count > 0 ? "\(count + 1) 人在线" : "仅本机在线")
                             .font(.system(size: 9, weight: .semibold))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
@@ -2939,7 +2978,9 @@ struct GroupChatView: View {
                         Text(group?.name ?? "群聊")
                             .font(.system(size: 16, weight: .semibold))
                             .lineLimit(1)
-                        Text(onlineCount > 0 ? "\(onlineCount) 人在线 · 点对点广播" : "暂无成员在线")
+                        // 「人在线」= 群里在线的设备数，含本机（自己和对方都算），
+                        // 三台设备全连上时三台都显示 3，不会再出现 2 / 2 / 1 各说各的
+                        Text(onlineCount > 0 ? "\(onlineCount + 1) 人在线 · 点对点广播" : "暂无成员在线")
                             .font(.system(size: 10))
                             .foregroundStyle(onlineCount > 0 ? Color.green : Color.secondary)
                     }
