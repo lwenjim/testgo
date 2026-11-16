@@ -11,20 +11,96 @@ import Combine
 import UIKit
 import PhotosUI
 import MultipeerConnectivity
+import AVFoundation
+import CoreLocation
+import UniformTypeIdentifiers
 
 // MARK: - 数据
+
+/// 富媒体附件：文件 / 视频 / 语音
+struct ChatAttachment: Codable, Equatable {
+    enum Kind: String, Codable { case file, video, audio }
+    var kind: Kind
+    /// 落在 chat-files 目录里的文件名，同时作为 MCSession 资源名
+    var fileName: String
+    /// 原始文件名（展示用）
+    var displayName: String
+    var size: Int64 = 0
+    /// 语音 / 视频时长（秒）
+    var duration: TimeInterval?
+}
+
+/// 位置消息：点对点直传经纬度，不依赖任何地图服务
+struct SharedLocation: Codable, Equatable {
+    var latitude: Double
+    var longitude: Double
+    var name: String = ""
+}
 
 struct ChatMessage: Identifiable, Codable, Equatable {
     var id = UUID()
     var text: String = ""
     var mine: Bool = true
     var date = Date()
-    /// 本地图片文件名（存在 chat-images 目录），为空表示纯文字
+    /// 本地图片文件名（存在 chat-images 目录），为空表示非图片
     var imageName: String?
     /// 群聊里显示"谁发的"；私聊为空
     var sender: String?
+    /// 文件 / 视频 / 语音附件
+    var attachment: ChatAttachment?
+    /// 位置
+    var location: SharedLocation?
+    /// 收藏标记（只存本机，不同步）
+    var favorite: Bool = false
 
     var isImage: Bool { imageName != nil }
+
+    /// 列表预览文案
+    var previewText: String {
+        if imageName != nil { return "[图片]" }
+        if let a = attachment {
+            switch a.kind {
+            case .file:  return "[文件] \(a.displayName)"
+            case .video: return "[视频] \(a.displayName)"
+            case .audio: return "[语音]"
+            }
+        }
+        if location != nil { return "[位置]" }
+        return text
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, text, mine, date, imageName, sender, attachment, location, favorite
+    }
+
+    init(id: UUID = UUID(), text: String = "", mine: Bool = true, date: Date = Date(),
+         imageName: String? = nil, sender: String? = nil,
+         attachment: ChatAttachment? = nil, location: SharedLocation? = nil,
+         favorite: Bool = false) {
+        self.id = id
+        self.text = text
+        self.mine = mine
+        self.date = date
+        self.imageName = imageName
+        self.sender = sender
+        self.attachment = attachment
+        self.location = location
+        self.favorite = favorite
+    }
+
+    /// 兼容旧数据：新增字段缺失时给默认值，避免整段历史解码失败
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
+        mine = try c.decodeIfPresent(Bool.self, forKey: .mine) ?? true
+        date = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
+        imageName = try c.decodeIfPresent(String.self, forKey: .imageName)
+        sender = try c.decodeIfPresent(String.self, forKey: .sender)
+        attachment = try c.decodeIfPresent(ChatAttachment.self, forKey: .attachment)
+        location = try c.decodeIfPresent(SharedLocation.self, forKey: .location)
+        favorite = try c.decodeIfPresent(Bool.self, forKey: .favorite) ?? false
+    }
 }
 
 struct ChatThread: Identifiable, Codable, Equatable {
@@ -38,7 +114,7 @@ struct ChatThread: Identifiable, Codable, Equatable {
     /// 列表里的一行预览
     var preview: String {
         guard let last = messages.last else { return "已连接，开始聊天" }
-        return last.isImage ? "[图片]" : last.text
+        return last.previewText
     }
 }
 
@@ -59,8 +135,7 @@ struct ChatGroup: Identifiable, Codable, Equatable {
 
     var preview: String {
         if let last = messages.last {
-            if last.isImage { return last.mine ? "我：[图片]" : "\(last.sender ?? "成员")：[图片]" }
-            return last.mine ? "我：\(last.text)" : "\(last.sender ?? "成员")：\(last.text)"
+            return last.mine ? "我：\(last.previewText)" : "\(last.sender ?? "成员")：\(last.previewText)"
         }
         if let p = pending, !p.isEmpty { return "等待成员同意加入…" }
         return "群已创建，发条消息试试"
@@ -118,10 +193,15 @@ struct ChatEnvelope: Codable {
     var imageName: String?
     /// kind == "sync" 时携带的一批历史消息
     var items: [ChatEnvelope]?
+    /// 文件 / 视频 / 语音元数据（原文件走资源通道单独传）
+    var attachment: ChatAttachment?
+    /// 位置消息
+    var location: SharedLocation?
 
     init(kind: String, text: String, sender: String, date: Date,
          groupId: String? = nil, groupName: String? = nil, groupMembers: [String]? = nil,
-         msgId: String? = nil, imageName: String? = nil, items: [ChatEnvelope]? = nil) {
+         msgId: String? = nil, imageName: String? = nil, items: [ChatEnvelope]? = nil,
+         attachment: ChatAttachment? = nil, location: SharedLocation? = nil) {
         self.kind = kind
         self.text = text
         self.sender = sender
@@ -132,6 +212,8 @@ struct ChatEnvelope: Codable {
         self.msgId = msgId
         self.imageName = imageName
         self.items = items
+        self.attachment = attachment
+        self.location = location
     }
 }
 
@@ -196,6 +278,75 @@ enum ChatImageStore {
     }
 }
 
+/// 聊天附件（文件 / 视频 / 语音）落在 Application Support/chat-files
+/// 资源名统一 "att__<消息ID>[__<群ID>].<ext>"，便于接收端识别归属
+enum ChatFileStore {
+
+    static let dir: URL = {
+        let url = LocalStore.url("chat-files")
+        if !FileManager.default.fileExists(atPath: url.path) {
+            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        }
+        return url
+    }()
+
+    static func url(_ name: String) -> URL { dir.appendingPathComponent(name) }
+
+    static func exists(_ name: String) -> Bool {
+        FileManager.default.fileExists(atPath: url(name).path)
+    }
+
+    static func size(_ name: String) -> Int64? {
+        guard let attr = try? FileManager.default.attributesOfItem(atPath: url(name).path),
+              let n = attr[.size] as? NSNumber else { return nil }
+        return n.int64Value
+    }
+
+    /// 把选中的文件复制进附件目录，返回资源名
+    @discardableResult
+    static func store(from src: URL, name: String) -> Bool {
+        let dest = url(name)
+        do {
+            if FileManager.default.fileExists(atPath: dest.path) {
+                try FileManager.default.removeItem(at: dest)
+            }
+            try FileManager.default.copyItem(at: src, to: dest)
+            return true
+        } catch { return false }
+    }
+
+    @discardableResult
+    static func store(_ data: Data, name: String) -> Bool {
+        do {
+            try data.write(to: url(name), options: .atomic)
+            return true
+        } catch { return false }
+    }
+
+    static func remove(_ name: String) {
+        try? FileManager.default.removeItem(at: url(name))
+    }
+
+    static func fileSize(_ path: String) -> Int64 {
+        guard let a = try? FileManager.default.attributesOfItem(atPath: path),
+              let n = a[.size] as? NSNumber else { return 0 }
+        return n.int64Value
+    }
+
+    /// "att__<msgId>.<ext>" 或 "att__<groupId>__<msgId>.<ext>"
+    static func parse(_ name: String) -> (group: String?, msg: String)? {
+        guard name.hasPrefix("att__") else { return nil }
+        var rest = String(name.dropFirst(5))
+        let ext = (rest as NSString).pathExtension
+        if !ext.isEmpty { rest = String(rest.dropLast(ext.count + 1)) }
+        // 用 components(separatedBy:) 兼容 iOS 15（split(maxSplits:) 是 iOS 16+）
+        let parts = rest.components(separatedBy: "__")
+        if parts.count >= 2 { return (parts[0], parts.dropFirst().joined(separator: "__")) }
+        if parts.count == 1 { return (nil, parts[0]) }
+        return nil
+    }
+}
+
 // MARK: - 模型
 
 final class LANChatModel: NSObject, ObservableObject {
@@ -225,6 +376,18 @@ final class LANChatModel: NSObject, ObservableObject {
     @Published private(set) var errorText: String?
     @Published private(set) var unread: [String: Int] = [:]
     @Published var toast: String?
+
+    /// 收藏消息（跨私聊 / 群聊汇总，按时间倒序）
+    struct FavoriteEntry: Identifiable {
+        var id: UUID { message.id }
+        let message: ChatMessage
+        let peer: String?      // 私聊对象；群聊为 nil
+        let groupId: String?   // 群聊 ID；私聊为 nil
+        let groupName: String?
+    }
+
+    @Published private(set) var favorites: [FavoriteEntry] = []
+    var favoriteCount: Int { favorites.count }
 
     /// 正在自动重连 / 等待对方上线的设备
     @Published private(set) var reconnecting: Set<String> = []
@@ -294,6 +457,42 @@ final class LANChatModel: NSObject, ObservableObject {
             friends.formUnion(legacy)
             persistFriends()
         }
+        rebuildFavorites()
+    }
+
+    /// 重新汇总收藏（消息落库 / 取消收藏后调用）
+    private func rebuildFavorites() {
+        var result: [FavoriteEntry] = []
+        for t in threads {
+            for m in t.messages where m.favorite {
+                result.append(FavoriteEntry(message: m, peer: t.peer, groupId: nil, groupName: nil))
+            }
+        }
+        for g in groups {
+            for m in g.messages where m.favorite {
+                result.append(FavoriteEntry(message: m, peer: nil, groupId: g.id, groupName: g.name))
+            }
+        }
+        favorites = result.sorted { $0.message.date > $1.message.date }
+    }
+
+    /// 切换收藏状态（长按气泡调用）
+    func toggleFavorite(_ messageId: UUID) {
+        if let ti = threads.firstIndex(where: { $0.messages.contains { $0.id == messageId } }),
+           let mi = threads[ti].messages.firstIndex(where: { $0.id == messageId }) {
+            threads[ti].messages[mi].favorite.toggle()
+            persist()
+        } else if let gi = groups.firstIndex(where: { $0.messages.contains { $0.id == messageId } }),
+                  let mi = groups[gi].messages.firstIndex(where: { $0.id == messageId }) {
+            groups[gi].messages[mi].favorite.toggle()
+            persistGroups()
+        }
+        rebuildFavorites()
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    func isFavorite(_ messageId: UUID) -> Bool {
+        favorites.contains { $0.message.id == messageId }
     }
 
     private static func defaultNickname() -> String {
@@ -720,6 +919,77 @@ final class LANChatModel: NSObject, ObservableObject {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
+    /// 发送附件（文件 / 视频 / 语音）：本地先落盘，再发元数据信封 + 资源通道传原文件
+    func sendAttachment(_ attachment: ChatAttachment, fileURL: URL, to name: String) {
+        guard friends.contains(name) else {
+            showToast("先加对方为好友才能聊天")
+            return
+        }
+        guard online.contains(name) else {
+            reconnectNow(name)
+            showToast("正在重连，连上后再发送")
+            return
+        }
+        guard let pid = peerIDs[name], let s = sessions[name], s.connectedPeers.contains(pid) else {
+            showToast("对方已离开")
+            reconnectNow(name)
+            return
+        }
+        let msgId = UUID()
+        var att = attachment
+        let ext = fileURL.pathExtension.isEmpty ? "bin" : fileURL.pathExtension
+        att.fileName = "att__\(msgId.uuidString).\(ext)"
+        if let a = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+           let n = a[.size] as? NSNumber { att.size = n.int64Value }
+        guard ChatFileStore.store(from: fileURL, name: att.fileName) else {
+            showToast("文件处理失败")
+            return
+        }
+        append(ChatMessage(id: msgId, text: "", mine: true, date: Date(), attachment: att), to: name)
+
+        let env = ChatEnvelope(kind: "attachment", text: "", sender: nickname, date: Date(),
+                               msgId: msgId.uuidString, attachment: att)
+        if let data = try? JSONEncoder().encode(env) {
+            try? s.send(data, toPeers: [pid], with: .reliable)
+        }
+        s.sendResource(at: ChatFileStore.url(att.fileName),
+                       withName: att.fileName, toPeer: pid) { [weak self] error in
+            guard error != nil else { return }
+            DispatchQueue.main.async { self?.showToast("附件发送失败") }
+        }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    /// 发送位置：纯数据信封，不需要资源通道
+    func sendLocation(_ location: SharedLocation, to name: String) {
+        guard friends.contains(name) else {
+            showToast("先加对方为好友才能聊天")
+            return
+        }
+        guard online.contains(name) else {
+            reconnectNow(name)
+            showToast("正在重连，连上后再发送")
+            return
+        }
+        guard let pid = peerIDs[name], let s = sessions[name], s.connectedPeers.contains(pid) else {
+            showToast("对方已离开")
+            reconnectNow(name)
+            return
+        }
+        let msgId = UUID()
+        let env = ChatEnvelope(kind: "location", text: "", sender: nickname, date: Date(),
+                               msgId: msgId.uuidString, location: location)
+        guard let data = try? JSONEncoder().encode(env) else { return }
+        do {
+            try s.send(data, toPeers: [pid], with: .reliable)
+        } catch {
+            showToast("发送失败：\(error.localizedDescription)")
+            return
+        }
+        append(ChatMessage(id: msgId, text: "", mine: true, date: Date(), location: location), to: name)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
     // MARK: 群聊
 
     /// 在线且（若指定了成员）属于该群的设备
@@ -968,6 +1238,56 @@ final class LANChatModel: NSObject, ObservableObject {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
+    /// 群发附件：信封带群 ID，资源名带群 ID + 消息 ID
+    func sendGroupAttachment(_ attachment: ChatAttachment, fileURL: URL, to id: String) {
+        guard let g = group(id) else { return }
+        let msgId = UUID()
+        var att = attachment
+        let ext = fileURL.pathExtension.isEmpty ? "bin" : fileURL.pathExtension
+        att.fileName = "att__\(id)__\(msgId.uuidString).\(ext)"
+        if let a = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+           let n = a[.size] as? NSNumber { att.size = n.int64Value }
+        guard ChatFileStore.store(from: fileURL, name: att.fileName) else {
+            showToast("文件处理失败")
+            return
+        }
+        appendGroup(ChatMessage(id: msgId, text: "", mine: true, date: Date(), attachment: att), to: id)
+
+        let env = ChatEnvelope(kind: "attachment", text: "", sender: nickname, date: Date(),
+                               groupId: id, groupName: g.name,
+                               groupMembers: g.members.isEmpty ? nil : g.members,
+                               msgId: msgId.uuidString, attachment: att)
+        if let data = try? JSONEncoder().encode(env) { broadcast(data, to: g) }
+
+        var sent = 0
+        for name in targets(of: g) {
+            guard let pid = peerIDs[name], let s = sessions[name], s.connectedPeers.contains(pid) else { continue }
+            s.sendResource(at: ChatFileStore.url(att.fileName),
+                           withName: att.fileName, toPeer: pid) { [weak self] error in
+                guard error != nil else { return }
+                DispatchQueue.main.async { self?.showToast("附件发送失败") }
+            }
+            sent += 1
+        }
+        if sent == 0 { showToast("当前没有在线成员，附件只存在本机") }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    /// 群发位置
+    func sendGroupLocation(_ location: SharedLocation, to id: String) {
+        guard let g = group(id) else { return }
+        let msgId = UUID()
+        let env = ChatEnvelope(kind: "location", text: "", sender: nickname, date: Date(),
+                               groupId: id, groupName: g.name,
+                               groupMembers: g.members.isEmpty ? nil : g.members,
+                               msgId: msgId.uuidString, location: location)
+        guard let data = try? JSONEncoder().encode(env) else { return }
+        let sent = broadcast(data, to: g)
+        appendGroup(ChatMessage(id: msgId, text: "", mine: true, date: Date(), location: location), to: id)
+        if sent == 0 { showToast("当前没有在线成员，位置只存在本机") }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
     private func targets(of g: ChatGroup) -> [String] {
         // 老群（没有邀请机制）保持"发给所有在线设备"；新群只发给已同意的成员
         if g.pending == nil && g.members.isEmpty { return Array(sessions.keys) }
@@ -1188,6 +1508,7 @@ final class LANChatModel: NSObject, ObservableObject {
 
     private func persist() {
         LocalStore.save(threads, Self.threadFile)
+        rebuildFavorites()
     }
 
     private func receive(_ env: ChatEnvelope, from name: String) {
@@ -1201,7 +1522,8 @@ final class LANChatModel: NSObject, ObservableObject {
         let msgId = env.msgId.flatMap { UUID(uuidString: $0) } ?? UUID()
         if let t = thread(name), t.messages.contains(where: { $0.id == msgId }) { return }
         let msg = ChatMessage(id: msgId, text: env.text, mine: false, date: env.date,
-                              imageName: env.imageName, sender: nil)
+                              imageName: env.imageName, sender: nil,
+                              attachment: env.attachment, location: env.location)
         append(msg, to: name)
         if visiblePeer != name {
             unread[name, default: 0] += 1
@@ -1222,7 +1544,8 @@ final class LANChatModel: NSObject, ObservableObject {
         let mine = env.sender == nickname
         let msg = ChatMessage(id: msgId, text: env.text, mine: mine, date: env.date,
                               imageName: env.imageName,
-                              sender: mine ? nil : env.sender)
+                              sender: mine ? nil : env.sender,
+                              attachment: env.attachment, location: env.location)
         g.messages.append(msg)
         g.messages.sort { $0.date < $1.date }
         g.updatedAt = env.date
@@ -1247,6 +1570,7 @@ final class LANChatModel: NSObject, ObservableObject {
 
     private func persistGroups() {
         LocalStore.save(groups, Self.groupFile)
+        rebuildFavorites()
     }
 
     // MARK: 历史补齐（全量补）
@@ -1294,12 +1618,18 @@ final class LANChatModel: NSObject, ObservableObject {
 
     /// 构造一条历史消息的信封（群聊时带上群信息）
     private func envelope(for m: ChatMessage, in g: ChatGroup?) -> ChatEnvelope {
-        var env = ChatEnvelope(kind: m.imageName == nil ? "text" : "image",
+        let kind: String
+        if let a = m.attachment { kind = a.kind.rawValue }
+        else if m.location != nil { kind = "location" }
+        else { kind = m.imageName == nil ? "text" : "image" }
+        var env = ChatEnvelope(kind: kind,
                                text: m.text,
                                sender: m.mine ? nickname : (m.sender ?? nickname),
                                date: m.date,
                                msgId: m.id.uuidString,
-                               imageName: m.imageName)
+                               imageName: m.imageName,
+                               attachment: m.attachment,
+                               location: m.location)
         if let g {
             env.groupId = g.id
             env.groupName = g.name
@@ -1313,6 +1643,7 @@ final class LANChatModel: NSObject, ObservableObject {
         guard online.contains(name) else { return }
         lastSync[name] = Date()
         imageAskBudget[name] = 0
+        fileAskBudget[name] = 0
 
         var items: [ChatEnvelope] = []
         // 私聊历史只推给好友；群聊历史照旧（群成员之间不需要互为好友）
@@ -1353,6 +1684,7 @@ final class LANChatModel: NSObject, ObservableObject {
         var threadChanged = false
         var groupChanged = false
         var askLater: [String] = []
+        var askFiles: [String] = []
 
         for env in items {
             guard let msgId = env.msgId.flatMap({ UUID(uuidString: $0) }) else { continue }
@@ -1363,6 +1695,9 @@ final class LANChatModel: NSObject, ObservableObject {
             }
             if let img = env.imageName, !ChatImageStore.exists(img) {
                 askLater.append(img)
+            }
+            if let att = env.attachment, !ChatFileStore.exists(att.fileName) {
+                askFiles.append(att.fileName)
             }
         }
 
@@ -1377,12 +1712,16 @@ final class LANChatModel: NSObject, ObservableObject {
         for img in askLater.prefix(12) {
             askImage(img, from: name)
         }
+        for file in Array(Set(askFiles)).prefix(8) {
+            askFile(file, from: name)
+        }
     }
 
     /// 同一条消息的判定：ID 相同，或老版本没有跨设备 ID 时按「同方向 + 同内容 + 时间接近」兜底
     private func sameMessage(_ a: ChatMessage, _ b: ChatMessage) -> Bool {
         if a.id == b.id { return true }
-        guard a.text == b.text, a.imageName == b.imageName, a.mine == b.mine else { return false }
+        guard a.text == b.text, a.imageName == b.imageName, a.mine == b.mine,
+              a.attachment == b.attachment, a.location == b.location else { return false }
         return abs(a.date.timeIntervalSince(b.date)) < 6
     }
 
@@ -1391,7 +1730,8 @@ final class LANChatModel: NSObject, ObservableObject {
         // 未通过好友验证的设备，历史消息也不收
         guard friends.contains(name) else { return false }
         let message = ChatMessage(id: msgId, text: env.text, mine: false, date: env.date,
-                                  imageName: env.imageName, sender: nil)
+                                  imageName: env.imageName, sender: nil,
+                                  attachment: env.attachment, location: env.location)
         if let i = threads.firstIndex(where: { $0.peer == name }) {
             guard !threads[i].messages.contains(where: { sameMessage($0, message) }) else { return false }
             threads[i].messages.append(message)
@@ -1413,7 +1753,8 @@ final class LANChatModel: NSObject, ObservableObject {
         let mine = env.sender == nickname
         let message = ChatMessage(id: msgId, text: env.text, mine: mine, date: env.date,
                                   imageName: env.imageName,
-                                  sender: mine ? nil : env.sender)
+                                  sender: mine ? nil : env.sender,
+                                  attachment: env.attachment, location: env.location)
         guard var g = group(groupId) else {
             var fresh = ChatGroup(id: groupId, name: env.groupName ?? "群聊",
                                   members: env.groupMembers ?? [])
@@ -1461,6 +1802,26 @@ final class LANChatModel: NSObject, ObservableObject {
               let pid = peerIDs[name], let s = sessions[name],
               s.connectedPeers.contains(pid) else { return }
         s.sendResource(at: ChatImageStore.url(imageName), withName: imageName, toPeer: pid) { _ in }
+    }
+
+    /// 缺附件：向持有原文件的设备要一次
+    private var fileAskBudget: [String: Int] = [:]
+
+    private func askFile(_ name: String, from peer: String) {
+        let used = fileAskBudget[peer, default: 0]
+        guard used < 8 else { return }
+        fileAskBudget[peer] = used + 1
+        sendEnv(ChatEnvelope(kind: "file.need", text: "", sender: nickname, date: Date(),
+                             imageName: name), to: peer)
+    }
+
+    private func serveFile(_ fileName: String, to name: String) {
+        // 群附件（名字带群 ID）不限好友；私聊附件只发给好友
+        if ChatFileStore.parse(fileName)?.group == nil, !friends.contains(name) { return }
+        guard ChatFileStore.exists(fileName),
+              let pid = peerIDs[name], let s = sessions[name],
+              s.connectedPeers.contains(pid) else { return }
+        s.sendResource(at: ChatFileStore.url(fileName), withName: fileName, toPeer: pid) { _ in }
     }
 
     /// 群图片资源名："<群ID>__<消息ID>.jpg"；私聊图片没有这个前缀
@@ -1607,6 +1968,8 @@ extension LANChatModel: MCSessionDelegate {
                 self.pushHistory(to: peer)
             case "image.need":
                 if let img = env.imageName { self.serveImage(img, to: peer) }
+            case "file.need":
+                if let f = env.imageName { self.serveFile(f, to: peer) }
             default:
                 self.receive(env, from: peer)
             }
@@ -1627,6 +1990,29 @@ extension LANChatModel: MCSessionDelegate {
                  fromPeer peerID: MCPeerID,
                  at localURL: URL?, withError error: Error?) {
         guard error == nil, let localURL else { return }
+        let peer = peerID.displayName
+
+        // 附件（文件 / 视频 / 语音）：资源名以 att__ 开头，落到 chat-files，
+        // 元数据信封里的 attachment.fileName 就是它，气泡按文件名读取即可。
+        if let parsed = ChatFileStore.parse(resourceName) {
+            let dest = ChatFileStore.url(resourceName)
+            do {
+                if FileManager.default.fileExists(atPath: dest.path) {
+                    try FileManager.default.removeItem(at: dest)
+                }
+                try FileManager.default.moveItem(at: localURL, to: dest)
+            } catch { return }
+            DispatchQueue.main.async {
+                self.markAlive(peer, session: session)
+                // 信封可能比资源晚到：找不到对应消息时先缓存，等消息落库后气泡自然能显示
+                self.objectWillChange.send()
+                if parsed.group != nil {
+                    self.showToast("附件已收到")
+                }
+            }
+            return
+        }
+
         let dest = ChatImageStore.url(resourceName)
         do {
             if FileManager.default.fileExists(atPath: dest.path) {
@@ -1636,7 +2022,6 @@ extension LANChatModel: MCSessionDelegate {
         } catch {
             return
         }
-        let peer = peerID.displayName
         DispatchQueue.main.async {
             self.markAlive(peer, session: session)
             // 群聊图片：资源名是 "<群ID>__<消息ID>.jpg"，据此落回对应的群
@@ -1783,18 +2168,6 @@ enum AvatarPalette {
 
 // MARK: - 会话列表页
 
-enum ChatTab: CaseIterable {
-    case direct
-    case group
-
-    var title: String {
-        switch self {
-        case .direct: return "私聊"
-        case .group: return "群聊"
-        }
-    }
-}
-
 struct GroupTarget: Identifiable {
     let id: String
 }
@@ -1802,6 +2175,46 @@ struct GroupTarget: Identifiable {
 struct ChatTarget: Identifiable {
     let id = UUID()
     var name: String
+}
+
+/// 测量折叠内容自然高度，用于手风琴高度动画
+private struct FoldHeightPreference: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// 手风琴折叠容器：内容始终以自然高度布局，外层只裁剪可见高度。
+/// 展开/收起时动画的是高度本身，内容不参与位移或淡入淡出，
+/// 因此不会出现「向上插入 + 渐变错乱」，下方区块也会平滑跟随。
+private struct FoldContent<Content: View>: View {
+    @Binding var expanded: Bool
+    let content: Content
+    @State private var measuredHeight: CGFloat = 0
+
+    init(expanded: Binding<Bool>, @ViewBuilder content: () -> Content) {
+        self._expanded = expanded
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content
+                .fixedSize(horizontal: false, vertical: true)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear
+                            .preference(key: FoldHeightPreference.self, value: geo.size.height)
+                    }
+                )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: expanded ? measuredHeight : 0, alignment: .top)
+        .clipped()
+        .onPreferenceChange(FoldHeightPreference.self) { measuredHeight = $0 }
+        .animation(.easeInOut(duration: 0.3), value: expanded)
+    }
 }
 
 struct LANChatView: View {
@@ -1812,8 +2225,11 @@ struct LANChatView: View {
     @State private var groupTarget: GroupTarget?
     @State private var showRename = false
     @State private var showNewGroup = false
-    @State private var tab: ChatTab = .direct
-    @Namespace private var tabNS
+    /// 私聊 / 群聊分区是否折叠（默认展开）
+    @State private var directExpanded = true
+    @State private var groupExpanded = true
+    /// 收藏列表
+    @State private var showFavorites = false
 
     private var hasAnything: Bool {
         !model.friendThreads.isEmpty || !model.nearby.isEmpty || !model.incomingRequests.isEmpty
@@ -1821,20 +2237,38 @@ struct LANChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 14) {
+            VStack(spacing: 12) {
                 statusCard
-                tabBar
+                foldBar
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
             .padding(.bottom, 6)
 
-            // 私聊 / 群聊 分页：左右滑动切换，点页签也会跟着滑
-            TabView(selection: $tab) {
-                directPage.tag(ChatTab.direct)
-                groupPage.tag(ChatTab.group)
+            // 私聊 / 群聊 纵向排列，各区可独立折叠
+            ScrollView {
+                VStack(spacing: 14) {
+                    foldSection(
+                        title: "私聊",
+                        icon: "bubble.left.and.bubble.right",
+                        count: model.friendThreads.count,
+                        expanded: $directExpanded
+                    ) {
+                        directPage
+                    }
+                    foldSection(
+                        title: "群聊",
+                        icon: "person.2",
+                        count: model.groups.count,
+                        expanded: $groupExpanded
+                    ) {
+                        groupPage
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 2)
+                .padding(.bottom, 24)
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomBar
@@ -1864,6 +2298,9 @@ struct LANChatView: View {
         .sheet(isPresented: $showRename) {
             RenameSheet(model: model)
         }
+        .sheet(isPresented: $showFavorites) {
+            FavoritesView(model: model)
+        }
         .onAppear {
             model.start()
         }
@@ -1876,30 +2313,25 @@ struct LANChatView: View {
         }
     }
 
-    // MARK: 两页内容
+    // MARK: 两区内容（纵向，各自放在折叠容器里）
 
     private var directPage: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                if !model.incomingRequests.isEmpty {
-                    requestSection
-                }
-
-                if !model.friendThreads.isEmpty {
-                    threadSection
-                }
-
-                if !model.nearby.isEmpty {
-                    nearbySection
-                }
-
-                if !hasAnything {
-                    emptyHint
-                }
+        VStack(spacing: 14) {
+            if !model.incomingRequests.isEmpty {
+                requestSection
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
-            .padding(.bottom, 24)
+
+            if !model.friendThreads.isEmpty {
+                threadSection
+            }
+
+            if !model.nearby.isEmpty {
+                nearbySection
+            }
+
+            if !hasAnything {
+                emptyHint
+            }
         }
     }
 
@@ -1969,21 +2401,16 @@ struct LANChatView: View {
     }
 
     private var groupPage: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                if !model.groupInvites.isEmpty {
-                    groupInviteSection
-                }
-
-                if model.groups.isEmpty {
-                    if model.groupInvites.isEmpty { groupEmptyHint }
-                } else {
-                    groupSection
-                }
+        VStack(spacing: 14) {
+            if !model.groupInvites.isEmpty {
+                groupInviteSection
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
-            .padding(.bottom, 24)
+
+            if model.groups.isEmpty {
+                if model.groupInvites.isEmpty { groupEmptyHint }
+            } else {
+                groupSection
+            }
         }
     }
 
@@ -2215,42 +2642,109 @@ struct LANChatView: View {
         }
     }
 
-    // MARK: 页签
+    // MARK: 折叠控制
 
-    private var tabBar: some View {
-        HStack(spacing: 6) {
-            ForEach(ChatTab.allCases, id: \.self) { t in
-                Button {
-                    UISelectionFeedbackGenerator().selectionChanged()
-                    withAnimation(.easeInOut(duration: 0.25)) { tab = t }
-                } label: {
-                    Text(t.title)
-                        .font(.system(size: 13, weight: tab == t ? .semibold : .medium))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 7)
-                        .background(
-                            ZStack {
-                                if tab == t {
-                                    // 滑块跟着当前页滑过去，滑动切换时也同步
-                                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                        .fill(Color(.systemBackground))
-                                        .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
-                                        .matchedGeometryEffect(id: "chatTabPill", in: tabNS)
-                                }
-                            }
-                        )
-                        .foregroundStyle(tab == t ? Color.primary : Color.secondary)
-                        .contentShape(Rectangle())
+    /// 顶部一行：全部展开 / 全部折叠 + 收藏入口
+    private var foldBar: some View {
+        HStack(spacing: 8) {
+            Button {
+                UISelectionFeedbackGenerator().selectionChanged()
+                let expand = !(directExpanded && groupExpanded)
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    directExpanded = expand
+                    groupExpanded = expand
                 }
-                .buttonStyle(.plain)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: directExpanded && groupExpanded ? "chevron.up.chevron.up" : "chevron.down.chevron.down")
+                        .font(.system(size: 10, weight: .bold))
+                    Text(directExpanded && groupExpanded ? "全部折叠" : "全部展开")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundStyle(Color.secondary)
             }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Button {
+                UISelectionFeedbackGenerator().selectionChanged()
+                showFavorites = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "bookmark.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("收藏")
+                        .font(.system(size: 11, weight: .medium))
+                    if model.favoriteCount > 0 {
+                        Text("\(model.favoriteCount)")
+                            .font(.system(size: 10, weight: .bold))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(Color.orange))
+                            .foregroundStyle(Color.white)
+                    }
+                }
+                .foregroundStyle(model.favoriteCount > 0 ? Color.orange : Color.secondary)
+            }
+            .buttonStyle(.plain)
         }
-        .padding(4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(.secondarySystemBackground))
         )
-        .animation(.easeInOut(duration: 0.25), value: tab)
+    }
+
+    /// 可折叠分区：点标题栏展开 / 收起，右侧带 chevron 指示
+    private func foldSection<Content: View>(
+        title: String,
+        icon: String,
+        count: Int,
+        expanded: Binding<Bool>,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                UISelectionFeedbackGenerator().selectionChanged()
+                expanded.wrappedValue.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.orange)
+                    Text(title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.primary)
+                    Text("\(count)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(expanded.wrappedValue ? 180 : 0))
+                        .animation(.easeInOut(duration: 0.3), value: expanded.wrappedValue)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            FoldContent(expanded: expanded) {
+                VStack(spacing: 14) {
+                    content()
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(.systemGroupedBackground))
+        )
     }
 
     // MARK: 群聊列表
@@ -2488,24 +2982,24 @@ struct LANChatView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
-            if tab == .group {
-                Button {
-                    UISelectionFeedbackGenerator().selectionChanged()
-                    showNewGroup = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 10, weight: .bold))
-                        Text("新建群聊")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(Color.orange))
-                    .foregroundStyle(Color.white)
+            Button {
+                UISelectionFeedbackGenerator().selectionChanged()
+                groupExpanded = true
+                showNewGroup = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("新建群聊")
+                        .font(.system(size: 12, weight: .semibold))
                 }
-                .buttonStyle(.plain)
-            } else if model.hasOfflineThreads {
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(Color.orange))
+                .foregroundStyle(Color.white)
+            }
+            .buttonStyle(.plain)
+            if model.hasOfflineThreads {
                 Button {
                     model.resetSession()
                 } label: {
@@ -2597,6 +3091,10 @@ struct ChatDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft = ""
     @State private var showPicker = false
+    @State private var showVideoPicker = false
+    @State private var showFilePicker = false
+    @State private var showRecorder = false
+    @State private var showEmoji = false
     @State private var preview: ChatImagePreview?
     @FocusState private var focused: Bool
 
@@ -2669,6 +3167,33 @@ struct ChatDetailView: View {
                 showPicker = false
             })
             .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showVideoPicker) {
+            ChatVideoPicker(onPick: { url in
+                showVideoPicker = false
+                let att = ChatAttachment(kind: .video, fileName: "",
+                                         displayName: url.lastPathComponent,
+                                         size: ChatFileStore.fileSize(url.path))
+                model.sendAttachment(att, fileURL: url, to: peer)
+            }, onCancel: { showVideoPicker = false })
+            .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showFilePicker) {
+            ChatDocumentPicker(onPick: { url in
+                showFilePicker = false
+                let att = ChatAttachment(kind: .file, fileName: "", displayName: url.lastPathComponent)
+                model.sendAttachment(att, fileURL: url, to: peer)
+            }, onCancel: { showFilePicker = false })
+            .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showRecorder) {
+            VoiceRecorderSheet(onSend: { url, duration in
+                var att = ChatAttachment(kind: .audio, fileName: "",
+                                         displayName: "语音消息", duration: duration)
+                att.size = ChatFileStore.fileSize(url.path)
+                model.sendAttachment(att, fileURL: url, to: peer)
+            })
+            .mediumDetents()
         }
         .fullScreenCover(item: $preview) { item in
             ChatImageViewer(image: item.image)
@@ -2821,20 +3346,27 @@ struct ChatDetailView: View {
 
     @ViewBuilder
     private func messageBody(_ msg: ChatMessage, mine: Bool) -> some View {
-        if let name = msg.imageName {
-            imageBubble(name)
-        } else {
-            Text(msg.text)
-                .font(.system(size: 15))
-                .foregroundStyle(mine ? Color.white : Color.primary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .background(
-                    RoundedRectangle(cornerRadius: 15, style: .continuous)
-                        .fill(mine ? Color.orange : Color(.systemBackground))
-                )
-                .textSelection(.enabled)
+        Group {
+            if let name = msg.imageName {
+                imageBubble(name)
+            } else if let att = msg.attachment {
+                AttachmentBubble(att: att, mine: mine)
+            } else if let loc = msg.location {
+                LocationBubble(loc: loc, mine: mine)
+            } else {
+                Text(msg.text)
+                    .font(.system(size: 15))
+                    .foregroundStyle(mine ? Color.white : Color.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(
+                        RoundedRectangle(cornerRadius: 15, style: .continuous)
+                            .fill(mine ? Color.orange : Color(.systemBackground))
+                    )
+                    .textSelection(.enabled)
+            }
         }
+        .favoriteMenu(model: model, message: msg)
     }
 
     /// 图片气泡：点开看原图
@@ -2887,52 +3419,92 @@ struct ChatDetailView: View {
     // MARK: 输入栏
 
     private var inputBar: some View {
-        HStack(alignment: .bottom, spacing: 9) {
-            Button {
-                focused = false
-                UISelectionFeedbackGenerator().selectionChanged()
-                showPicker = true
-            } label: {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: 19, weight: .regular))
-                    .frame(width: 30, height: 38)
-                    .foregroundStyle(Color.orange)
+        VStack(spacing: 0) {
+            if showEmoji {
+                EmojiPanel { emoji in draft.append(emoji) }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("发送图片")
+            HStack(alignment: .bottom, spacing: 8) {
+                Menu {
+                    Button { focused = false; showPicker = true } label: {
+                        Label("图片", systemImage: "photo")
+                    }
+                    Button { focused = false; showVideoPicker = true } label: {
+                        Label("视频", systemImage: "video")
+                    }
+                    Button { focused = false; showFilePicker = true } label: {
+                        Label("文件", systemImage: "doc")
+                    }
+                    Button { focused = false; showRecorder = true } label: {
+                        Label("语音", systemImage: "mic")
+                    }
+                    Button { focused = false; sendCurrentLocation() } label: {
+                        Label("位置", systemImage: "mappin.and.ellipse")
+                    }
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 22, weight: .regular))
+                        .frame(width: 28, height: 38)
+                        .foregroundStyle(Color.orange)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("添加附件")
 
-            TextField(isOnline ? "发消息…" : "对方已断开", text: $draft)
-                .font(.system(size: 15))
-                .focused($focused)
-                .submitLabel(.send)
-                .onSubmit { send() }
-                .padding(.horizontal, 13)
-                .padding(.vertical, 9)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color(.secondarySystemBackground))
-                )
+                Button {
+                    focused = false
+                    withAnimation(.easeInOut(duration: 0.2)) { showEmoji.toggle() }
+                    if !showEmoji { focused = true }
+                } label: {
+                    Image(systemName: showEmoji ? "keyboard" : "face.smiling")
+                        .font(.system(size: 20, weight: .regular))
+                        .frame(width: 26, height: 38)
+                        .foregroundStyle(showEmoji ? Color.orange : Color.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("表情")
 
-            Button {
-                send()
-            } label: {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 15, weight: .bold))
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(canSend ? Color.orange : Color(.systemGray4)))
-                    .foregroundStyle(Color.white)
+                TextField(isOnline ? "发消息…" : "对方已断开", text: $draft)
+                    .font(.system(size: 15))
+                    .focused($focused)
+                    .submitLabel(.send)
+                    .onSubmit { send() }
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 9)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color(.secondarySystemBackground))
+                    )
+
+                Button {
+                    send()
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 15, weight: .bold))
+                        .frame(width: 38, height: 38)
+                        .background(Circle().fill(canSend ? Color.orange : Color(.systemGray4)))
+                        .foregroundStyle(Color.white)
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSend)
             }
-            .buttonStyle(.plain)
-            .disabled(!canSend)
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
         .background(
             Color(.systemGroupedBackground)
                 .overlay(Divider(), alignment: .top)
                 .ignoresSafeArea(edges: .bottom)
         )
+    }
+
+    private func sendCurrentLocation() {
+        OneShotLocation.shared.request { loc in
+            guard let loc else {
+                model.toast = "定位失败，请检查位置权限"
+                return
+            }
+            model.sendLocation(loc, to: peer)
+        }
     }
 
     private var canSend: Bool {
@@ -2955,6 +3527,10 @@ struct GroupChatView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft = ""
     @State private var showPicker = false
+    @State private var showVideoPicker = false
+    @State private var showFilePicker = false
+    @State private var showRecorder = false
+    @State private var showEmoji = false
     @State private var preview: ChatImagePreview?
     @State private var showSettings = false
     @FocusState private var focused: Bool
@@ -3023,6 +3599,33 @@ struct GroupChatView: View {
                 showPicker = false
             })
             .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showVideoPicker) {
+            ChatVideoPicker(onPick: { url in
+                showVideoPicker = false
+                let att = ChatAttachment(kind: .video, fileName: "",
+                                         displayName: url.lastPathComponent,
+                                         size: ChatFileStore.fileSize(url.path))
+                model.sendGroupAttachment(att, fileURL: url, to: groupId)
+            }, onCancel: { showVideoPicker = false })
+            .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showFilePicker) {
+            ChatDocumentPicker(onPick: { url in
+                showFilePicker = false
+                let att = ChatAttachment(kind: .file, fileName: "", displayName: url.lastPathComponent)
+                model.sendGroupAttachment(att, fileURL: url, to: groupId)
+            }, onCancel: { showFilePicker = false })
+            .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showRecorder) {
+            VoiceRecorderSheet(onSend: { url, duration in
+                var att = ChatAttachment(kind: .audio, fileName: "",
+                                         displayName: "语音消息", duration: duration)
+                att.size = ChatFileStore.fileSize(url.path)
+                model.sendGroupAttachment(att, fileURL: url, to: groupId)
+            })
+            .mediumDetents()
         }
         .fullScreenCover(item: $preview) { item in
             ChatImageViewer(image: item.image)
@@ -3116,19 +3719,26 @@ struct GroupChatView: View {
 
     @ViewBuilder
     private func messageBody(_ msg: ChatMessage, mine: Bool) -> some View {
-        if let name = msg.imageName {
-            imageBubble(name)
-        } else {
-            Text(msg.text)
-                .font(.system(size: 15))
-                .foregroundStyle(mine ? Color.white : Color.primary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .background(
-                    RoundedRectangle(cornerRadius: 15, style: .continuous)
-                        .fill(mine ? Color.orange : Color(.systemBackground))
-                )
+        Group {
+            if let name = msg.imageName {
+                imageBubble(name)
+            } else if let att = msg.attachment {
+                AttachmentBubble(att: att, mine: mine)
+            } else if let loc = msg.location {
+                LocationBubble(loc: loc, mine: mine)
+            } else {
+                Text(msg.text)
+                    .font(.system(size: 15))
+                    .foregroundStyle(mine ? Color.white : Color.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(
+                        RoundedRectangle(cornerRadius: 15, style: .continuous)
+                            .fill(mine ? Color.orange : Color(.systemBackground))
+                    )
+            }
         }
+        .favoriteMenu(model: model, message: msg)
     }
 
     private func imageBubble(_ name: String) -> some View {
@@ -3156,51 +3766,92 @@ struct GroupChatView: View {
     }
 
     private var inputBar: some View {
-        HStack(alignment: .bottom, spacing: 9) {
-            Button {
-                focused = false
-                UISelectionFeedbackGenerator().selectionChanged()
-                showPicker = true
-            } label: {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: 19, weight: .regular))
-                    .frame(width: 30, height: 38)
-                    .foregroundStyle(Color.orange)
+        VStack(spacing: 0) {
+            if showEmoji {
+                EmojiPanel { emoji in draft.append(emoji) }
             }
-            .buttonStyle(.plain)
+            HStack(alignment: .bottom, spacing: 8) {
+                Menu {
+                    Button { focused = false; showPicker = true } label: {
+                        Label("图片", systemImage: "photo")
+                    }
+                    Button { focused = false; showVideoPicker = true } label: {
+                        Label("视频", systemImage: "video")
+                    }
+                    Button { focused = false; showFilePicker = true } label: {
+                        Label("文件", systemImage: "doc")
+                    }
+                    Button { focused = false; showRecorder = true } label: {
+                        Label("语音", systemImage: "mic")
+                    }
+                    Button { focused = false; sendCurrentLocation() } label: {
+                        Label("位置", systemImage: "mappin.and.ellipse")
+                    }
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 22, weight: .regular))
+                        .frame(width: 28, height: 38)
+                        .foregroundStyle(Color.orange)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("添加附件")
 
-            TextField("发消息给所有在线成员…", text: $draft)
-                .font(.system(size: 15))
-                .focused($focused)
-                .submitLabel(.send)
-                .onSubmit { send() }
-                .padding(.horizontal, 13)
-                .padding(.vertical, 9)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color(.secondarySystemBackground))
-                )
+                Button {
+                    focused = false
+                    withAnimation(.easeInOut(duration: 0.2)) { showEmoji.toggle() }
+                    if !showEmoji { focused = true }
+                } label: {
+                    Image(systemName: showEmoji ? "keyboard" : "face.smiling")
+                        .font(.system(size: 20, weight: .regular))
+                        .frame(width: 26, height: 38)
+                        .foregroundStyle(showEmoji ? Color.orange : Color.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("表情")
 
-            Button {
-                send()
-            } label: {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 15, weight: .bold))
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(canSend ? Color.orange : Color(.systemGray4)))
-                    .foregroundStyle(Color.white)
+                TextField("发消息给所有在线成员…", text: $draft)
+                    .font(.system(size: 15))
+                    .focused($focused)
+                    .submitLabel(.send)
+                    .onSubmit { send() }
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 9)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color(.secondarySystemBackground))
+                    )
+
+                Button {
+                    send()
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 15, weight: .bold))
+                        .frame(width: 38, height: 38)
+                        .background(Circle().fill(canSend ? Color.orange : Color(.systemGray4)))
+                        .foregroundStyle(Color.white)
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSend)
             }
-            .buttonStyle(.plain)
-            .disabled(!canSend)
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
         .background(
             Color(.systemGroupedBackground)
                 .overlay(Divider(), alignment: .top)
                 .ignoresSafeArea(edges: .bottom)
         )
+    }
+
+    private func sendCurrentLocation() {
+        OneShotLocation.shared.request { loc in
+            guard let loc else {
+                model.toast = "定位失败，请检查位置权限"
+                return
+            }
+            model.sendGroupLocation(loc, to: groupId)
+        }
     }
 
     private var canSend: Bool {
@@ -3395,6 +4046,532 @@ struct RenameSheet: View {
         .onAppear {
             text = model.nickname
             focused = true
+        }
+    }
+}
+
+// MARK: - 富媒体气泡与面板
+
+/// 附件气泡：显示类型 / 文件名 / 大小，点击用系统分享面板打开
+struct AttachmentBubble: View {
+    let att: ChatAttachment
+    let mine: Bool
+
+    private var icon: String {
+        switch att.kind {
+        case .file: return "doc.fill"
+        case .video: return "film"
+        case .audio: return "waveform"
+        }
+    }
+
+    private var sizeText: String {
+        if att.size <= 0 { return "" }
+        if att.size < 1024 { return "\(att.size) B" }
+        if att.size < 1024 * 1024 { return String(format: "%.1f KB", Double(att.size) / 1024) }
+        return String(format: "%.1f MB", Double(att.size) / 1024 / 1024)
+    }
+
+    var body: some View {
+        Button {
+            guard ChatFileStore.exists(att.fileName) else { return }
+            let url = ChatFileStore.url(att.fileName)
+            let vc = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+            if let top = UIApplication.topViewController {
+                top.present(vc, animated: true)
+            }
+        } label: {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(mine ? Color.white.opacity(0.22) : Color.orange.opacity(0.14))
+                        .frame(width: 38, height: 38)
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(mine ? Color.white : Color.orange)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(att.displayName)
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                    Text(sizeText.isEmpty ? att.kind.rawValue.uppercased() : sizeText)
+                        .font(.system(size: 10))
+                        .foregroundStyle(mine ? Color.white.opacity(0.75) : Color.secondary)
+                }
+                Spacer(minLength: 2)
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 13))
+                    .foregroundStyle(mine ? Color.white.opacity(0.8) : Color.orange)
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 9)
+            .frame(width: 220)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(mine ? Color.orange : Color(.systemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// 位置气泡：显示经纬度，点击在合规地图 App（腾讯 / 高德 / 百度）中打开
+struct LocationBubble: View {
+    let loc: SharedLocation
+    let mine: Bool
+
+    private var title: String { loc.name.isEmpty ? "位置共享" : loc.name }
+    private var coord: String { String(format: "%.5f, %.5f", loc.latitude, loc.longitude) }
+
+    var body: some View {
+        Button {
+            openInMap()
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(mine ? Color.white : Color.orange)
+
+                Text(coord)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(mine ? Color.white.opacity(0.8) : Color.secondary)
+
+                HStack(spacing: 4) {
+                    Image(systemName: "map")
+                        .font(.system(size: 10))
+                    Text("在地图中查看")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundStyle(mine ? Color.white.opacity(0.85) : Color.orange)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(width: 200, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(mine ? Color.orange : Color(.systemBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 按合规白名单顺序尝试：腾讯地图 → 高德 → 百度；都没装则复制坐标
+    private func openInMap() {
+        let schemes = [
+            "qqmap://map/marker?marker=coord:\(loc.latitude),\(loc.longitude);title:\(title)",
+            "iosamap://viewMap?sourceApplication=shensuanzi&poiname=\(title)&lat=\(loc.latitude)&lon=\(loc.longitude)&dev=0",
+            "baidumap://map/marker?location=\(loc.latitude),\(loc.longitude)&title=\(title)"
+        ]
+        for s in schemes {
+            guard let url = URL(string: s) else { continue }
+            if UIApplication.shared.canOpenURL(url) {
+                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                return
+            }
+        }
+        UIPasteboard.general.string = coord
+    }
+}
+
+extension UIApplication {
+    static var topViewController: UIViewController? {
+        guard let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }),
+              let root = scene.windows.first?.rootViewController else { return nil }
+        var vc = root
+        while let presented = vc.presentedViewController { vc = presented }
+        return vc
+    }
+}
+
+/// 收藏菜单
+extension View {
+    func favoriteMenu(model: LANChatModel, message: ChatMessage) -> some View {
+        self.contextMenu {
+            Button {
+                model.toggleFavorite(message.id)
+            } label: {
+                Label(message.favorite ? "取消收藏" : "收藏",
+                      systemImage: message.favorite ? "bookmark.slash" : "bookmark")
+            }
+        }
+    }
+}
+
+/// 表情面板
+struct EmojiPanel: View {
+    var onPick: (String) -> Void
+
+    private let rows: [[String]] = [
+        ["😀","😃","😄","😁","😆","😅","😂","🤣","😊","😇","🙂","🙃","😉","😍","🥰","😘"],
+        ["😋","😜","🤪","😝","🤗","🤭","🤔","🤨","😐","😑","😶","😏","😒","😞","😔","😢"],
+        ["😭","😤","😡","🤯","😱","🥳","😎","🤩","🥺","😴","🤤","😷","🤒","🤕","🥴","😵"],
+        ["👍","👎","👌","✌️","🤝","🙏","💪","👏","🎉","❤️","🔥","✨","🌹","🍀","⭐️","💯"]
+    ]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            VStack(spacing: 4) {
+                ForEach(rows, id: \.self) { row in
+                    HStack(spacing: 2) {
+                        ForEach(row, id: \.self) { emoji in
+                            Button {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                onPick(emoji)
+                            } label: {
+                                Text(emoji)
+                                    .font(.system(size: 24))
+                                    .frame(width: 34, height: 34)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+        }
+        .frame(height: 158)
+        .background(Color(.secondarySystemBackground))
+    }
+}
+
+/// 系统文件选择器
+struct ChatDocumentPicker: UIViewControllerRepresentable {
+    var onPick: (URL) -> Void
+    var onCancel: () -> Void
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let vc = UIDocumentPickerViewController(forOpeningContentTypes: [.item], asCopy: true)
+        vc.delegate = context.coordinator
+        vc.allowsMultipleSelection = false
+        return vc
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        private let parent: ChatDocumentPicker
+        init(_ parent: ChatDocumentPicker) { self.parent = parent }
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            guard let url = urls.first else { parent.onCancel(); return }
+            parent.onPick(url)
+        }
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            parent.onCancel()
+        }
+    }
+}
+
+/// 视频选择器（PHPicker，只选视频；在回调内先把文件复制进沙盒）
+struct ChatVideoPicker: UIViewControllerRepresentable {
+    var onPick: (URL) -> Void
+    var onCancel: () -> Void
+
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var config = PHPickerConfiguration(photoLibrary: .shared())
+        config.filter = .videos
+        config.selectionLimit = 1
+        config.preferredAssetRepresentationMode = .current
+        let vc = PHPickerViewController(configuration: config)
+        vc.delegate = context.coordinator
+        return vc
+    }
+
+    func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        private let parent: ChatVideoPicker
+        init(_ parent: ChatVideoPicker) { self.parent = parent }
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            guard let provider = results.first?.itemProvider else { parent.onCancel(); return }
+            provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { [weak self] url, _ in
+                guard let self, let url else {
+                    DispatchQueue.main.async { self?.parent.onCancel() }
+                    return
+                }
+                let ext = url.pathExtension.isEmpty ? "mov" : url.pathExtension
+                let name = "tmp-\(UUID().uuidString).\(ext)"
+                guard ChatFileStore.store(from: url, name: name) else {
+                    DispatchQueue.main.async { self.parent.onCancel() }
+                    return
+                }
+                let stable = ChatFileStore.url(name)
+                DispatchQueue.main.async { self.parent.onPick(stable) }
+            }
+        }
+    }
+}
+
+/// 录音面板：按住/点击开始，再点停止，试听后发送
+struct VoiceRecorderSheet: View {
+    var onSend: (URL, TimeInterval) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var recorder: AVAudioRecorder?
+    @State private var player: AVAudioPlayer?
+    @State private var recording = false
+    @State private var elapsed: TimeInterval = 0
+    @State private var timer: Timer?
+    @State private var fileURL: URL?
+    @State private var message = "点击录音"
+
+    private var formatted: String {
+        String(format: "%02d:%02d", Int(elapsed) / 60, Int(elapsed) % 60)
+    }
+
+    var body: some View {
+        NavStackCompat {
+            VStack(spacing: 20) {
+                Spacer()
+                Text(formatted)
+                    .font(.system(size: 40, weight: .light, design: .monospaced))
+                    .foregroundStyle(recording ? Color.orange : Color.primary)
+
+                Text(message)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    recording ? stop() : start()
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(recording ? Color.red : Color.orange)
+                            .frame(width: 72, height: 72)
+                        Image(systemName: recording ? "square.fill" : "mic.fill")
+                            .font(.system(size: 26, weight: .semibold))
+                            .foregroundStyle(Color.white)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                HStack(spacing: 20) {
+                    Button {
+                        player?.stop()
+                        guard let url = fileURL else { return }
+                        player = try? AVAudioPlayer(contentsOf: url)
+                        player?.play()
+                    } label: {
+                        Label("试听", systemImage: "play.circle")
+                    }
+                    .disabled(fileURL == nil || recording)
+
+                    Button("重录") {
+                        stopTimer()
+                        fileURL = nil
+                        elapsed = 0
+                        message = "点击录音"
+                    }
+                    .disabled(recording)
+                }
+                .font(.system(size: 13))
+                .foregroundStyle(Color.orange)
+
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("语音消息")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") { stopTimer(); recorder?.stop(); dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("发送") {
+                        guard let url = fileURL else { return }
+                        onSend(url, elapsed)
+                        dismiss()
+                    }
+                    .font(.system(size: 15, weight: .semibold))
+                    .disabled(fileURL == nil || recording)
+                }
+            }
+        }
+        .onDisappear { stopTimer() }
+    }
+
+    private func start() {
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
+        try? session.setActive(true)
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("voice-\(UUID().uuidString).m4a")
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 44100,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
+        ]
+        guard let rec = try? AVAudioRecorder(url: url, settings: settings) else {
+            message = "录音初始化失败，请检查麦克风权限"
+            return
+        }
+        recorder = rec
+        rec.record()
+        recording = true
+        elapsed = 0
+        message = "正在录音，点下方方块结束"
+        timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
+            elapsed = rec.currentTime
+        }
+    }
+
+    private func stop() {
+        stopTimer()
+        recorder?.stop()
+        recording = false
+        elapsed = recorder?.currentTime ?? elapsed
+        fileURL = recorder?.url
+        message = fileURL == nil ? "录音失败" : "录音完成，可试听或发送"
+    }
+
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
+    }
+}
+
+/// CoreLocation 单次定位封装
+final class OneShotLocation: NSObject, CLLocationManagerDelegate {
+    static let shared = OneShotLocation()
+    private let manager = CLLocationManager()
+    private var completion: ((SharedLocation?) -> Void)?
+
+    override init() {
+        super.init()
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+    }
+
+    func request(_ completion: @escaping (SharedLocation?) -> Void) {
+        self.completion = completion
+        switch manager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
+            manager.requestLocation()
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+        default:
+            completion(nil)
+            self.completion = nil
+        }
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        switch manager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
+            manager.requestLocation()
+        case .denied, .restricted:
+            completion?(nil)
+            completion = nil
+        default:
+            break
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let loc = locations.last else { return }
+        let value = SharedLocation(latitude: loc.coordinate.latitude,
+                                   longitude: loc.coordinate.longitude,
+                                   name: "当前位置")
+        completion?(value)
+        completion = nil
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        completion?(nil)
+        completion = nil
+    }
+}
+
+/// 收藏列表
+struct FavoritesView: View {
+    @ObservedObject var model: LANChatModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavStackCompat {
+            Group {
+                if model.favorites.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "bookmark")
+                            .font(.system(size: 38, weight: .light))
+                            .foregroundStyle(Color.orange.opacity(0.7))
+                        Text("长按消息气泡即可收藏\n收藏内容只保存在本机")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    List {
+                        ForEach(model.favorites) { entry in
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Text(entry.peer ?? entry.groupName ?? "群聊")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(Color.orange)
+                                    Spacer()
+                                    Text(LANChatView.stamp(entry.message.date))
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.tertiary)
+                                }
+                                favoriteContent(entry.message)
+                            }
+                            .padding(.vertical, 4)
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    model.toggleFavorite(entry.message.id)
+                                } label: {
+                                    Label("取消收藏", systemImage: "bookmark.slash")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("收藏")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func favoriteContent(_ msg: ChatMessage) -> some View {
+        if let name = msg.imageName, let img = ChatImageStore.image(name) {
+            Image(uiImage: img)
+                .resizable()
+                .scaledToFit()
+                .frame(maxHeight: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+        } else if let att = msg.attachment {
+            AttachmentBubble(att: att, mine: msg.mine)
+        } else if let loc = msg.location {
+            LocationBubble(loc: loc, mine: msg.mine)
+        } else {
+            Text(msg.text)
+                .font(.system(size: 14))
         }
     }
 }

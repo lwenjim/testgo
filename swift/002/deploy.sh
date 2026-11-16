@@ -86,6 +86,16 @@ EXECUTABLE="$APP/$(basename "$APP" .app)"
 # 真机报 "The item at 002.app is not a valid bundle"（就是缺可执行文件）
 rm -rf "$APP"
 
+# 关键：清掉污染编译的环境变量。~/.bashrc 里为 macOS C 开发设了
+# SDKROOT/CPATH/LIBRARY_PATH 指向 MacOSX.sdk，交互式终端会继承；它们会让 clang
+# 在编译 iOS 时强行包含 macOS 头文件，报 "could not build module 'DarwinFoundation'"，
+# 而且错误信息会误导成 MacOSX.sdk 的问题。必须在 xcodebuild 前 unset，
+# 让 Xcode 自己用 -sdk iPhoneOS 决定头文件路径。
+unset SDKROOT CPATH CPLUS_INCLUDE_PATH C_INCLUDE_PATH LIBRARY_PATH
+
+# 共享 module 缓存里可能残留用污染环境构建过的 module，一并清掉更保险。
+rm -rf "$DERIVED/ModuleCache.noindex"
+
 BUILDLOG=$(mktemp -t xcodebuild)
 set +e
 xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration "$CONFIG" \
