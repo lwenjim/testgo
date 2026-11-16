@@ -1,6 +1,6 @@
 <?php
 // 服务器IP和端口
-$server_ip = '127.0.0.1';
+$server_ip = '192.168.50.152';
 $server_port = 9501;
 
 // 创建UDP socket

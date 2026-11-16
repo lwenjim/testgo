@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "DeployService": {
+      "commandName": "Project",
+      "commandLineArgs": "service run",
+      "environmentVariables": {
+        "DOTNET_ROOT": "d:\\bin"
+      }
+    }
+  }
+}

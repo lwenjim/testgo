@@ -1,0 +1,11 @@
+# 构建输出
+bin/
+obj/
+.vs/
+
+# 本地临时/调试产物
+$null
+$outFile
+trae_*.txt
+programs.txt
+ext_versions.txt

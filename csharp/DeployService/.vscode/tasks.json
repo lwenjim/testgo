@@ -8,17 +8,18 @@
             "args": [
                 "build",
                 "${workspaceFolder}/DeployService.csproj",
-                "/property:GenerateFullPaths=true",
-                "/consoleloggerparameters:NoSummary"
+                "-c",
+                "Debug",
+                "--nologo"
             ],
             "problemMatcher": "$msCompile",
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
-            "detail": "Build .NET project",
-             "presentation": {
-                "reveal": "never" // 或者 "silent"
+            "presentation": {
+                "reveal": "silent",
+                "clear": true
             }
         }
     ]
