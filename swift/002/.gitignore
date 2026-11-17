@@ -1,0 +1,14 @@
+# Xcode / SwiftPM build outputs (local only)
+build/
+Mac/build/
+ChatCore/.build/
+DerivedData/
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# macOS finder junk
+.DS_Store

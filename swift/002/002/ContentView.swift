@@ -43,6 +43,7 @@ struct ContentView: View {
     @StateObject private var chat = LANChatModel()
     @StateObject private var bar = TopBarState()
     @State private var section: AppSection = .ranking
+    @Environment(\.scenePhase) private var scenePhase
     /// 板块下拉面板
     @State private var showSections = false
 
@@ -70,6 +71,15 @@ struct ContentView: View {
             }
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        // 连接从启动就建立：笔记等数据同步不再依赖先进入聊天板块
+        .onAppear { chat.start() }
+        .onChange(of: scenePhase) { phase in
+            switch phase {
+            case .active: chat.resumeDiscovery()
+            case .background: chat.pauseDiscovery()
+            default: break
+            }
+        }
         // 大分类真正切换时才露出顶部菜单（页内横滑、天气切城市都不会触发）
         .onChange(of: section) { _ in
             bar.reveal(after: 2.2)
@@ -118,6 +128,9 @@ struct ContentView: View {
             .accessibilityLabel("切换板块，当前 \(section.rawValue)")
 
             Spacer(minLength: 0)
+            Text("v\(BuildInfo.versionTag)")
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 16)
         .padding(.top, 4)

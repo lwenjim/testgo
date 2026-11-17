@@ -8,45 +8,88 @@
 import SwiftUI
 import Combine
 
-// MARK: - 数据
-
-struct Note: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var text: String = ""
-    var createdAt = Date()
-    var updatedAt = Date()
-
-    /// 第一行作为标题
-    var title: String {
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
-        let first = lines.first.map(String.init)?.trimmingCharacters(in: .whitespaces) ?? ""
-        return first.isEmpty ? "无标题" : first
-    }
-
-    /// 除标题外的正文，列表里做两行预览
-    var preview: String {
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-        return lines.dropFirst().joined(separator: " ")
-    }
-
-    var isEmpty: Bool {
-        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-}
+// MARK: - 数据（模型在 ChatCore/Models.swift，Mac 与 iPhone 共用）
 
 @MainActor
 final class NotesModel: ObservableObject {
 
+    /// 展示用的有效笔记（墓碑不展示）
     @Published private(set) var notes: [Note] = []
+    /// 删除墓碑：保留下来才能把「删除」同步给另一台设备
+    private var tombstones: [Note] = []
 
     private static let file = "notes.json"
+    /// 应用远端合并时不要再广播回去，避免两台设备来回弹消息
+    private var applyingRemote = false
 
-    init() { reload() }
+    init() {
+        reload()
+        NotificationCenter.default.addObserver(
+            forName: .chatNotesDidReceive, object: nil, queue: .main
+        ) { [weak self] notification in
+            guard let notes = notification.userInfo?["notes"] as? [Note] else { return }
+            Task { @MainActor in self?.mergeRemote(notes) }
+        }
+    }
+
+    /// 主动向所有已连接设备请求笔记；对方回推后会自动合并到本地
+    func refreshFromPeers() {
+        NotificationCenter.default.post(name: .chatNotesRequestRefresh, object: self)
+    }
 
     func reload() {
-        notes = (LocalStore.load([Note].self, Self.file) ?? [])
+        let all = LocalStore.load([Note].self, Self.file) ?? []
+        tombstones = all.filter { $0.deleted }
+        notes = all.filter { !$0.deleted }
             .sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    /// 远端笔记按 ID 合并，谁新听谁的；删除墓碑也按时间比较
+    func mergeRemote(_ incoming: [Note]) {
+        var changed = false
+        for note in incoming {
+            if note.deleted {
+                if let i = notes.firstIndex(where: { $0.id == note.id }) {
+                    if note.updatedAt > notes[i].updatedAt {
+                        notes.remove(at: i)
+                        changed = upsertTombstone(note) || changed
+                    }
+                } else {
+                    changed = upsertTombstone(note) || changed
+                }
+            } else if let i = notes.firstIndex(where: { $0.id == note.id }) {
+                if note.updatedAt > notes[i].updatedAt {
+                    notes[i] = note
+                    changed = true
+                }
+            } else if let ti = tombstones.firstIndex(where: { $0.id == note.id }) {
+                // 我删掉之后对方又编辑了：时间更新的那份生效，允许「复活」
+                if note.updatedAt > tombstones[ti].updatedAt {
+                    tombstones.remove(at: ti)
+                    notes.append(note)
+                    changed = true
+                }
+            } else {
+                notes.append(note)
+                changed = true
+            }
+        }
+        guard changed else { return }
+        applyingRemote = true
+        sortAndPersist()
+        applyingRemote = false
+    }
+
+    @discardableResult
+    private func upsertTombstone(_ note: Note) -> Bool {
+        guard let old = tombstones.first(where: { $0.id == note.id }) else {
+            tombstones.append(note)
+            return true
+        }
+        guard note.updatedAt > old.updatedAt else { return false }
+        tombstones.removeAll { $0.id == note.id }
+        tombstones.append(note)
+        return true
     }
 
     func add(_ note: Note) {
@@ -64,7 +107,12 @@ final class NotesModel: ObservableObject {
     }
 
     func delete(_ note: Note) {
-        notes.removeAll { $0.id == note.id }
+        guard let i = notes.firstIndex(where: { $0.id == note.id }) else { return }
+        var gone = notes[i]
+        gone.deleted = true
+        gone.updatedAt = Date()
+        notes.remove(at: i)
+        upsertTombstone(gone)
         persist()
     }
 
@@ -82,7 +130,12 @@ final class NotesModel: ObservableObject {
     }
 
     private func persist() {
-        LocalStore.save(notes, Self.file)
+        let all = notes + tombstones
+        LocalStore.save(all, Self.file)
+        guard !applyingRemote else { return }
+        NotificationCenter.default.post(
+            name: .chatNotesDidChange, object: self, userInfo: ["notes": all]
+        )
     }
 }
 
@@ -115,6 +168,10 @@ struct NotesView: View {
         .sheet(item: $target) { t in
             NoteEditor(model: model, target: t)
         }
+        .onAppear {
+            // 进笔记页就主动向已连接设备拉一遍
+            model.refreshFromPeers()
+        }
     }
 
     // MARK: 底部悬浮：搜索 + 新建
@@ -143,6 +200,19 @@ struct NotesView: View {
             .padding(.horizontal, 12)
             .frame(height: 38)
             .background(Capsule().fill(Color(.secondarySystemBackground)))
+
+            Button {
+                model.reload()
+                model.refreshFromPeers()
+            } label: {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(Color(.secondarySystemBackground)))
+                    .foregroundStyle(Color.primary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("同步笔记")
 
             Button {
                 var n = Note()
@@ -300,7 +370,6 @@ struct NoteEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var text: String
     @FocusState private var focused: Bool
-    @State private var confirmDelete = false
 
     init(model: NotesModel, target: NoteTarget) {
         self.model = model
@@ -334,16 +403,6 @@ struct NoteEditor: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 6)
-
-                if !target.isNew {
-                    Button(role: .destructive) {
-                        confirmDelete = true
-                    } label: {
-                        Label("删除这条笔记", systemImage: "trash")
-                            .font(.system(size: 14))
-                    }
-                    .padding(.bottom, 14)
-                }
             }
             .navigationTitle(target.isNew ? "新建笔记" : "编辑笔记")
             .navigationBarTitleDisplayMode(.inline)
@@ -356,15 +415,6 @@ struct NoteEditor: View {
                         .font(.system(size: 16, weight: .semibold))
                 }
             }
-            .alert(isPresented: $confirmDelete) {
-                Alert(title: Text("删除这条笔记？"),
-                      message: Text("删除后无法恢复"),
-                      primaryButton: .destructive(Text("删除")) {
-                          model.delete(target.note)
-                          dismiss()
-                      },
-                      secondaryButton: .cancel(Text("取消")))
-            }
         }
         .onAppear {
             if target.isNew { focused = true }
@@ -374,8 +424,7 @@ struct NoteEditor: View {
     private func save() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            // 新建留空：直接关掉；编辑清空：视为删除
-            if !target.isNew { model.delete(target.note) }
+            // 留空不删除，直接关掉，避免误碰清空内容导致笔记丢失
             dismiss()
             return
         }

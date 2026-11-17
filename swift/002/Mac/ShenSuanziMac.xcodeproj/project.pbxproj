@@ -1,0 +1,426 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		2A76EE799DE44CF7A70002E8 /* ShenSuanziMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18A1307C84E94EE8AE869093 /* ShenSuanziMacApp.swift */; };
+		996BBA1F68D1484AA508A296 /* MacChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B79230FA36F47B187500AF7 /* MacChatView.swift */; };
+		A4F350053FA640EFBCD1CBDC /* LANChatModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D557D4EEB0974BB49CDB4539 /* LANChatModel.swift */; };
+		18F305BCF86746B390C07D43 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DB613EC65F34CF8B8EEA9CE /* Models.swift */; };
+		4925E7F8927A404EB4C3675E /* Storage.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC0E0C87D5B0469B8784F720 /* Storage.swift */; };
+		55B222F5EF32498490677EB2 /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = D03CA00DE919494FA55828B2 /* Haptics.swift */; };
+		BB0000000000000000000002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000001 /* Assets.xcassets */; };
+		BF0000000000000000000001 /* MacRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000001 /* MacRootView.swift */; };
+		BF0000000000000000000002 /* MacCompat.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000002 /* MacCompat.swift */; };
+		BF0000000000000000000003 /* CalculatorViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000003 /* CalculatorViews.swift */; };
+		BF0000000000000000000004 /* CalculatorEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000004 /* CalculatorEngine.swift */; };
+		BF0000000000000000000005 /* CalculatorModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000005 /* CalculatorModel.swift */; };
+		BF0000000000000000000006 /* LunarCalendar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000006 /* LunarCalendar.swift */; };
+		BF0000000000000000000007 /* HolidayData.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000007 /* HolidayData.swift */; };
+		BF0000000000000000000008 /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000008 /* CalendarView.swift */; };
+		BF0000000000000000000009 /* WeatherView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000009 /* WeatherView.swift */; };
+		BF000000000000000000000A /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000000A /* NotesView.swift */; };
+		BF000000000000000000000B /* LedgerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000000B /* LedgerView.swift */; };
+		BF000000000000000000000C /* AppRankingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000000C /* AppRankingView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		B837A6A98F0641AC86E7F4B5 /* ShenSuanziMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ShenSuanziMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		18A1307C84E94EE8AE869093 /* ShenSuanziMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ShenSuanziMacApp.swift"; sourceTree = "<group>"; };
+		5B79230FA36F47B187500AF7 /* MacChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MacChatView.swift"; sourceTree = "<group>"; };
+		D557D4EEB0974BB49CDB4539 /* LANChatModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../002/Core/LANChatModel.swift"; sourceTree = SOURCE_ROOT; };
+		8DB613EC65F34CF8B8EEA9CE /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../002/Core/Models.swift"; sourceTree = SOURCE_ROOT; };
+		EC0E0C87D5B0469B8784F720 /* Storage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../002/Core/Storage.swift"; sourceTree = SOURCE_ROOT; };
+		D03CA00DE919494FA55828B2 /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../002/Core/Haptics.swift"; sourceTree = SOURCE_ROOT; };
+		BB0000000000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		CC0000000000000000000001 /* MacRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ShenSuanziMac/MacRootView.swift"; sourceTree = SOURCE_ROOT; };
+		CC0000000000000000000002 /* MacCompat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/MacCompat.swift"; sourceTree = SOURCE_ROOT; };
+		CC0000000000000000000003 /* CalculatorViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/CalculatorViews.swift"; sourceTree = SOURCE_ROOT; };
+		CC0000000000000000000004 /* CalculatorEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/CalculatorEngine.swift"; sourceTree = SOURCE_ROOT; };
+		CC0000000000000000000005 /* CalculatorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/CalculatorModel.swift"; sourceTree = SOURCE_ROOT; };
+		CC0000000000000000000006 /* LunarCalendar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/LunarCalendar.swift"; sourceTree = SOURCE_ROOT; };
+		CC0000000000000000000007 /* HolidayData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/HolidayData.swift"; sourceTree = SOURCE_ROOT; };
+		CC0000000000000000000008 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/CalendarView.swift"; sourceTree = SOURCE_ROOT; };
+		CC0000000000000000000009 /* WeatherView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/WeatherView.swift"; sourceTree = SOURCE_ROOT; };
+		CC000000000000000000000A /* NotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/NotesView.swift"; sourceTree = SOURCE_ROOT; };
+		CC000000000000000000000B /* LedgerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/LedgerView.swift"; sourceTree = SOURCE_ROOT; };
+		CC000000000000000000000C /* AppRankingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/AppRankingView.swift"; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+
+/* Begin PBXFrameworksBuildPhase section */
+		926782080E8A443F85408F55 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		08DB251FFBFD4A11A9F1EEF3 = {
+			isa = PBXGroup;
+			children = (
+				5C9A6DDF952A4EEC8C3C3AB9 /* ShenSuanziMac */,
+				E3CBEA8FDA7B44DE94AD21E3 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		E3CBEA8FDA7B44DE94AD21E3 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B837A6A98F0641AC86E7F4B5 /* ShenSuanziMac.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+
+		5C9A6DDF952A4EEC8C3C3AB9 /* ShenSuanziMac */ = {
+			isa = PBXGroup;
+			children = (
+				18A1307C84E94EE8AE869093 /* ShenSuanziMacApp.swift */,
+				5B79230FA36F47B187500AF7 /* MacChatView.swift */,
+				D557D4EEB0974BB49CDB4539 /* LANChatModel.swift */,
+				8DB613EC65F34CF8B8EEA9CE /* Models.swift */,
+				EC0E0C87D5B0469B8784F720 /* Storage.swift */,
+				D03CA00DE919494FA55828B2 /* Haptics.swift */,
+				BB0000000000000000000001 /* Assets.xcassets */,
+				CC0000000000000000000001 /* MacRootView.swift */,
+				CC0000000000000000000002 /* MacCompat.swift */,
+				CC0000000000000000000003 /* CalculatorViews.swift */,
+				CC0000000000000000000004 /* CalculatorEngine.swift */,
+				CC0000000000000000000005 /* CalculatorModel.swift */,
+				CC0000000000000000000006 /* LunarCalendar.swift */,
+				CC0000000000000000000007 /* HolidayData.swift */,
+				CC0000000000000000000008 /* CalendarView.swift */,
+				CC0000000000000000000009 /* WeatherView.swift */,
+				CC000000000000000000000A /* NotesView.swift */,
+				CC000000000000000000000B /* LedgerView.swift */,
+				CC000000000000000000000C /* AppRankingView.swift */,
+			);
+			path = ShenSuanziMac;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		3474910DE20D49E8AE276E11 /* ShenSuanziMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 13A8C439F99C4430B737A675 /* Build configuration list for PBXNativeTarget "002" */;
+			buildPhases = (
+				6DE0C46DC02F44E1B0AB079F /* Sources */,
+				926782080E8A443F85408F55 /* Frameworks */,
+				7855D22E90274B3F9F4B987C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ShenSuanziMac;
+			packageProductDependencies = (
+			);
+			productName = ShenSuanziMac;
+			productReference = B837A6A98F0641AC86E7F4B5 /* ShenSuanziMac.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B25236EF381448F8A064F644 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2630;
+				LastUpgradeCheck = 2630;
+				TargetAttributes = {
+					3474910DE20D49E8AE276E11 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+				};
+			};
+			buildConfigurationList = 95D911447FDB4950B5D6A71C /* Build configuration list for PBXProject "002" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 08DB251FFBFD4A11A9F1EEF3;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = E3CBEA8FDA7B44DE94AD21E3 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				3474910DE20D49E8AE276E11 /* ShenSuanziMac */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		7855D22E90274B3F9F4B987C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB0000000000000000000002 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		6DE0C46DC02F44E1B0AB079F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2A76EE799DE44CF7A70002E8 /* ShenSuanziMacApp.swift in Sources */,
+				996BBA1F68D1484AA508A296 /* MacChatView.swift in Sources */,
+				A4F350053FA640EFBCD1CBDC /* LANChatModel.swift in Sources */,
+				18F305BCF86746B390C07D43 /* Models.swift in Sources */,
+				4925E7F8927A404EB4C3675E /* Storage.swift in Sources */,
+				55B222F5EF32498490677EB2 /* Haptics.swift in Sources */,
+				BF0000000000000000000001 /* MacRootView.swift in Sources */,
+				BF0000000000000000000002 /* MacCompat.swift in Sources */,
+				BF0000000000000000000003 /* CalculatorViews.swift in Sources */,
+				BF0000000000000000000004 /* CalculatorEngine.swift in Sources */,
+				BF0000000000000000000005 /* CalculatorModel.swift in Sources */,
+				BF0000000000000000000006 /* LunarCalendar.swift in Sources */,
+				BF0000000000000000000007 /* HolidayData.swift in Sources */,
+				BF0000000000000000000008 /* CalendarView.swift in Sources */,
+				BF0000000000000000000009 /* WeatherView.swift in Sources */,
+				BF000000000000000000000A /* NotesView.swift in Sources */,
+				BF000000000000000000000B /* LedgerView.swift in Sources */,
+				BF000000000000000000000C /* AppRankingView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		F0BCF52FA7A249EEB1C27C21 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 95FUL8JQ64;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		B8BAE85A675942D49BB2E5FA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 95FUL8JQ64;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		7AD1D85C1FBF4ECEB2D8D316 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 95FUL8JQ64;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于在同一 Wi-Fi 下发现附近的神算子设备，设备之间直接点对点聊天，不经过任何服务器。";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于录制语音消息发送给好友。";
+				INFOPLIST_KEY_NSLocationUsageDescription = "用于发送当前位置给好友。";
+				
+				INFOPLIST_KEY_CFBundleDisplayName = "神算子";
+				
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				
+				
+				
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shensuanzi.mac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				
+			};
+			name = Debug;
+		};
+		2E0A75851B1E420E99BC6BFA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 95FUL8JQ64;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于在同一 Wi-Fi 下发现附近的神算子设备，设备之间直接点对点聊天，不经过任何服务器。";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于录制语音消息发送给好友。";
+				INFOPLIST_KEY_NSLocationUsageDescription = "用于发送当前位置给好友。";
+				
+				INFOPLIST_KEY_CFBundleDisplayName = "神算子";
+				
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				
+				
+				
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shensuanzi.mac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		95D911447FDB4950B5D6A71C /* Build configuration list for PBXProject "002" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F0BCF52FA7A249EEB1C27C21 /* Debug */,
+				B8BAE85A675942D49BB2E5FA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		13A8C439F99C4430B737A675 /* Build configuration list for PBXNativeTarget "002" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7AD1D85C1FBF4ECEB2D8D316 /* Debug */,
+				2E0A75851B1E420E99BC6BFA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B25236EF381448F8A064F644 /* Project object */;
+}
