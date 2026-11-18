@@ -406,7 +406,7 @@ struct GroupChatPane: View {
 
 // MARK: - 输入栏（富媒体）
 
-/// 功能条图标按钮：悬停时浮起一块圆角底色，离开恢复透明
+/// 功能条图标按钮：常显方形圆角底板，悬停时加深
 private struct ComposerIconButton: View {
     let icon: String
     let label: String
@@ -416,12 +416,13 @@ private struct ComposerIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Color.secondary)
-                .frame(width: 30, height: 26)
+                .frame(width: 34, height: 28)
                 .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(hovering ? Color.primary.opacity(0.08) : Color.clear)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(hovering ? Color.primary.opacity(0.10)
+                                       : Color.primary.opacity(0.055))
                 )
                 .contentShape(Rectangle())
         }
@@ -451,8 +452,6 @@ struct MacComposer: View {
     @State private var showFilePanel = false
     @State private var showRecorder = false
     @State private var showLocationSheet = false
-    /// 截屏预览（确认后再发送）
-    @State private var pendingScreenshot: ScreenshotItem?
 
     /// 收藏（常用语）：本机持久化，点击回填到输入框
     @AppStorage("macChatFavorites") private var favoritesData: Data = Data()
@@ -576,13 +575,6 @@ struct MacComposer: View {
         .sheet(isPresented: $showLocationSheet) {
             MacLocationSheet { loc in sendLocation(loc) }
         }
-        // 截屏预览
-        .sheet(item: $pendingScreenshot) { shot in
-            ScreenshotConfirmSheet(image: shot.image) { jpeg in
-                if let jpeg { sendImage(jpeg) }
-                pendingScreenshot = nil
-            }
-        }
     }
 
     // MARK: 功能条按钮（微信风格：只放图标，悬停浮起圆角底色）
@@ -693,15 +685,16 @@ struct MacComposer: View {
 
     // MARK: 截屏
 
-    /// 全屏截一张图（0.2s 延迟让菜单弹层先消失），弹预览确认后发送。
+    /// 全屏截一张图（0.2s 延迟让菜单弹层先消失），弹出全屏标注浮层：
+    /// 拖拽选区（8 个手柄可调整大小）→ 画线 / 圈图标注 → 发送。
     /// 需要系统设置里给应用「屏幕录制」权限，否则截不到窗口内容。
     private func captureScreen() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            guard let screen = NSScreen.main else { return }
             if let cg = CGWindowListCreateImage(.infinite, .optionOnScreenOnly, kCGNullWindowID, [.bestResolution]) {
-                let image = NSImage(cgImage: cg,
-                                    size: NSSize(width: CGFloat(cg.width) / 2,
-                                                 height: CGFloat(cg.height) / 2))
-                pendingScreenshot = ScreenshotItem(image: image)
+                ScreenshotOverlay.shared.present(captured: cg, screenFrame: screen.frame) { data in
+                    if let data { sendImage(data) }
+                }
             } else {
                 model.toast = "截屏失败，请到系统设置给应用开启「屏幕录制」权限"
             }
@@ -740,58 +733,434 @@ struct MacComposer: View {
     }
 }
 
-// MARK: - 截屏预览确认
+// MARK: - 截屏标注浮层
 
-struct ScreenshotItem: Identifiable {
+/// 一条标注笔画：画线（自由手绘）或圈图（椭圆）
+struct ShotStroke: Identifiable {
+    enum Kind { case pen, ellipse }
     let id = UUID()
-    let image: NSImage
+    let kind: Kind
+    let color: NSColor
+    /// 相对选择区域左上角的点（视图 points 坐标，y 向下）
+    var points: [CGPoint]
 }
 
-struct ScreenshotConfirmSheet: View {
-    let image: NSImage
-    /// 点发送回传 JPEG 数据；取消回传 nil
-    let onDone: (Data?) -> Void
+/// 全屏浮窗宿主：把冻结的屏幕截图铺满全屏，交给 SwiftUI 视图交互
+final class ScreenshotOverlay {
+    static let shared = ScreenshotOverlay()
+    private var window: NSWindow?
 
-    var body: some View {
-        VStack(spacing: 14) {
-            Text("截屏预览")
-                .font(.headline)
-            GeometryReader { geo in
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: geo.size.width, maxHeight: geo.size.height)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    func present(captured: CGImage, screenFrame: NSRect,
+                 onSend: @escaping (Data?) -> Void) {
+        close()
+        let w = NSWindow(contentRect: screenFrame,
+                         styleMask: [.borderless],
+                         backing: .buffered, defer: false)
+        w.level = .screenSaver
+        w.isOpaque = false
+        w.backgroundColor = .clear
+        w.hasShadow = false
+        w.ignoresMouseEvents = false
+        w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        let scale = CGFloat(captured.width) / max(1, screenFrame.width)
+        let host = NSHostingView(rootView: ScreenshotOverlayView(
+            captured: captured,
+            screenSize: screenFrame.size,
+            scale: scale,
+            onFinish: { [weak self] data in
+                self?.close()
+                onSend(data)
             }
-            HStack(spacing: 14) {
-                Button("取消") { onDone(nil) }
-                    .buttonStyle(.bordered)
-                Button {
-                    send()
-                } label: {
-                    Label("发送", systemImage: "paperplane.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.return, modifiers: .command)
-            }
-        }
-        .padding(20)
-        .frame(width: 560, height: 460)
+        ))
+        w.contentView = host
+        w.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        window = w
     }
 
-    private func send() {
-        guard let tiff = image.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff),
-              let data = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) else {
-            onDone(nil)
-            return
+    func close() {
+        window?.orderOut(nil)
+        window = nil
+    }
+}
+
+/// 全屏截屏标注交互视图
+struct ScreenshotOverlayView: View {
+    let captured: CGImage
+    let screenSize: CGSize
+    let scale: CGFloat
+    /// 发送回传成图 JPEG 数据；取消回传 nil
+    let onFinish: (Data?) -> Void
+
+    private let bounds = CGRect(origin: .zero, size: CGSize(width: NSScreen.main!.frame.width,
+                                                            height: NSScreen.main!.frame.height))
+    private let minSelection: CGFloat = 40
+
+    // 选择区域与模式
+    @State private var selection: CGRect = .zero
+    @State private var hasSelection = false
+    @State private var tool: ShotStroke.Kind? = nil          // nil = 移动选区模式
+    @State private var drawColor: NSColor = .systemRed
+    @State private var strokes: [ShotStroke] = []
+
+    // 拖拽过程状态
+    private enum DragMode { case none, create, move, resize, stroke }
+    @State private var dragMode: DragMode = .none
+    @State private var dragStart: CGPoint = .zero
+    @State private var dragOrigin: CGRect = .zero
+    @State private var activeStroke: ShotStroke?
+
+    var body: some View {
+        ZStack {
+            // 冻结的屏幕画面（选区新建手势挂在这里：只有点到选区外/工具条以外才触发）
+            Image(nsImage: NSImage(cgImage: captured, size: screenSize))
+                .resizable()
+                .frame(width: bounds.width, height: bounds.height)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0, coordinateSpace: .named("shotScreen"))
+                        .onChanged { v in
+                            if dragMode == .none {
+                                dragMode = .create
+                                dragStart = v.startLocation
+                                strokes = []            // 重选区域后旧标注作废
+                            }
+                            let p = clampToBounds(v.location)
+                            selection = rect(from: dragStart, to: p)
+                            hasSelection = true
+                        }
+                        .onEnded { _ in
+                            dragMode = .none
+                            if selection.width < minSelection || selection.height < minSelection {
+                                hasSelection = false
+                                selection = .zero
+                            }
+                        }
+                )
+
+            // 选区外压暗（挖洞）
+            DimOverlay(hole: hasSelection ? selection : nil,
+                       fullBounds: bounds)
+
+            if hasSelection { selectionLayer }
+            else { hint }
+
+            if hasSelection { toolbar }
         }
-        onDone(data)
+        .frame(width: bounds.width, height: bounds.height)
+        // 统一坐标空间：所有截屏手势的 location 都用全屏坐标，避免局部空间换算出错
+        .coordinateSpace(name: "shotScreen")
+        // Esc 随时可取消（无论有没有选区/工具条）
+        .onExitCommand { onFinish(nil) }
+    }
+
+    // MARK: 选区层（边框 + 手柄 + 标注画布 + 移动/画笔手势）
+
+    @ViewBuilder
+    private var selectionLayer: some View {
+        let local = CGRect(origin: .zero,
+                           size: CGSize(width: selection.width, height: selection.height))
+        ZStack {
+            // 标注画布
+            Canvas { ctx, _ in
+                for s in strokes { drawStroke(s, in: &ctx) }
+                if let s = activeStroke { drawStroke(s, in: &ctx) }
+            }
+            .frame(width: local.width, height: local.height)
+
+            // 边框
+            RoundedRectangle(cornerRadius: 2)
+                .stroke(Color.white, lineWidth: 1.5)
+                .frame(width: local.width, height: local.height)
+
+            // 8 个调整手柄
+            ForEach(Handle.allCases, id: \.self) { h in
+                handleView(h)
+            }
+        }
+        .frame(width: local.width, height: local.height)
+        .position(x: selection.midX, y: selection.midY)
+        // 选区内拖拽：选中画笔/圈图 → 画标注；否则移动选区
+        .gesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .named("shotScreen"))
+                .onChanged { v in
+                    let p = v.startLocation
+                    switch dragMode {
+                    case .none:
+                        if tool != nil {
+                            dragMode = .stroke
+                            activeStroke = ShotStroke(kind: tool!, color: drawColor,
+                                                      points: [localPoint(p)])
+                        } else {
+                            dragMode = .move
+                            dragOrigin = selection
+                        }
+                    case .stroke:
+                        activeStroke?.points.append(localPoint(v.location))
+                    case .move:
+                        let d = CGPoint(x: v.location.x - p.x, y: v.location.y - p.y)
+                        selection = moved(dragOrigin, by: d)
+                    default: break
+                    }
+                }
+                .onEnded { _ in
+                    if let s = activeStroke, s.points.count > 1 {
+                        strokes.append(s)
+                    }
+                    activeStroke = nil
+                    dragMode = .none
+                }
+        )
+    }
+
+    private var hint: some View {
+        Text("拖动鼠标选择截图区域 · 可拖手柄调整大小 · 画线 / 圈图后发送")
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16).padding(.vertical, 9)
+            .background(Capsule().fill(Color.black.opacity(0.55)))
+            .position(x: bounds.midX, y: 46)
+            .allowsHitTesting(false)
+    }
+
+    // MARK: 悬浮工具条
+
+    @ViewBuilder
+    private var toolbar: some View {
+        let below = selection.maxY + 52 < bounds.height
+        let y = below ? selection.maxY + 30 : max(30, selection.minY - 30)
+        let x = min(max(selection.minX + 130, 150), bounds.width - 150)
+        HStack(spacing: 14) {
+            toolButton("pencil.tip", "画线", active: tool == .pen) {
+                tool = (tool == .pen) ? nil : .pen
+            }
+            toolButton("ellipse", "圈图", active: tool == .ellipse) {
+                tool = (tool == .ellipse) ? nil : .ellipse
+            }
+            // 颜色
+            ForEach([NSColor.systemRed, .systemBlue, .systemGreen, .black], id: \.self) { c in
+                Circle()
+                    .fill(Color(cgColor: c.cgColor))
+                    .frame(width: 14, height: 14)
+                    .overlay(Circle().stroke(Color.white, lineWidth: drawColor == c ? 2 : 0))
+                    .padding(2)
+                    .contentShape(Circle())
+                    .onTapGesture { drawColor = c }
+            }
+            Divider().frame(height: 16)
+            toolButton("arrow.uturn.backward", "撤销标注", active: false) {
+                if !strokes.isEmpty { strokes.removeLast() }
+            }
+            toolButton("rectangle.on.rectangle", "整个屏幕", active: false) {
+                strokes = []
+                selection = bounds
+                hasSelection = true
+            }
+            Divider().frame(height: 16)
+            Button {
+                onFinish(nil)
+            } label: {
+                Text("取消")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Button {
+                onFinish(renderFinal())
+            } label: {
+                Label("发送", systemImage: "paperplane.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Capsule().fill(Color.accentColor))
+                    .frame(width: 78, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(Color.black.opacity(0.72)))
+        .position(x: x, y: y)
+    }
+
+    private func toolButton(_ icon: String, _ label: String, active: Bool,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(active ? Color.accentColor : .white)
+                .frame(width: 26, height: 24)
+                .background(RoundedRectangle(cornerRadius: 6)
+                    .fill(active ? Color.white.opacity(0.22) : Color.clear))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(label)
+    }
+
+    // MARK: 手柄
+
+    private enum Handle: CaseIterable {
+        case tl, t, tr, l, r, bl, b, br
+        var isCorner: Bool { self == .tl || self == .tr || self == .bl || self == .br }
+    }
+
+    @ViewBuilder
+    private func handleView(_ h: Handle) -> some View {
+        let local = CGRect(origin: .zero,
+                           size: CGSize(width: selection.width, height: selection.height))
+        let p: CGPoint = {
+            switch h {
+            case .tl: CGPoint(x: 0, y: 0)
+            case .t:  CGPoint(x: local.midX, y: 0)
+            case .tr: CGPoint(x: local.maxX, y: 0)
+            case .l:  CGPoint(x: 0, y: local.midY)
+            case .r:  CGPoint(x: local.maxX, y: local.midY)
+            case .bl: CGPoint(x: 0, y: local.maxY)
+            case .b:  CGPoint(x: local.midX, y: local.maxY)
+            case .br: CGPoint(x: local.maxX, y: local.maxY)
+            }
+        }()
+        RoundedRectangle(cornerRadius: h.isCorner ? 3 : 2)
+            .fill(Color.white)
+            .overlay(RoundedRectangle(cornerRadius: h.isCorner ? 3 : 2)
+                .stroke(Color.accentColor, lineWidth: 1.5))
+            .frame(width: 12, height: h.isCorner ? 12 : 5)
+            .contentShape(Rectangle().inset(by: -6))
+            // 手柄在选区局部坐标系内定位（外层 ZStack 已平移到选区原点）
+            .position(x: p.x, y: p.y)
+            .gesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .named("shotScreen"))
+                    .onChanged { v in
+                        if dragMode != .resize {
+                            dragMode = .resize
+                            dragOrigin = selection
+                        }
+                        selection = resized(dragOrigin, by: h, to: clampToBounds(v.location))
+                    }
+                    .onEnded { _ in dragMode = .none }
+            )
+    }
+
+    // MARK: 几何辅助
+
+    private func clampToBounds(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: min(max(p.x, 0), bounds.width),
+                y: min(max(p.y, 0), bounds.height))
+    }
+
+    private func localPoint(_ p: CGPoint) -> CGPoint {
+        CGPoint(x: p.x - selection.minX, y: p.y - selection.minY)
+    }
+
+    private func rect(from a: CGPoint, to b: CGPoint) -> CGRect {
+        CGRect(x: min(a.x, b.x), y: min(a.y, b.y),
+               width: abs(a.x - b.x), height: abs(a.y - b.y))
+    }
+
+    private func moved(_ r: CGRect, by d: CGPoint) -> CGRect {
+        var nr = r.offsetBy(dx: d.x, dy: d.y)
+        nr.origin.x = min(max(nr.minX, 0), bounds.width - nr.width)
+        nr.origin.y = min(max(nr.minY, 0), bounds.height - nr.height)
+        return nr
+    }
+
+    /// 按手柄方向拖动调整选区（拖过对面边自动翻折）
+    private func resized(_ r: CGRect, by h: Handle, to p: CGPoint) -> CGRect {
+        var minX = r.minX, minY = r.minY, maxX = r.maxX, maxY = r.maxY
+        switch h {
+        case .tl, .l, .bl: minX = p.x
+        case .tr, .r, .br: maxX = p.x
+        default: break
+        }
+        switch h {
+        case .tl, .t, .tr: minY = p.y
+        case .bl, .b, .br: maxY = p.y
+        default: break
+        }
+        let rect = CGRect(x: min(minX, maxX), y: min(minY, maxY),
+                          width: abs(maxX - minX), height: abs(maxY - minY))
+        return rect.width < minSelection || rect.height < minSelection ? r : rect
+    }
+
+    // MARK: 标注绘制（屏幕画布用）
+
+    private func drawStroke(_ s: ShotStroke, in ctx: inout GraphicsContext) {
+        ctx.stroke(Path { p in
+            if s.kind == .pen {
+                guard let f = s.points.first else { return }
+                p.move(to: f)
+                for pt in s.points.dropFirst() { p.addLine(to: pt) }
+            } else if s.points.count >= 2 {
+                let a = s.points[0], b = s.points[s.points.count - 1]
+                p.addEllipse(in: CGRect(x: min(a.x, b.x), y: min(a.y, b.y),
+                                        width: abs(a.x - b.x), height: abs(a.y - b.y)))
+            }
+        }, with: .color(Color(nsColor: s.color)), style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+    }
+
+    // MARK: 成图导出
+
+    /// 裁剪选区 + 叠加标注，输出 JPEG
+    private func renderFinal() -> Data? {
+        let px = CGRect(x: selection.minX * scale, y: selection.minY * scale,
+                        width: selection.width * scale, height: selection.height * scale)
+        guard let cropped = captured.cropping(to: px) else { return nil }
+        let wpx = Int(px.width), hpx = Int(px.height)
+        let ctx = CGContext(data: nil, width: wpx, height: hpx, bitsPerComponent: 8,
+                            bytesPerRow: wpx * 4, space: CGColorSpaceCreateDeviceRGB(),
+                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        guard let ctx else { return nil }
+        // CGContext 原点在左下；截图 CGImage 同向，直接铺底
+        ctx.draw(cropped, in: CGRect(x: 0, y: 0, width: px.width, height: px.height))
+        // 标注点来自 SwiftUI（y 向下），翻转 y 后绘制
+        for s in strokes {
+            ctx.setStrokeColor(s.color.cgColor)
+            ctx.setLineWidth(3 * scale)
+            ctx.setLineCap(.round)
+            ctx.setLineJoin(.round)
+            if s.kind == .pen {
+                guard let f = s.points.first else { continue }
+                ctx.beginPath()
+                ctx.move(to: CGPoint(x: f.x * scale, y: selection.height * scale - f.y * scale))
+                for pt in s.points.dropFirst() {
+                    ctx.addLine(to: CGPoint(x: pt.x * scale, y: selection.height * scale - pt.y * scale))
+                }
+                ctx.strokePath()
+            } else if s.points.count >= 2 {
+                let a = s.points[0], b = s.points[s.points.count - 1]
+                let e = CGRect(x: min(a.x, b.x) * scale,
+                               y: selection.height * scale - max(a.y, b.y) * scale,
+                               width: abs(a.x - b.x) * scale,
+                               height: abs(a.y - b.y) * scale)
+                ctx.strokeEllipse(in: e)
+            }
+        }
+        guard let final = ctx.makeImage() else { return nil }
+        let rep = NSBitmapImageRep(cgImage: final)
+        return rep.representation(using: .jpeg, properties: [.compressionFactor: 0.85])
+    }
+}
+
+/// 全屏压暗层：在选区挖洞
+private struct DimOverlay: View {
+    let hole: CGRect?
+    let fullBounds: CGRect
+
+    var body: some View {
+        Canvas { ctx, _ in
+            var path = Path()
+            path.addRect(CGRect(origin: .zero, size: fullBounds.size))
+            if let hole {
+                path.addRect(hole)
+            }
+            ctx.fill(path, with: .color(.black.opacity(0.35)),
+                     style: FillStyle(eoFill: true))
+        }
+        .allowsHitTesting(false)
     }
 }
 
