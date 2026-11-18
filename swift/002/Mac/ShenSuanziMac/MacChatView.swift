@@ -216,7 +216,6 @@ struct MacChatView: View {
 
     private var sidebar: some View {
         List(selection: $selection) {
-            // 连接状态卡片
             Section {
                 HStack(spacing: 10) {
                     // 自己的头像：点击修改
@@ -325,6 +324,10 @@ struct MacChatView: View {
             }
         }
         .listStyle(.sidebar)
+        // 去掉 List 自带的灰色底，露出白色背景
+        .scrollContentBackground(.hidden)
+        .background(Color.white)
+        .listRowBackground(Color.white)
     }
 }
 
