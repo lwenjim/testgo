@@ -471,26 +471,9 @@ struct MacComposer: View {
     }
 
     var body: some View {
-        VStack(spacing: 4) {
-            // 微信式功能条：浮在输入区上方（悬浮态带圆角底色）
-            HStack(spacing: 4) {
-                iconButton("face.smiling", "表情") { showEmojiPanel = true }
-                    .popover(isPresented: $showEmojiPanel, arrowEdge: .bottom) { emojiGrid }
-                iconButton("cube.transparent", "收藏") { showFavoritesPanel = true }
-                    .popover(isPresented: $showFavoritesPanel, arrowEdge: .bottom) { favoritesPanel }
-                iconButton("photo", "图片") { showImagePanel = true }
-                iconButton("folder", "文件") { showFilePanel = true }
-                iconButton("scissors", "截屏发送") { captureScreen() }
-                iconButton("video", "视频") { showVideoPanel = true }
-                iconButton("mic", "录音") { showRecorder = true }
-                iconButton("mappin.circle", "位置") { showLocationSheet = true }
-                Spacer(minLength: 0)
-            }
-            .padding(.leading, 14)
-            .padding(.trailing, 10)
-            .padding(.top, 4)
-
-            // 多行输入框：白色圆角卡片，沉到功能条下方贴底
+        // 白色圆角卡片整体包含：上面是文本输入区，底部一行工具按钮（悬浮在输入框内底部）
+        VStack(spacing: 0) {
+            // 多行输入框
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $draft)
                     .font(.system(size: 13))
@@ -498,10 +481,10 @@ struct MacComposer: View {
                     .background(Color.clear)
                     .scrollIndicators(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                       ? .never : .automatic)
-                    .frame(minHeight: 64, maxHeight: 130)
+                    .frame(minHeight: 60, maxHeight: 126)
                     .padding(.leading, 14)
                     .padding(.trailing, 6)
-                    .padding(.vertical, 8)
+                    .padding(.top, 8)
                     // 回车直接发送；Shift+回车 交回默认行为（换行）
                     .onKeyPress { press in
                         guard press.key == .return, !press.modifiers.contains(.shift) else {
@@ -519,15 +502,33 @@ struct MacComposer: View {
                         .allowsHitTesting(false)
                 }
             }
-            .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.secondary.opacity(0.14), lineWidth: 0.5)
-            )
-            .padding(.horizontal, 10)
-            .padding(.bottom, 10)
+
+            // 微信式功能条：悬浮在输入框内部底部
+            HStack(spacing: 4) {
+                iconButton("face.smiling", "表情") { showEmojiPanel = true }
+                    .popover(isPresented: $showEmojiPanel, arrowEdge: .top) { emojiGrid }
+                iconButton("cube.transparent", "收藏") { showFavoritesPanel = true }
+                    .popover(isPresented: $showFavoritesPanel, arrowEdge: .top) { favoritesPanel }
+                iconButton("photo", "图片") { showImagePanel = true }
+                iconButton("folder", "文件") { showFilePanel = true }
+                iconButton("scissors", "截屏发送") { captureScreen() }
+                iconButton("video", "视频") { showVideoPanel = true }
+                iconButton("mic", "录音") { showRecorder = true }
+                iconButton("mappin.circle", "位置") { showLocationSheet = true }
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 10)
+            .padding(.trailing, 10)
+            .padding(.bottom, 6)
         }
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.secondary.opacity(0.14), lineWidth: 0.5)
+        )
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
         // 输入区顶边框 2px，分隔聊天记录
         .overlay(alignment: .top) {
             Rectangle()
