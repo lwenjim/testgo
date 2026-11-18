@@ -110,11 +110,11 @@ struct MacChatView: View {
         HStack(spacing: 0) {
             sidebar
                 .frame(width: sidebarWidth)
-                .background(Color(nsColor: .windowBackgroundColor))
+                .background(Color.white)
             splitHandle
             detailView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(nsColor: .controlBackgroundColor).opacity(0.35))
+                .background(Color.white)
         }
         .overlay(alignment: .top) {
             if let toast = model.toast {
@@ -206,7 +206,7 @@ struct MacChatView: View {
                     .foregroundStyle(.tertiary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(0.35))
+            .background(Color.white)
         }
     }
 
@@ -346,7 +346,7 @@ struct ChatPane: View {
                     .padding(.horizontal, 18)
                     .padding(.vertical, 14)
                 }
-                .background(Color(nsColor: .controlBackgroundColor).opacity(0.3))
+                .background(Color.white)
                 .onChange(of: model.messages(peer).count) { _, _ in
                     if let last = model.messages(peer).last {
                         withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
@@ -385,7 +385,7 @@ struct GroupChatPane: View {
                     .padding(.horizontal, 18)
                     .padding(.vertical, 14)
                 }
-                .background(Color(nsColor: .controlBackgroundColor).opacity(0.3))
+                .background(Color.white)
                 .onChange(of: model.groupMessages(groupID).count) { _, _ in
                     if let last = model.groupMessages(groupID).last {
                         withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
