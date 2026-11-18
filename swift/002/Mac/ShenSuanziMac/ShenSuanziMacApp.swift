@@ -25,6 +25,8 @@ struct ShenSuanziMacApp: App {
                         let w = NSApplication.shared.keyWindow
                             ?? NSApplication.shared.windows.first { $0.isVisible }
                         guard let w else { return }
+                        // 全局白色主题：窗口底色纯白
+                        w.backgroundColor = .white
                         // 标题栏的软件名后面直接带上构建时间，一眼看出跑的是哪一版
                         w.title = "神算子  v\(BuildInfo.versionTag)"
                         // macOS 不会把 SwiftUI 的 frame(minHeight:) 强加到恢复出来的旧窗口上，

@@ -530,7 +530,7 @@ struct LedgerEditor: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(Color(nsColor: .windowBackgroundColor))
+                .background(Color.white)
             }
         }
         .onAppear { amountFocused = true }

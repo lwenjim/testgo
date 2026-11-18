@@ -118,7 +118,7 @@ struct MacRootView: View {
             if headerShown {
                 tabBar
                     .layoutPriority(1)   // 空间不足时最后压缩，保证标签栏永远完整
-                    .background(Color(nsColor: .windowBackgroundColor))
+                    .background(Color.white)
                     .transition(.move(edge: .top).combined(with: .opacity))
                 Divider()
                     .transition(.opacity)
@@ -126,6 +126,8 @@ struct MacRootView: View {
             content
         }
         .frame(minWidth: 900, minHeight: 760)
+        // 全局白色主题：所有板块底色统一纯白
+        .background(Color.white)
         .overlay(alignment: .top) {
             // 顶部感应条：鼠标移到窗口最上沿就把标签栏拉出来
             Color.clear
