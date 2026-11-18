@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import AppKit
 import Combine
 
 
@@ -12,24 +13,114 @@ struct CalculatorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("模式", selection: $model.mode) {
-                ForEach(CalcMode.allCases) { m in
-                    Text(m.rawValue).tag(m)
+            HStack(spacing: 10) {
+                Picker("模式", selection: $model.mode) {
+                    ForEach(CalcMode.allCases) { m in
+                        Text(m.rawValue).tag(m)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 300)
+
+                Spacer()
+
+                Text("⌘⇧1/2/3 切换模式 · 支持键盘输入")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                    .padding(.trailing, 8)
             }
-            .pickerStyle(.segmented)
             .padding(.horizontal)
             .padding(.vertical, 8)
 
-            // 三种模式分页，可左右滑动
-            TabView(selection: $model.mode) {
-                standardPage.tag(CalcMode.standard)
-                scientificPage.tag(CalcMode.scientific)
-                programmerPage.tag(CalcMode.programmer)
+            // macOS 上 TabView(.automatic) 会自绘一条原生标签条（页面无标题时是一排空白灰块，
+            // 和上面的分段选择器重复且难看），桌面端直接按模式切换即可，不需要滑动分页。
+            switch model.mode {
+            case .standard:   standardPage
+            case .scientific: scientificPage
+            case .programmer: programmerPage
             }
-            .tabViewStyle(.automatic)
         }
         .animation(.easeInOut(duration: 0.15), value: model.mode)
+        .background(keyboardHost)
+    }
+
+    // MARK: 键盘输入（隐藏按钮宿主，不占视觉位置）
+
+    private var keyboardHost: some View {
+        HStack(spacing: 0) {
+            // 数字
+            ForEach(Array("0123456789"), id: \.self) { c in
+                Button("") { press(String(c)) }
+                    .keyboardShortcut(KeyEquivalent(c), modifiers: [])
+            }
+            // 运算符
+            Button("") { press("+") }.keyboardShortcut("+", modifiers: [])
+            Button("") { press("−") }.keyboardShortcut("-", modifiers: [])
+            Button("") { press("×") }.keyboardShortcut("*", modifiers: [])
+            Button("") { press("÷") }.keyboardShortcut("/", modifiers: [])
+            Button("") { press("^") }.keyboardShortcut("^", modifiers: [])
+            Button("") { press("%") }.keyboardShortcut("%", modifiers: [])
+            Button("") { press(".") }.keyboardShortcut(".", modifiers: [])
+            // 括号（科学 / 程序员模式）
+            Button("") { press("(") }.keyboardShortcut("(", modifiers: [])
+            Button("") { press(")") }.keyboardShortcut(")", modifiers: [])
+            // 十六进制字母（程序员模式）
+            ForEach(Array("abcdef"), id: \.self) { c in
+                Button("") { press(c.uppercased()) }
+                    .keyboardShortcut(KeyEquivalent(c), modifiers: [])
+            }
+            // 等于：回车 或 =
+            Button("") { equals() }.keyboardShortcut(.return, modifiers: [])
+            Button("") { equals() }.keyboardShortcut("=", modifiers: [])
+            // 退格
+            Button("") { backspace() }.keyboardShortcut(.delete, modifiers: [])
+            // 清空：Esc
+            Button("") { clearAll() }.keyboardShortcut(.escape, modifiers: [])
+            // 模式切换快捷键
+            Button("") { model.mode = .standard }
+                .keyboardShortcut("1", modifiers: [.command, .shift])
+            Button("") { model.mode = .scientific }
+                .keyboardShortcut("2", modifiers: [.command, .shift])
+            Button("") { model.mode = .programmer }
+                .keyboardShortcut("3", modifiers: [.command, .shift])
+        }
+        .opacity(0)
+        .frame(width: 0, height: 0)
+        .allowsHitTesting(false)
+    }
+
+    private func press(_ key: String) {
+        Haptics.soft()
+        switch model.mode {
+        case .programmer:
+            // 程序员模式没有小数点；字母数字会按当前进制校验
+            guard key != "." else { return }
+            model.appendProg(key)
+        default:
+            model.append(key)
+        }
+    }
+
+    private func equals() {
+        Haptics.soft()
+        switch model.mode {
+        case .programmer: model.equalsProg()
+        default: model.equalsDecimal()
+        }
+    }
+
+    private func backspace() {
+        switch model.mode {
+        case .programmer: model.backspaceProg()
+        default: model.backspaceDecimal()
+        }
+    }
+
+    private func clearAll() {
+        switch model.mode {
+        case .programmer: model.clearProg()
+        default: model.clearDecimal()
+        }
     }
 
     // MARK: 标准模式页
@@ -79,6 +170,8 @@ struct HistoryLog: View {
     /// 程序员模式空间紧张，字号小一些
     var compact = false
     var onPick: (HistoryItem) -> Void = { _ in }
+    /// 鼠标悬停的行，给个高亮提示可点
+    @State private var hoveredID: UUID?
 
     private let bottomID = "history-bottom"
 
@@ -151,8 +244,19 @@ struct HistoryLog: View {
             .frame(width: compact ? 84 : 104, alignment: .trailing)
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.horizontal, compact ? 6 : 10)
+        .padding(.vertical, compact ? 3 : 5)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(hoveredID == item.id ? Color.primary.opacity(0.06) : Color.clear)
+        )
         .contentShape(Rectangle())
+        .onHover { inside in
+            hoveredID = inside ? item.id : (hoveredID == item.id ? nil : hoveredID)
+            NSCursor.pointingHand.set()
+        }
         .onTapGesture { onPick(item) }
+        .help("点击把结果粘到当前输入")
     }
 }
 
@@ -327,7 +431,7 @@ struct MemoryPad: View {
                 }
             }
         }
-        .frame(height: 34)
+        .frame(minHeight: 24, maxHeight: 34)
     }
 }
 
@@ -346,7 +450,7 @@ struct DecimalPad: View {
     ]
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             MemoryPad(model: model)
             ForEach(rows.indices, id: \.self) { r in
                 HStack(spacing: 10) {
@@ -356,7 +460,7 @@ struct DecimalPad: View {
                         }
                     }
                 }
-                .frame(height: rowHeight)
+                .frame(minHeight: rowHeight * 0.55, maxHeight: rowHeight)
             }
         }
     }
@@ -412,9 +516,9 @@ struct ScientificKeypad: View {
                         }
                     }
                 }
-                .frame(height: 44)
+                .frame(minHeight: 36, maxHeight: 58)
             }
-            DecimalPad(model: model, rowHeight: 54)
+            DecimalPad(model: model, rowHeight: 56)
         }
         .animation(.easeInOut(duration: 0.12), value: model.second)
     }
@@ -472,7 +576,7 @@ struct ProgrammerKeypad: View {
                     }
                 }
             }
-            .frame(height: 40)
+            .frame(minHeight: 34, maxHeight: 50)
 
             ForEach(rows.indices, id: \.self) { r in
                 HStack(spacing: 8) {
@@ -484,7 +588,7 @@ struct ProgrammerKeypad: View {
                         }
                     }
                 }
-                .frame(height: 52)
+                .frame(minHeight: 44, maxHeight: 64)
             }
         }
     }

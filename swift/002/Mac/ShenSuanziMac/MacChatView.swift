@@ -9,16 +9,19 @@
 import SwiftUI
 import AppKit
 import AVFoundation
+import AVKit
 import CoreLocation
 import MultipeerConnectivity
 
 // MARK: - 视觉基础组件（原生 SwiftUI，无第三方依赖）
 
-/// 圆形头像：按名字稳定取色，首字母；可带在线小圆点
+/// 圆形头像：有自定义头像（头像同步落盘）就显示图片，否则按名字稳定取色 + 首字母；
+/// 可带在线小圆点。收到头像资源后自动刷新。
 struct MacAvatar: View {
     let name: String
     var size: CGFloat = 34
     var online: Bool = false
+    @State private var refresh = UUID()
 
     private let palette: [Color] = [.blue, .purple, .pink, .orange, .green, .teal, .indigo]
     private var seed: Int { name.unicodeScalars.reduce(0) { $0 + Int($1.value) } }
@@ -27,12 +30,7 @@ struct MacAvatar: View {
 
     var body: some View {
         ZStack {
-            Circle()
-                .fill(LinearGradient(colors: [tint, tint.opacity(0.62)],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-            Text(initial)
-                .font(.system(size: size * 0.42, weight: .semibold))
-                .foregroundStyle(.white)
+            core
         }
         .frame(width: size, height: size)
         .overlay(alignment: .bottomTrailing) {
@@ -42,6 +40,27 @@ struct MacAvatar: View {
                     .overlay(Circle().stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 2))
                     .offset(x: 1, y: 1)
             }
+        }
+        .id(refresh)
+        .onReceive(NotificationCenter.default.publisher(for: .chatAvatarDidChange)) { _ in
+            refresh = UUID()
+        }
+    }
+
+    @ViewBuilder
+    private var core: some View {
+        if let img = NSImage(contentsOfFile: ChatImageStore.url("avatar-\(name).jpg").path) {
+            Image(nsImage: img)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+        } else {
+            LinearGradient(colors: [tint, tint.opacity(0.62)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            Text(initial)
+                .font(.system(size: size * 0.42, weight: .semibold))
+                .foregroundStyle(.white)
         }
     }
 }
@@ -76,12 +95,26 @@ struct MacChatView: View {
     @EnvironmentObject var model: LANChatModel
     // 单一选中项：私聊用 peer 名，群聊用 "group:" 前缀区分，避免两个 @State 互相踩。
     @State private var selection: String?
+    /// 修改头像的文件选择器
+    @State private var showAvatarPicker = false
+    // 左侧会话列表宽度：可拖拽，持久化
+    // AppStorage 不支持 CGFloat，统一用 Double 存，用时转一次
+    @AppStorage("macChatSidebarWidth") private var sidebarWidthRaw: Double = 280
+    @State private var dragStartWidth: Double?
+    private var sidebarWidth: CGFloat { CGFloat(sidebarWidthRaw) }
 
     var body: some View {
-        NavigationSplitView {
+        // 不用 NavigationSplitView：它会把标题/工具栏挤进窗口标题栏（顶部多出一层、
+        // 和自定义板块标签栏打架）。左右分栏自己排，窗口标题栏保持干净。
+        // 中间那条分隔线可拖拽调整左右宽度，宽度记进 AppStorage，下次启动沿用。
+        HStack(spacing: 0) {
             sidebar
-        } detail: {
+                .frame(width: sidebarWidth)
+                .background(Color(nsColor: .windowBackgroundColor))
+            splitHandle
             detailView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(nsColor: .controlBackgroundColor).opacity(0.35))
         }
         .overlay(alignment: .top) {
             if let toast = model.toast {
@@ -97,6 +130,59 @@ struct MacChatView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: model.toast)
         .onAppear { model.start() }
+        // 修改头像
+        .fileImporter(isPresented: $showAvatarPicker, allowedContentTypes: [.image], allowsMultipleSelection: false) { result in
+            guard let url = (try? result.get())?.first else { return }
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+            guard let data = try? Data(contentsOf: url) else {
+                model.toast = "读取图片失败"
+                return
+            }
+            // 压到 480 见方，头像不需要原图那么大
+            guard let jpeg = MacImageBubble.compress(data, maxSide: 480) else {
+                model.toast = "图片处理失败"
+                return
+            }
+            model.setAvatar(jpeg)
+            model.toast = "头像已更新"
+        }
+    }
+
+    // MARK: 可拖拽分隔线
+
+    private static let minSidebarWidth: Double = 220
+    private static let maxSidebarWidth: Double = 520
+
+    private var splitHandle: some View {
+        ZStack {
+            // 视觉上一条细线，命中区域左右各 4pt，方便抓
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(width: 1)
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: 9)
+                .contentShape(Rectangle())
+                .onHover { inside in
+                    if inside { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() }
+                }
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            if dragStartWidth == nil { dragStartWidth = sidebarWidthRaw }
+                            let raw = (dragStartWidth ?? sidebarWidthRaw) + value.translation.width
+                            sidebarWidthRaw = min(max(raw, Self.minSidebarWidth), Self.maxSidebarWidth)
+                        }
+                        .onEnded { _ in dragStartWidth = nil }
+                )
+                .onTapGesture(count: 2) {
+                    // 双击分隔线恢复默认宽度
+                    withAnimation(.easeInOut(duration: 0.15)) { sidebarWidthRaw = 280 }
+                }
+        }
+        .frame(width: 9)
+        .help("拖动调整宽度，双击恢复默认")
     }
 
     @ViewBuilder
@@ -133,17 +219,19 @@ struct MacChatView: View {
             // 连接状态卡片
             Section {
                 HStack(spacing: 10) {
-                    ZStack {
-                        Circle().fill((model.running ? Color.green : Color.gray).opacity(0.16))
-                            .frame(width: 34, height: 34)
-                        Image(systemName: model.running ? "wifi" : "wifi.slash")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(model.running ? .green : .secondary)
+                    // 自己的头像：点击修改
+                    Button {
+                        showAvatarPicker = true
+                    } label: {
+                        MacAvatar(name: model.nickname, size: 34)
                     }
+                    .buttonStyle(.plain)
+                    .help("点击修改头像")
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(model.running ? "局域网已连接" : "服务未启动")
+                        Text(model.nickname)
                             .font(.system(size: 13, weight: .semibold))
-                        Text("\(model.online.count) 台设备在线")
+                            .lineLimit(1)
+                        Text(model.running ? "\(model.online.count) 台设备在线" : "服务未启动")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }
@@ -237,7 +325,6 @@ struct MacChatView: View {
             }
         }
         .listStyle(.sidebar)
-        .frame(minWidth: 250)
     }
 }
 
@@ -266,10 +353,8 @@ struct ChatPane: View {
                     }
                 }
             }
-            Divider()
             MacComposer(target: .peer(peer), model: model)
         }
-        .navigationTitle(peer)
         .onAppear {
             model.visiblePeer = peer
             model.markRead(peer)
@@ -307,10 +392,8 @@ struct GroupChatPane: View {
                     }
                 }
             }
-            Divider()
             MacComposer(target: .group(groupID), model: model)
         }
-        .navigationTitle(model.group(groupID)?.name ?? "群聊")
         .onAppear {
             model.visibleGroup = groupID
             model.markGroupRead(groupID)
@@ -333,11 +416,25 @@ struct MacComposer: View {
     let model: LANChatModel
 
     @State private var draft = ""
+    @State private var showEmojiPanel = false
+    @State private var showFavoritesPanel = false
     @State private var showImagePanel = false
     @State private var showVideoPanel = false
     @State private var showFilePanel = false
     @State private var showRecorder = false
     @State private var showLocationSheet = false
+    /// 截屏预览（确认后再发送）
+    @State private var pendingScreenshot: ScreenshotItem?
+
+    /// 收藏（常用语）：本机持久化，点击回填到输入框
+    @AppStorage("macChatFavorites") private var favoritesData: Data = Data()
+
+    private var favorites: [String] {
+        (try? JSONDecoder().decode([String].self, from: favoritesData)) ?? []
+    }
+    private func saveFavorites(_ list: [String]) {
+        favoritesData = (try? JSONEncoder().encode(list)) ?? Data()
+    }
 
     private var placeholder: String {
         switch target {
@@ -347,56 +444,76 @@ struct MacComposer: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 8) {
-                toolbarButton("photo", "图片") { showImagePanel = true }
-                toolbarButton("video", "视频") { showVideoPanel = true }
-                toolbarButton("doc", "文件") { showFilePanel = true }
-                toolbarButton("mic", "语音") { showRecorder = true }
-                toolbarButton("mappin.circle", "位置") { showLocationSheet = true }
-                Spacer()
-            }
-            HStack(alignment: .bottom, spacing: 8) {
-                // 多行输入框：固定最小高度，内容多时可滚动；占位文字自行叠加
-                ZStack(alignment: .topLeading) {
-                    TextEditor(text: $draft)
-                        .font(.system(size: 13))
-                        .scrollContentBackground(.hidden)
-                        .background(Color.clear)
-                        .frame(minHeight: 68, maxHeight: 130)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                    if draft.isEmpty {
-                        Text(placeholder)
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 13)
-                            .padding(.vertical, 13)
-                            .allowsHitTesting(false)
+        VStack(spacing: 5) {
+            // 多行输入框：白色背景、右侧顶到窗口右边框；有内容才出垂直滚动条
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $draft)
+                    .font(.system(size: 13))
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
+                    .scrollIndicators(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                      ? .never : .automatic)
+                    .frame(minHeight: 56, maxHeight: 130)
+                    .padding(.leading, 14)
+                    .padding(.trailing, 4)
+                    .padding(.vertical, 8)
+                    // 回车直接发送；Shift+回车 交回默认行为（换行）
+                    .onKeyPress { press in
+                        guard press.key == .return, !press.modifiers.contains(.shift) else {
+                            return .ignored
+                        }
+                        sendText()
+                        return .handled
                     }
+                if draft.isEmpty {
+                    Text(placeholder)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 19)
+                        .padding(.top, 15)
+                        .allowsHitTesting(false)
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.secondary.opacity(0.09))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(Color.secondary.opacity(0.16), lineWidth: 0.5)
-                )
-                Button { sendText() } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 26, weight: .semibold))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.secondary.opacity(0.4) : Color.accentColor)
-                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .help("发送（⌘ + 回车）")
-                .keyboardShortcut(.return, modifiers: .command)
-                .padding(.bottom, 2)
             }
+            .background(Color.white)
+            // 右侧顶到窗口右边框：只给左侧圆角
+            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 10,
+                                              bottomLeadingRadius: 10,
+                                              style: .continuous))
+            .overlay(
+                UnevenRoundedRectangle(topLeadingRadius: 10,
+                                       bottomLeadingRadius: 10,
+                                       style: .continuous)
+                    .stroke(Color.secondary.opacity(0.14), lineWidth: 0.5)
+            )
+
+            // 微信式功能条（在下）：悬浮在输入区下方，无背景，底部贴窗口底
+            HStack(spacing: 4) {
+                iconButton("face.smiling", "表情") { showEmojiPanel = true }
+                    .popover(isPresented: $showEmojiPanel, arrowEdge: .bottom) { emojiGrid }
+                iconButton("cube.transparent", "收藏") { showFavoritesPanel = true }
+                    .popover(isPresented: $showFavoritesPanel, arrowEdge: .bottom) { favoritesPanel }
+                iconButton("photo", "图片") { showImagePanel = true }
+                iconButton("folder", "文件") { showFilePanel = true }
+                iconButton("scissors", "截屏发送") { captureScreen() }
+                iconButton("video", "视频") { showVideoPanel = true }
+                iconButton("mic", "录音") { showRecorder = true }
+                iconButton("mappin.circle", "位置") { showLocationSheet = true }
+                Spacer(minLength: 0)
+                Text("回车发送 · Shift+回车换行")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                    .padding(.trailing, 10)
+            }
+            .padding(.leading, 12)
+            .padding(.trailing, 8)
+            .padding(.bottom, 3)
         }
-        .padding(14)
-        .background(Color(nsColor: .windowBackgroundColor))
+        // 输入区顶边框 2px，分隔聊天记录
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(height: 2)
+        }
         // 图片
         .fileImporter(isPresented: $showImagePanel, allowedContentTypes: [.image], allowsMultipleSelection: false) { result in
             guard let url = (try? result.get())?.first else { return }
@@ -438,26 +555,151 @@ struct MacComposer: View {
         .sheet(isPresented: $showLocationSheet) {
             MacLocationSheet { loc in sendLocation(loc) }
         }
+        // 截屏预览
+        .sheet(item: $pendingScreenshot) { shot in
+            ScreenshotConfirmSheet(image: shot.image) { jpeg in
+                if let jpeg { sendImage(jpeg) }
+                pendingScreenshot = nil
+            }
+        }
     }
 
-    private func toolbarButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
+    // MARK: 功能条按钮（微信风格：只放图标，不配文字）
+
+    private func iconButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 3) {
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .medium))
-                    .frame(width: 20, height: 18)
-                Text(label)
-                    .font(.system(size: 10))
-            }
-            .frame(width: 50, height: 44)
-            .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(Color.secondary.opacity(0.08))
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Color.secondary)
+                .frame(width: 30, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.clear)
+                )
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { inside in
+            if inside { NSCursor.pointingHand.set() }
+        }
         .help(label)
+    }
+
+    // MARK: 表情面板
+
+    private let emojiList: [String] = [
+        "😀", "😁", "😂", "🤣", "😊", "😇", "😉", "😍", "🥰", "😘",
+        "😜", "🤪", "😎", "🥳", "😏", "😴", "🤔", "🤯", "😅", "🥺",
+        "😭", "😡", "🤬", "🫡", "🤗", "😷", "🤒", "👻", "💯", "👍",
+        "👎", "👌", "🙏", "👏", "💪", "🤝", "✌️", "🎉", "🔥", "⭐️",
+        "❤️", "💔", "🌹", "🍀", "🍺", "☕️", "🍕", "🍎", "🚀", "✅",
+        "❌", "❓", "❗️", "⚡️", "🌈", "☀️", "🌙", "🏠", "🚗", "💰"
+    ]
+
+    private var emojiGrid: some View {
+        ScrollView(showsIndicators: true) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 36), spacing: 6)], spacing: 6) {
+                ForEach(emojiList, id: \.self) { e in
+                    Button {
+                        draft += e
+                    } label: {
+                        Text(e)
+                            .font(.system(size: 21))
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(12)
+        }
+        .frame(width: 296, height: 212)
+    }
+
+    // MARK: 收藏（常用语）面板
+
+    private var favoritesPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("收藏 · 常用语")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+                Button {
+                    let t = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !t.isEmpty else { return }
+                    if !favorites.contains(t) {
+                        saveFavorites([t] + favorites)
+                    }
+                } label: {
+                    Label("收藏当前输入", systemImage: "plus")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            if favorites.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "cube.transparent")
+                        .font(.system(size: 28))
+                        .foregroundStyle(.tertiary)
+                    Text("还没有收藏。\n输入内容后点右上角「收藏当前输入」。")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    ForEach(favorites, id: \.self) { item in
+                        HStack(alignment: .top, spacing: 8) {
+                            Text(item)
+                                .font(.system(size: 12))
+                                .lineLimit(3)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Button {
+                                draft += item
+                            } label: {
+                                Image(systemName: "arrow.down.to.line")
+                                    .font(.system(size: 12))
+                            }
+                            .buttonStyle(.borderless)
+                            .help("填入输入框")
+                            Button(role: .destructive) {
+                                saveFavorites(favorites.filter { $0 != item })
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 12))
+                            }
+                            .buttonStyle(.borderless)
+                            .help("删除收藏")
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+                .listStyle(.inset)
+            }
+        }
+        .padding(12)
+        .frame(width: 320, height: 280)
+    }
+
+    // MARK: 截屏
+
+    /// 全屏截一张图（0.2s 延迟让菜单弹层先消失），弹预览确认后发送。
+    /// 需要系统设置里给应用「屏幕录制」权限，否则截不到窗口内容。
+    private func captureScreen() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            if let cg = CGWindowListCreateImage(.infinite, .optionOnScreenOnly, kCGNullWindowID, [.bestResolution]) {
+                let image = NSImage(cgImage: cg,
+                                    size: NSSize(width: CGFloat(cg.width) / 2,
+                                                 height: CGFloat(cg.height) / 2))
+                pendingScreenshot = ScreenshotItem(image: image)
+            } else {
+                model.toast = "截屏失败，请到系统设置给应用开启「屏幕录制」权限"
+            }
+        }
     }
 
     private func sendText() {
@@ -492,7 +734,62 @@ struct MacComposer: View {
     }
 }
 
-/// 文件工具（仅提供大小读取）
+// MARK: - 截屏预览确认
+
+struct ScreenshotItem: Identifiable {
+    let id = UUID()
+    let image: NSImage
+}
+
+struct ScreenshotConfirmSheet: View {
+    let image: NSImage
+    /// 点发送回传 JPEG 数据；取消回传 nil
+    let onDone: (Data?) -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text("截屏预览")
+                .font(.headline)
+            GeometryReader { geo in
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: geo.size.width, maxHeight: geo.size.height)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            HStack(spacing: 14) {
+                Button("取消") { onDone(nil) }
+                    .buttonStyle(.bordered)
+                Button {
+                    send()
+                } label: {
+                    Label("发送", systemImage: "paperplane.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.return, modifiers: .command)
+            }
+        }
+        .padding(20)
+        .frame(width: 560, height: 460)
+    }
+
+    private func send() {
+        guard let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let data = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) else {
+            onDone(nil)
+            return
+        }
+        onDone(data)
+    }
+}
+
+// MARK: - 文件工具（仅提供大小读取）
 enum MacFilePanel {
     static func size(_ url: URL) -> Int64 {
         guard let a = try? FileManager.default.attributesOfItem(atPath: url.path),
@@ -696,6 +993,7 @@ final class MacOneShotLocation: NSObject, CLLocationManagerDelegate {
 
 struct MessageRow: View {
     let msg: ChatMessage
+    @EnvironmentObject var model: LANChatModel
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -714,7 +1012,7 @@ struct MessageRow: View {
                     .foregroundStyle(.tertiary)
             }
             if msg.mine {
-                MacAvatar(name: "我", size: 28)
+                MacAvatar(name: model.nickname, size: 28)
             }
         }
         .frame(maxWidth: .infinity, alignment: msg.mine ? .trailing : .leading)
@@ -808,10 +1106,12 @@ struct MacImageBubble: View {
     }
 }
 
-/// 附件气泡（文件 / 视频 / 语音）：文本文件气泡内预览 + 新窗口看全文，其余点击用系统打开
+/// 附件气泡（文件 / 视频 / 语音）：视频点击内嵌播放，文本文件气泡内预览 + 新窗口看全文，其余点击用系统打开
 struct MacAttachmentBubble: View {
     let att: ChatAttachment
     let mine: Bool
+    /// 视频消息：点按播放
+    @State private var playingVideo: MacVideoItem?
 
     private var icon: String {
         if att.isTextPreviewable { return "doc.text.fill" }
@@ -839,10 +1139,12 @@ struct MacAttachmentBubble: View {
     /// 文件实际大小是否超过预览摘录（用于提示「点开看全文」）
     private var hasMore: Bool { att.size > 1024 }
 
-    /// 文本文件 → 新窗口看全文；其余 → 系统程序打开
+    /// 视频内嵌播放；文本文件 → 新窗口看全文；其余 → 系统程序打开
     private func openFile() {
         guard ChatFileStore.exists(att.fileName) else { return }
-        if att.isTextPreviewable {
+        if att.kind == .video {
+            playingVideo = MacVideoItem(url: ChatFileStore.url(att.fileName))
+        } else if att.isTextPreviewable {
             MacTextPreviewWindow.shared.show(title: att.displayName, fileName: att.fileName)
         } else {
             NSWorkspace.shared.open(ChatFileStore.url(att.fileName))
@@ -907,7 +1209,64 @@ struct MacAttachmentBubble: View {
         .frame(width: 250)
         .background(mine ? Color.accentColor : Color.secondary.opacity(0.15))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .sheet(item: $playingVideo) { item in
+            MacVideoPlayerSheet(url: item.url)
+        }
     }
+}
+
+/// 可播放的视频附件
+struct MacVideoItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+/// 视频播放窗：AVPlayerView + 系统控制条
+struct MacVideoPlayerSheet: View {
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(url.lastPathComponent)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+
+            MacVideoPlayerView(url: url)
+                .frame(minWidth: 560, idealWidth: 680, minHeight: 380, idealHeight: 440)
+        }
+        .padding(.bottom, 12)
+    }
+}
+
+/// NSViewRepresentable 包装 AVPlayerView（含播放/进度/音量控制）
+struct MacVideoPlayerView: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let view = AVPlayerView()
+        let player = AVPlayer(url: url)
+        view.player = player
+        view.controlsStyle = .inline
+        player.play()
+        return view
+    }
+
+    func updateNSView(_ nsView: AVPlayerView, context: Context) {}
 }
 
 /// 文本文件全文预览窗口：独立窗口 + NSTextView（可滚动、可选中复制、等宽字体）

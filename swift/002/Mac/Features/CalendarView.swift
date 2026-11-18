@@ -27,12 +27,79 @@ enum MonthMath {
     }
 }
 
+// MARK: - 日历备忘（本地持久化，按天归档）
+
+struct CalendarMemo: Codable, Identifiable {
+    var id: UUID = UUID()
+    var dayKey: String      // "2026-11-18"，按天归档
+    var text: String
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+}
+
+@MainActor
+final class CalendarMemoModel: ObservableObject {
+    @Published private(set) var memos: [CalendarMemo] = []
+    private static let file = "calendar-memos.json"
+
+    private static let keyFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    init() {
+        memos = LocalStore.load([CalendarMemo].self, Self.file) ?? []
+    }
+
+    static func key(for date: Date) -> String { keyFormatter.string(from: date) }
+
+    func memos(for date: Date) -> [CalendarMemo] {
+        let key = Self.key(for: date)
+        return memos.filter { $0.dayKey == key }
+    }
+
+    /// 有备忘的日期（月历格子上画小圆点用）
+    var memoDayKeys: Set<String> { Set(memos.map(\.dayKey)) }
+
+    func add(_ text: String, for date: Date) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        memos.append(CalendarMemo(dayKey: Self.key(for: date), text: trimmed))
+        persist()
+    }
+
+    func update(_ memo: CalendarMemo, text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let i = memos.firstIndex(where: { $0.id == memo.id }) else { return }
+        memos[i].text = trimmed
+        memos[i].updatedAt = Date()
+        persist()
+    }
+
+    func delete(_ memo: CalendarMemo) {
+        memos.removeAll { $0.id == memo.id }
+        persist()
+    }
+
+    private func persist() {
+        LocalStore.save(memos, Self.file)
+    }
+}
+
 // MARK: - 万年历
 
 struct CalendarView: View {
     @State private var monthAnchor = MonthMath.startOfMonth(Date())
     @State private var selectedDate = Date()
     @State private var shift: Int = 0
+    @StateObject private var memoModel = CalendarMemoModel()
+    /// 新建备忘输入
+    @State private var memoDraft = ""
+    /// 正在行内编辑的备忘
+    @State private var editingMemoID: UUID?
+    @State private var editingDraft = ""
 
     private static let weekdays = ["日", "一", "二", "三", "四", "五", "六"]
 
@@ -41,7 +108,8 @@ struct CalendarView: View {
             header
             weekdayRow
 
-            MonthGridView(anchor: monthAnchor, selected: selectedDate) { date in
+            MonthGridView(anchor: monthAnchor, selected: selectedDate,
+                          memoKeys: memoModel.memoDayKeys) { date in
                 selectedDate = date
                 if !MonthMath.sameMonth(date, monthAnchor) {
                     monthAnchor = MonthMath.startOfMonth(date)
@@ -57,10 +125,11 @@ struct CalendarView: View {
             ))
 
             detailCard
+            memoSection
             Spacer(minLength: 0)
         }
         .padding(20)
-        .frame(minWidth: 420, minHeight: 520)
+        .frame(minWidth: 420, minHeight: 560)
     }
 
     private func goMonth(_ delta: Int) {
@@ -160,6 +229,141 @@ struct CalendarView: View {
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
             .fill(Color(nsColor: .controlBackgroundColor)))
     }
+
+    // MARK: 备忘
+
+    private var dayMemos: [CalendarMemo] { memoModel.memos(for: selectedDate) }
+
+    private var memoSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.orange)
+                Text("备忘")
+                    .font(.system(size: 14, weight: .semibold))
+                Text(Self.shortDate(selectedDate))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if !dayMemos.isEmpty {
+                    Text("\(dayMemos.count) 条")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            // 添加框：回车保存
+            HStack(spacing: 8) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.orange)
+                TextField("添加备忘，回车保存…", text: $memoDraft)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .onSubmit(addMemo)
+                if !memoDraft.isEmpty {
+                    Button {
+                        memoDraft = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Color(nsColor: .windowBackgroundColor)))
+
+            // 当天备忘列表
+            if !dayMemos.isEmpty {
+                VStack(spacing: 6) {
+                    ForEach(dayMemos) { memo in
+                        memoRow(memo)
+                    }
+                }
+                .padding(.top, 2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(Color(nsColor: .controlBackgroundColor)))
+    }
+
+    private func memoRow(_ memo: CalendarMemo) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "checkmark.circle")
+                .font(.system(size: 12))
+                .foregroundStyle(Color.orange.opacity(0.8))
+                .padding(.top, 2)
+
+            if editingMemoID == memo.id {
+                TextField("备忘内容", text: $editingDraft)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .onSubmit { commitMemoEdit(memo) }
+            } else {
+                Text(memo.text)
+                    .font(.system(size: 13))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+            }
+
+            if editingMemoID == memo.id {
+                Button("保存") { commitMemoEdit(memo) }
+                    .buttonStyle(.bordered)
+                    .font(.system(size: 11))
+            } else {
+                HStack(spacing: 4) {
+                    Button {
+                        editingMemoID = memo.id
+                        editingDraft = memo.text
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 11))
+                    }
+                    .buttonStyle(.borderless)
+                    .help("编辑备忘")
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) { memoModel.delete(memo) }
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("删除备忘")
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .fill(Color.primary.opacity(0.04)))
+    }
+
+    private func addMemo() {
+        memoModel.add(memoDraft, for: selectedDate)
+        memoDraft = ""
+    }
+
+    private func commitMemoEdit(_ memo: CalendarMemo) {
+        memoModel.update(memo, text: editingDraft)
+        editingMemoID = nil
+        editingDraft = ""
+    }
+
+    private static func shortDate(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "M月d日"
+        f.locale = Locale(identifier: "zh_CN")
+        return f.string(from: date)
+    }
 }
 
 // MARK: - 单月网格
@@ -167,6 +371,8 @@ struct CalendarView: View {
 struct MonthGridView: View {
     let anchor: Date
     let selected: Date
+    /// 有备忘的日期（"yyyy-MM-dd"），格子上画小圆点
+    var memoKeys: Set<String> = []
     let onSelect: (Date) -> Void
 
     static let rows = 6
@@ -217,6 +423,7 @@ struct MonthGridView: View {
             let weekday = Self.cal.component(.weekday, from: date)
             let isWeekend = weekday == 1 || weekday == 7
             let info = labelInfo(date)
+            let hasMemo = memoKeys.contains(CalendarMemoModel.key(for: date))
 
             VStack(spacing: 1) {
                 Text("\(Self.cal.component(.day, from: date))")
@@ -230,6 +437,15 @@ struct MonthGridView: View {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(isSelected ? Color.orange : Color.clear)
             )
+            .overlay(alignment: .topTrailing) {
+                if hasMemo {
+                    Circle()
+                        .fill(isSelected ? Color.white : Color.orange)
+                        .frame(width: 5, height: 5)
+                        .padding(.top, 4)
+                        .padding(.trailing, 8)
+                }
+            }
             .foregroundStyle(
                 isSelected ? Color.white
                 : isToday ? Color.orange

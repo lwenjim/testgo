@@ -69,6 +69,8 @@ public final class LANChatModel: NSObject, ObservableObject {
 
     // 断线重连：每个会话设备独立计数，退避邀请
     private var reconnectAttempts: [String: Int] = [:]
+    /// 对端协议版本（discoveryInfo["v"]）：nil = 旧版本客户端，不支持记账同步
+    private var peerVersions: [String: String] = [:]
     private var lastInvite: [String: Date] = [:]
     private var waitingSince: [String: Date] = [:]
     private var reconnectTicking = false
@@ -119,6 +121,8 @@ public final class LANChatModel: NSObject, ObservableObject {
         }
         rebuildFavorites()
         registerNotesSync()
+        registerLedgerSync()
+        registerAvatarSync()
     }
 
     // MARK: 笔记同步
@@ -260,8 +264,11 @@ public final class LANChatModel: NSObject, ObservableObject {
             return
         }
         let peer = ownPeer ?? MCPeerID(displayName: String(nickname.prefix(20)))
+        // v2 = 支持 ledger（记账）同步信封。旧版本广播里没有这个标记，
+        // 记账包只发给声明过 v2 的设备，避免旧客户端把信封当消息气泡显示。
         let adv = MCNearbyServiceAdvertiser(peer: peer,
-                                            discoveryInfo: ["n": String(nickname.prefix(20))],
+                                            discoveryInfo: ["n": String(nickname.prefix(20)),
+                                                            "v": "2"],
                                             serviceType: Self.serviceType)
         adv.delegate = self
 
@@ -332,6 +339,8 @@ public final class LANChatModel: NSObject, ObservableObject {
         }
         // 笔记也主动拉一遍：iPhone 长时间在后台时 Mac 推来的 notes.sync 可能没送到
         syncNotesNow()
+        // 账目同理
+        syncLedgerNow()
     }
 
     /// 主动向所有已连接设备请求笔记：对方收到 notes.req 会把最新版推回来。
@@ -344,6 +353,156 @@ public final class LANChatModel: NSObject, ObservableObject {
                   s.connectedPeers.contains(pid) else { continue }
             sendEnv(env, to: name)
         }
+    }
+
+    // MARK: 记账同步
+    //
+    // 账目与笔记同样独立于聊天记录：kind="ledger.sync" 信封，不进会话列表、不弹未读。
+    // 同步范围 = 所有已建立连接的设备（不要求加好友 / 有过会话）。
+
+    private func registerLedgerSync() {
+        NotificationCenter.default.addObserver(
+            forName: .chatLedgerDidChange, object: nil, queue: .main
+        ) { [weak self] notification in
+            guard let self,
+                  let entries = notification.userInfo?["entries"] as? [LedgerEntry] else { return }
+            self.broadcastLedger(entries)
+        }
+        // 记账页点刷新 / 进入记账板块：向所有连接设备拉一遍
+        NotificationCenter.default.addObserver(
+            forName: .chatLedgerRequestRefresh, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.syncLedgerNow()
+        }
+    }
+
+    private static func encodeLedger(_ entries: [LedgerEntry]) -> String? {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .secondsSince1970
+        guard let data = try? encoder.encode(entries) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func decodeLedger(_ text: String) -> [LedgerEntry]? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        return try? decoder.decode([LedgerEntry].self, from: data)
+    }
+
+    /// 本机账目变化：推送给所有已连接的设备。每包最多 60 条 / 60KB。
+    private func broadcastLedger(_ entries: [LedgerEntry]) {
+        let targets = Array(online).filter { name in
+            guard peerVersions[name] == "2" else { return false }
+            guard let s = sessions[name], let pid = peerID(for: name) else { return false }
+            return s.connectedPeers.contains(pid)
+        }
+        guard !targets.isEmpty else { return }
+        var batch: [LedgerEntry] = []
+        var bytes = 0
+        func flush() {
+            guard !batch.isEmpty, let text = Self.encodeLedger(batch) else { return }
+            let env = ChatEnvelope(kind: "ledger.sync", text: text, sender: nickname, date: Date())
+            for name in targets { sendEnv(env, to: name) }
+            batch.removeAll()
+            bytes = 0
+        }
+        for entry in entries {
+            let size = entry.category.utf8.count + entry.note.utf8.count + 64
+            if !batch.isEmpty, batch.count >= 60 || bytes + size > 60_000 { flush() }
+            batch.append(entry)
+            bytes += size
+        }
+        flush()
+    }
+
+    /// 把本机的账目推给指定设备：新连接 / 收到 ledger.req 时用。
+    /// 只推给声明过 v2 的设备，旧版本收到会把它当聊天消息显示。
+    private func pushLedger(to name: String) {
+        guard peerVersions[name] == "2" else { return }
+        guard let entries = LocalStore.load([LedgerEntry].self, "ledger.json") else { return }
+        var batch: [LedgerEntry] = []
+        var bytes = 0
+        func flush() {
+            guard !batch.isEmpty, let text = Self.encodeLedger(batch) else { return }
+            sendEnv(ChatEnvelope(kind: "ledger.sync", text: text, sender: nickname, date: Date()),
+                    to: name)
+            batch.removeAll()
+            bytes = 0
+        }
+        for entry in entries {
+            let size = entry.category.utf8.count + entry.note.utf8.count + 64
+            if !batch.isEmpty, batch.count >= 60 || bytes + size > 60_000 { flush() }
+            batch.append(entry)
+            bytes += size
+        }
+        flush()
+    }
+
+    /// 主动向所有已连接设备请求账目：对方收到 ledger.req 会把最新版推回来。
+    /// 用于：回前台、进入记账板块。
+    public func syncLedgerNow() {
+        guard running else { return }
+        let env = ChatEnvelope(kind: "ledger.req", text: "", sender: nickname, date: Date())
+        for name in Array(online) {
+            guard peerVersions[name] == "2" else { continue }
+            guard let s = sessions[name], let pid = peerID(for: name),
+                  s.connectedPeers.contains(pid) else { continue }
+            sendEnv(env, to: name)
+        }
+    }
+
+    // MARK: 头像同步
+    //
+    // 头像走独立通道：kind="avatar.sync" 信封 + MCSession 资源传原图。
+    // 资源名统一 "avatar-<昵称>.jpg"，落在 chat-images，谁的头像就是哪个文件。
+    // 本机改头像 → 存盘 + 推给所有已连接的 v2 设备；对端收到信封若还没有图就
+    // 回 avatar.need，我方直接把资源送过去。资源到齐后发 chatAvatarDidChange 刷 UI。
+
+    /// 某用户的头像文件（存在与否由 ChatImageStore.exists 判断）
+    public func avatarURL(for name: String) -> URL {
+        ChatImageStore.url("avatar-\(name).jpg")
+    }
+
+    public func hasAvatar(for name: String) -> Bool {
+        ChatImageStore.exists("avatar-\(name).jpg")
+    }
+
+    /// 修改本机头像：存盘 + 广播给所有已连接的 v2 设备
+    public func setAvatar(_ imageData: Data) {
+        let name = "avatar-\(nickname).jpg"
+        guard ChatImageStore.save(imageData, name: name) != nil else { return }
+        NotificationCenter.default.post(name: .chatAvatarDidChange, object: nil)
+        broadcastAvatar()
+    }
+
+    /// 把我的头像（信封 + 原图资源）推给指定设备
+    private func pushAvatar(to name: String) {
+        guard peerVersions[name] == "2" else { return }
+        guard let s = sessions[name], let pid = peerID(for: name),
+              s.connectedPeers.contains(pid) else { return }
+        let res = "avatar-\(nickname).jpg"
+        guard ChatImageStore.exists(res) else { return }
+        let env = ChatEnvelope(kind: "avatar.sync", text: res, sender: nickname, date: Date())
+        sendEnv(env, to: name)
+        s.sendResource(at: ChatImageStore.url(res), withName: res, toPeer: pid) { _ in }
+    }
+
+    /// 把我的头像推给所有已连接的 v2 设备
+    private func broadcastAvatar() {
+        for name in Array(online) {
+            pushAvatar(to: name)
+        }
+    }
+
+    private func registerAvatarSync() {
+        // 不需要观察本机通知：头像只在我改的时候主动广播（setAvatar 里直接做）
+    }
+
+    private func serveAvatar(_ res: String, to name: String) {
+        guard let s = sessions[name], let pid = peerID(for: name) else { return }
+        guard ChatImageStore.exists(res) else { return }
+        s.sendResource(at: ChatImageStore.url(res), withName: res, toPeer: pid) { _ in }
     }
 
     public func stop() {
@@ -364,6 +523,7 @@ public final class LANChatModel: NSObject, ObservableObject {
         ownPeer = nil
         running = false
         peerIDs.removeAll()
+        peerVersions.removeAll()
         reconnectTicking = false
         for (_, w) in syncWork { w.cancel() }
         syncWork.removeAll()
@@ -1288,6 +1448,14 @@ public final class LANChatModel: NSObject, ObservableObject {
     }
 
     private func receive(_ env: ChatEnvelope, from name: String) {
+        // 防护：只把真正的聊天信封当消息落库。未知 kind（notes.sync / ledger.sync /
+        // image.need 之外将来新加的控制信封）一律丢弃，避免把 JSON 当消息显示出来。
+        switch env.kind {
+        case "text", "image", "attachment", "location":
+            break
+        default:
+            return
+        }
         // 群聊：按群 ID 落库，未知的群自动创建（谁先发消息谁把群带过来）
         if let gid = env.groupId {
             receiveGroup(env, groupId: gid, from: name)
@@ -1655,6 +1823,14 @@ extension LANChatModel: MCSessionDelegate {
                 self.pushNotes(to: name)
                 self.sendEnv(ChatEnvelope(kind: "notes.req", text: "", sender: self.nickname,
                                           date: Date()), to: name)
+                // 账目同样双向互推一遍（只对声明过 v2 的客户端，旧版会当消息气泡显示）
+                if self.peerVersions[name] == "2" {
+                    self.pushLedger(to: name)
+                    self.sendEnv(ChatEnvelope(kind: "ledger.req", text: "", sender: self.nickname,
+                                              date: Date()), to: name)
+                    // 头像：连上就把自己头像推过去（没有图就推不了，正常）
+                    self.pushAvatar(to: name)
+                }
                 if isFriend {
                     // 好友：自动互相补一遍历史（断开期间对方发的消息会一次性补回来）
                     self.syncHistory(with: name, force: false, delay: 1.5)
@@ -1747,6 +1923,7 @@ extension LANChatModel: MCSessionDelegate {
                 // 对方想补历史：把我的版本推过去
                 self.pushHistory(to: peer)
                 self.pushNotes(to: peer)
+                self.pushLedger(to: peer)
             case "notes.sync":
                 // 笔记是独立数据，不进聊天记录；交给 NotesModel 按 updatedAt 合并
                 if let notes = Self.decodeNotes(env.text) {
@@ -1757,6 +1934,30 @@ extension LANChatModel: MCSessionDelegate {
                 }
             case "notes.req":
                 self.pushNotes(to: peer)
+            case "ledger.sync":
+                // 账目是独立数据，不进聊天记录；交给 LedgerModel 按 updatedAt 合并
+                if let entries = Self.decodeLedger(env.text) {
+                    NotificationCenter.default.post(
+                        name: .chatLedgerDidReceive, object: self,
+                        userInfo: ["entries": entries]
+                    )
+                }
+            case "ledger.req":
+                self.pushLedger(to: peer)
+            case "avatar.sync":
+                // 对端头像有更新：资源名在 text 里。还没有图就先要原图；
+                // 有了图也通知一下 UI（可能是重发/更新）。
+                let res = env.text
+                guard res.hasPrefix("avatar-") else { break }
+                if !ChatImageStore.exists(res) {
+                    self.sendEnv(ChatEnvelope(kind: "avatar.need", text: res,
+                                              sender: self.nickname, date: Date()), to: peer)
+                }
+                self.objectWillChange.send()
+                NotificationCenter.default.post(name: .chatAvatarDidChange, object: nil)
+            case "avatar.need":
+                // 对端要我的头像原图：不要求好友关系（加好友前也能看到头像）
+                self.serveAvatar(env.text, to: peer)
             case "image.need":
                 if let img = env.imageName { self.serveImage(img, to: peer) }
             case "file.need":
@@ -1815,6 +2016,11 @@ extension LANChatModel: MCSessionDelegate {
         }
         DispatchQueue.main.async {
             self.markAlive(peer, session: session)
+            // 头像资源：avatar-<昵称>.jpg，收齐就通知 UI 刷新头像显示
+            if resourceName.hasPrefix("avatar-") {
+                NotificationCenter.default.post(name: .chatAvatarDidChange, object: nil)
+                self.objectWillChange.send()
+            }
             // 群聊图片：资源名是 "<群ID>__<消息ID>.jpg"，据此落回对应的群
             if let split = Self.splitGroupResource(resourceName),
                self.group(split.group) != nil {
@@ -1900,6 +2106,7 @@ extension LANChatModel: MCNearbyServiceBrowserDelegate {
         DispatchQueue.main.async {
             self.discoveryBackoff = 60
             self.peerIDs[name] = peerID
+            self.peerVersions[name] = info?["v"]
             if !self.online.contains(name),
                !self.nearby.contains(where: { $0.name == name }) {
                 self.nearby.append(LanPeer(name: name, state: .nearby))

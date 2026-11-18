@@ -2,7 +2,9 @@
 //  LedgerView.swift
 //  神算子
 //
-//  记账：按日分组的收支流水 + 月度汇总，纯本地保存
+//  记账：按日分组的收支流水 + 月度汇总
+//  LedgerEntry / LedgerKind 在 ChatCore/Models.swift，Mac 与 iPhone 共用同一份数据、
+//  同一套局域网同步逻辑（ledger.sync 信封，删除走墓碑）。
 //
 
 import SwiftUI
@@ -11,22 +13,8 @@ import Combine
 
 // MARK: - 数据
 
-enum LedgerKind: String, Codable, CaseIterable, Identifiable {
-    case expense = "支出"
-    case income = "收入"
-    var id: String { rawValue }
-
-    var sign: String { self == .expense ? "−" : "+" }
+extension LedgerKind {
     var color: Color { self == .expense ? Color.primary : Color.green }
-}
-
-struct LedgerEntry: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var amount: Double          // 始终为正数，方向由 kind 决定
-    var kind: LedgerKind
-    var category: String
-    var note: String = ""
-    var date: Date = Date()
 }
 
 enum LedgerCatalog {
@@ -84,30 +72,114 @@ struct LedgerDayGroup: Identifiable {
 @MainActor
 final class LedgerModel: ObservableObject {
 
+    /// 展示用的有效账目（墓碑不展示）
     @Published private(set) var entries: [LedgerEntry] = []
+    /// 删除墓碑：保留下来才能把「删除」同步给另一台设备
+    private var tombstones: [LedgerEntry] = []
 
     private static let file = "ledger.json"
+    /// 应用远端合并时不要再广播回去，避免两台设备来回弹消息
+    private var applyingRemote = false
 
-    init() { reload() }
+    init() {
+        reload()
+        NotificationCenter.default.addObserver(
+            forName: .chatLedgerDidReceive, object: nil, queue: .main
+        ) { [weak self] notification in
+            guard let entries = notification.userInfo?["entries"] as? [LedgerEntry] else { return }
+            Task { @MainActor in self?.mergeRemote(entries) }
+        }
+    }
+
+    /// 主动向所有已连接设备请求账目；对方回推后会自动合并到本地
+    func refreshFromPeers() {
+        NotificationCenter.default.post(name: .chatLedgerRequestRefresh, object: self)
+    }
 
     func reload() {
-        entries = (LocalStore.load([LedgerEntry].self, Self.file) ?? [])
+        let all = LocalStore.load([LedgerEntry].self, Self.file) ?? []
+        tombstones = all.filter { $0.deleted }
+        entries = all.filter { !$0.deleted }
             .sorted { $0.date > $1.date }
     }
 
+    /// 远端账目按 ID 合并，谁新听谁的；删除墓碑也按时间比较
+    func mergeRemote(_ incoming: [LedgerEntry]) {
+        var changed = false
+        for entry in incoming {
+            if entry.deleted {
+                if let i = entries.firstIndex(where: { $0.id == entry.id }) {
+                    if entry.updatedAt > entries[i].updatedAt {
+                        entries.remove(at: i)
+                        changed = upsertTombstone(entry) || changed
+                    }
+                } else {
+                    changed = upsertTombstone(entry) || changed
+                }
+            } else if let i = entries.firstIndex(where: { $0.id == entry.id }) {
+                if entry.updatedAt > entries[i].updatedAt {
+                    entries[i] = entry
+                    changed = true
+                }
+            } else if let ti = tombstones.firstIndex(where: { $0.id == entry.id }) {
+                // 我删掉之后对方又改了：时间更新的那份生效，允许「复活」
+                if entry.updatedAt > tombstones[ti].updatedAt {
+                    tombstones.remove(at: ti)
+                    entries.append(entry)
+                    changed = true
+                }
+            } else {
+                entries.append(entry)
+                changed = true
+            }
+        }
+        guard changed else { return }
+        applyingRemote = true
+        sortAndPersist()
+        applyingRemote = false
+    }
+
+    @discardableResult
+    private func upsertTombstone(_ entry: LedgerEntry) -> Bool {
+        guard let old = tombstones.first(where: { $0.id == entry.id }) else {
+            tombstones.append(entry)
+            return true
+        }
+        guard entry.updatedAt > old.updatedAt else { return false }
+        tombstones.removeAll { $0.id == entry.id }
+        tombstones.append(entry)
+        return true
+    }
+
     func add(_ entry: LedgerEntry) {
-        entries.append(entry)
+        var fresh = entry
+        fresh.updatedAt = Date()
+        entries.append(fresh)
+        sortAndPersist()
+    }
+
+    func delete(_ entry: LedgerEntry) {
+        guard let i = entries.firstIndex(where: { $0.id == entry.id }) else { return }
+        var gone = entries[i]
+        gone.deleted = true
+        gone.updatedAt = Date()
+        entries.remove(at: i)
+        upsertTombstone(gone)
+        persist()
+    }
+
+    private func sortAndPersist() {
         entries.sort { $0.date > $1.date }
         persist()
     }
 
-    func delete(_ entry: LedgerEntry) {
-        entries.removeAll { $0.id == entry.id }
-        persist()
-    }
-
     private func persist() {
-        LocalStore.save(entries, Self.file)
+        let all = entries + tombstones
+        LocalStore.save(all, Self.file)
+        guard !applyingRemote else { return }
+        NotificationCenter.default.post(
+            name: .chatLedgerDidChange, object: self, userInfo: ["entries": all]
+        )
     }
 
     // MARK: 汇总
@@ -177,6 +249,7 @@ struct LedgerView: View {
         .sheet(isPresented: $showEditor) {
             LedgerEditor(model: model)
         }
+        .onAppear { model.refreshFromPeers() }
     }
 
     // MARK: 月份栏
@@ -244,7 +317,7 @@ struct LedgerView: View {
                 stat("结余", LedgerCatalog.money(income - expense),
                      income - expense < 0 ? Color.red : Color.orange)
             }
-            Text("共 \(model.entries(inMonthOf: monthDate).count) 笔 · 数据保存在本机")
+            Text("共 \(model.entries(inMonthOf: monthDate).count) 笔 · 局域网自动同步")
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -421,15 +494,43 @@ struct LedgerEditor: View {
             }
             .dismissKeyboardOnScroll()
             .navigationTitle("记一笔")
-            .toolbar {
-                ToolbarItem(placement: .navigation) {
-                    Button("取消") { dismiss() }
+            // macOS 的 sheet 没有工具栏，ToolbarItem(.primaryAction) 不会渲染，
+            // 必须放可见的底部按钮
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                HStack(spacing: 10) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Text("取消")
+                            .font(.system(size: 14, weight: .medium))
+                            .frame(maxWidth: .infinity, minHeight: 34)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(Color(nsColor: .controlBackgroundColor))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.cancelAction)
+
+                    Button {
+                        save()
+                    } label: {
+                        Text("保存")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(maxWidth: .infinity, minHeight: 34)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(amount > 0 ? Color.orange : Color(nsColor: .controlBackgroundColor))
+                            )
+                            .foregroundStyle(amount > 0 ? Color.white : Color.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(amount <= 0)
+                    .keyboardShortcut(.defaultAction)
                 }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("保存") { save() }
-                        .font(.system(size: 16, weight: .semibold))
-                        .disabled(amount <= 0)
-                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color(nsColor: .windowBackgroundColor))
             }
         }
         .onAppear { amountFocused = true }
@@ -437,6 +538,8 @@ struct LedgerEditor: View {
             let list = LedgerCatalog.categories(for: newKind)
             if !list.contains(category) { category = list[0] }
         }
+        // macOS 的 sheet 没有固有高度，ScrollView 撑不开就会被压扁：给一个明确尺寸
+        .frame(minWidth: 440, idealWidth: 460, minHeight: 560, idealHeight: 620)
     }
 
     // MARK: 金额

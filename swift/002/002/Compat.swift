@@ -41,6 +41,23 @@ extension View {
             self
         }
     }
+
+}
+
+/// 工具栏宿主：在 iOS 26 上给 ToolbarItem 去掉玻璃圆圈背景，低版本原样。
+/// 注意 sharedBackgroundVisibility 只能修饰 ToolbarContent（不能修饰内容 View），
+/// 而 toolbar builder 的条件语句要 iOS 16+，所以把分支放在 View 层做。
+struct PlainToolbar<Base: View, Items: ToolbarContent>: View {
+    let base: Base
+    @ToolbarContentBuilder let items: () -> Items
+
+    var body: some View {
+        if #available(iOS 26.0, *) {
+            base.toolbar { items().sharedBackgroundVisibility(.hidden) }
+        } else {
+            base.toolbar { items() }
+        }
+    }
 }
 
 

@@ -47,6 +47,35 @@ struct ContentView: View {
     /// 板块下拉面板
     @State private var showSections = false
 
+    // MARK: 板块顺序（长按拖动调整，持久化到 UserDefaults）
+
+    @AppStorage("sectionOrder") private var orderRaw = ""
+    /// 正在拖动的板块
+    @State private var dragSection: AppSection?
+    @State private var dragTranslation: CGSize = .zero
+    /// 各格子在下拉面板坐标系里的位置，用来判断拖到了谁头上
+    @State private var tileFrames: [AppSection: CGRect] = [:]
+
+    /// 用户排好的顺序（缺的板块自动补到末尾，容错旧数据）
+    private var orderedSections: [AppSection] {
+        var list = orderRaw.split(separator: ",").compactMap { AppSection(rawValue: String($0)) }
+        for s in AppSection.allCases where !list.contains(s) { list.append(s) }
+        return list.filter { AppSection.allCases.contains($0) }
+    }
+
+    /// 把 dragged 移到 target 前面，并持久化
+    private func moveSection(_ dragged: AppSection, before target: AppSection) {
+        var list = orderedSections
+        guard let ti = list.firstIndex(of: target), let di = list.firstIndex(of: dragged),
+              di != ti else { return }
+        list.remove(at: di)
+        let offset = di < ti ? -1 : 0
+        list.insert(dragged, at: ti + offset)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            orderRaw = list.map(\.rawValue).joined(separator: ",")
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
@@ -137,29 +166,31 @@ struct ContentView: View {
         .padding(.bottom, 8)
     }
 
-    // MARK: 板块内容（可左右滑动切换）
+    // MARK: 板块内容（可左右滑动切换，顺序跟随用户排序）
 
     private var sections: some View {
         TabView(selection: $section) {
-            AppRankingView(model: ranking)
-                .tag(AppSection.ranking)
-            CalculatorView(model: model)
-                .tag(AppSection.calculator)
-            CalendarView()
-                .tag(AppSection.calendar)
-            WeatherView(model: weather)
-                .tag(AppSection.weather)
-            NotesView(model: notes)
-                .tag(AppSection.notes)
-            LedgerView(model: ledger)
-                .tag(AppSection.ledger)
-            LANChatView(model: chat)
-                .tag(AppSection.chat)
+            ForEach(orderedSections) { s in
+                page(for: s).tag(s)
+            }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
     }
 
-    // MARK: 板块下拉面板
+    @ViewBuilder
+    private func page(for s: AppSection) -> some View {
+        switch s {
+        case .ranking: AppRankingView(model: ranking)
+        case .calculator: CalculatorView(model: model)
+        case .calendar: CalendarView()
+        case .weather: WeatherView(model: weather)
+        case .notes: NotesView(model: notes)
+        case .ledger: LedgerView(model: ledger)
+        case .chat: LANChatView(model: chat)
+        }
+    }
+
+    // MARK: 板块下拉面板（长按拖动调整顺序）
 
     private var sectionPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -168,40 +199,15 @@ struct ContentView: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
-                Text("共 \(AppSection.allCases.count) 个")
+                Text("长按拖动可排序 · 共 \(orderedSections.count) 个")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             }
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 86), spacing: 10)],
                       alignment: .leading, spacing: 10) {
-                ForEach(AppSection.allCases) { s in
-                    Button {
-                        select(s)
-                    } label: {
-                        VStack(spacing: 8) {
-                            Image(systemName: s.icon)
-                                .font(.system(size: 21, weight: .semibold))
-                            Text(s.rawValue)
-                                .font(.system(size: 13, weight: .medium))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                                .fill(s == section
-                                      ? Color.orange.opacity(0.14)
-                                      : Color(.systemGray6))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                                .stroke(s == section ? Color.orange : Color.clear, lineWidth: 1.5)
-                        )
-                        .foregroundStyle(s == section ? Color.orange : Color.primary)
-                    }
-                    .buttonStyle(.plain)
+                ForEach(orderedSections) { s in
+                    tile(s)
                 }
             }
         }
@@ -211,6 +217,97 @@ struct ContentView: View {
                 .fill(Color(.systemBackground))
                 .shadow(color: Color.black.opacity(0.15), radius: 20, x: 0, y: 8)
         )
+        .coordinateSpace(name: "panelSpace")
+        .onPreferenceChange(TileFramesKey.self) { entries in
+            tileFrames = Dictionary(entries.map { ($0.section, $0.frame) },
+                                    uniquingKeysWith: { _, new in new })
+        }
+    }
+
+    private func tile(_ s: AppSection) -> some View {
+        let isDragging = dragSection == s
+        return VStack(spacing: 8) {
+            Image(systemName: s.icon)
+                .font(.system(size: 21, weight: .semibold))
+            Text(s.rawValue)
+                .font(.system(size: 13, weight: .medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(tileBackground(s))
+        .overlay(tileOverlay(s))
+        .foregroundStyle(s == section ? Color.orange : Color.primary)
+        .scaleEffect(isDragging ? 1.08 : 1)
+        .shadow(color: isDragging ? Color.orange.opacity(0.35) : .clear,
+                radius: 10, x: 0, y: 4)
+        .zIndex(isDragging ? 1 : 0)
+        .offset(isDragging ? dragTranslation : .zero)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: TileFramesKey.self,
+                                       value: [TileFramesKey.Entry(section: s,
+                                                                   frame: geo.frame(in: .named("panelSpace")))])
+            }
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { select(s) }
+        .accessibilityLabel("切换板块，当前 \(section.rawValue)")
+        .simultaneousGesture(tileDragGesture(s))
+    }
+
+    private func tileBackground(_ s: AppSection) -> some View {
+        let selected = s == section
+        return RoundedRectangle(cornerRadius: 15, style: .continuous)
+            .fill(selected ? Color.orange.opacity(0.14) : Color(.systemGray6))
+    }
+
+    private func tileOverlay(_ s: AppSection) -> some View {
+        let selected = s == section
+        return RoundedRectangle(cornerRadius: 15, style: .continuous)
+            .stroke(selected ? Color.orange : Color.clear, lineWidth: 1.5)
+    }
+
+    private func tileDragGesture(_ s: AppSection) -> some Gesture {
+        LongPressGesture(minimumDuration: 0.3)
+            .sequenced(before: DragGesture(minimumDistance: 0,
+                                           coordinateSpace: .named("panelSpace")))
+            .onChanged { value in
+                self.handleTileDrag(value, for: s)
+            }
+            .onEnded { _ in
+                self.endDrag()
+            }
+    }
+
+    private func handleTileDrag(
+        _ value: SequenceGesture<LongPressGesture, DragGesture>.Value,
+        for s: AppSection
+    ) {
+        switch value {
+        case .first(let pressed):
+            if pressed {
+                dragSection = s
+                UISelectionFeedbackGenerator().selectionChanged()
+            }
+        case .second(_, let drag):
+            guard let drag else { break }
+            dragSection = s
+            dragTranslation = drag.translation
+            // 拖到别的格子上：实时换位
+            if let target = tileFrames.first(where: { $0.value.contains(drag.location) })?.key,
+               target != s {
+                moveSection(s, before: target)
+            }
+        }
+    }
+
+    private func endDrag() {
+        guard dragSection != nil else { return }
+        UISelectionFeedbackGenerator().selectionChanged()
+        dragSection = nil
+        dragTranslation = .zero
     }
 
     private func togglePanel(_ open: Bool) {
@@ -236,6 +333,18 @@ struct ContentView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             section = s
         }
+    }
+}
+
+/// 收集面板里每个格子在其坐标系中的位置（拖动排序用）
+struct TileFramesKey: PreferenceKey {
+    struct Entry: Equatable {
+        let section: AppSection
+        let frame: CGRect
+    }
+    static var defaultValue: [Entry] = []
+    static func reduce(value: inout [Entry], nextValue: () -> [Entry]) {
+        value.append(contentsOf: nextValue())
     }
 }
 

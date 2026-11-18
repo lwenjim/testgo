@@ -1,0 +1,1294 @@
+//
+//  MarkdownEditorKit.swift
+//  神算子（iPhone / Mac 共用）
+//
+//  笔记的 Markdown 渲染内核：
+//  · MarkdownBlock：把纯文本切成块（标题 / 段落 / 列表 / 待办 / 引用 / 代码块 / 分隔线）
+//  · MarkdownRender：把块拼成一份 NSAttributedString（排版信息都在里面）
+//  · MarkdownPreview：只读文本视图展示，可以跨段落、跨行自由选中复制
+//  · MarkdownEditing：编辑区跨行套格式时用的文本处理
+//
+//  两端共用同一份解析与样式，保证 iPhone 与 Mac 的预览效果一致。
+//
+
+import SwiftUI
+
+#if os(macOS)
+import AppKit
+typealias PlatformFont = NSFont
+typealias PlatformColor = NSColor
+#else
+import UIKit
+typealias PlatformFont = UIFont
+typealias PlatformColor = UIColor
+#endif
+
+// MARK: - 块解析
+
+enum MarkdownBlock {
+    case heading(Int, String)
+    case paragraph(String)
+    case bullet(String, Int)        // 内容、缩进层级（0…3）
+    case numbered(String, String)   // 序号原文（"1."）、内容
+    case todo(Bool, String)
+    case quote(String)
+    case code(String, String)       // 语言、代码正文（围栏标记已去掉）
+    case divider
+    case blank
+
+    static func parse(_ text: String) -> [MarkdownBlock] {
+        var blocks: [MarkdownBlock] = []
+        var codeLines: [String] = []
+        var codeLanguage = ""
+        var inCode = false
+
+        for raw in text.components(separatedBy: "\n") {
+            let trimmed = raw.trimmingCharacters(in: .whitespaces)
+
+            // 代码围栏：``` 或 ~~~ 开头都算
+            if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                if inCode {
+                    blocks.append(.code(codeLanguage, codeLines.joined(separator: "\n")))
+                    codeLines.removeAll()
+                    codeLanguage = ""
+                    inCode = false
+                } else {
+                    // 围栏后面跟的就是语言名：```swift / ```python
+                    let fence = trimmed.drop(while: { $0 == "`" || $0 == "~" })
+                    codeLanguage = fence.trimmingCharacters(in: .whitespaces)
+                    inCode = true
+                }
+                continue
+            }
+            if inCode {
+                codeLines.append(raw)
+                continue
+            }
+
+            if trimmed.isEmpty { blocks.append(.blank); continue }
+            if trimmed == "---" || trimmed == "***" || trimmed == "___" {
+                blocks.append(.divider); continue
+            }
+
+            // 标题
+            if let r = trimmed.range(of: #"^#{1,6} "#, options: .regularExpression) {
+                let level = trimmed[trimmed.startIndex..<r.upperBound].filter { $0 == "#" }.count
+                blocks.append(.heading(level, String(trimmed[r.upperBound...])))
+                continue
+            }
+
+            // 待办：- [ ] / - [x] / * [ ]
+            if let r = trimmed.range(of: #"^[-*] \[( |x|X)\] "#, options: .regularExpression) {
+                let marker = String(trimmed[r])
+                let done = marker.contains("x") || marker.contains("X")
+                blocks.append(.todo(done, String(trimmed[r.upperBound...])))
+                continue
+            }
+
+            // 引用
+            if trimmed.hasPrefix("> ") || trimmed == ">" {
+                blocks.append(.quote(trimmed == ">" ? "" : String(trimmed.dropFirst(2))))
+                continue
+            }
+
+            // 有序列表
+            if let r = trimmed.range(of: #"^\d+\. "#, options: .regularExpression) {
+                let num = String(trimmed[trimmed.startIndex..<r.upperBound])
+                    .trimmingCharacters(in: .whitespaces)
+                blocks.append(.numbered(num, String(trimmed[r.upperBound...])))
+                continue
+            }
+
+            // 无序列表（按前导空格算层级）
+            if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") || trimmed.hasPrefix("+ ") {
+                let indent = raw.prefix { $0 == " " }.count / 2
+                blocks.append(.bullet(String(trimmed.dropFirst(2)), min(indent, 3)))
+                continue
+            }
+
+            blocks.append(.paragraph(trimmed))
+        }
+
+        if inCode, !codeLines.isEmpty {
+            blocks.append(.code(codeLanguage, codeLines.joined(separator: "\n")))
+        }
+        return blocks
+    }
+}
+
+// MARK: - 样式
+
+enum MarkdownStyle {
+
+    static let label: PlatformColor = {
+        #if os(macOS)
+        return NSColor.labelColor
+        #else
+        return UIColor.label
+        #endif
+    }()
+
+    static let secondary: PlatformColor = {
+        #if os(macOS)
+        return NSColor.secondaryLabelColor
+        #else
+        return UIColor.secondaryLabel
+        #endif
+    }()
+    static let accent: PlatformColor = {
+        #if os(macOS)
+        return NSColor.controlAccentColor
+        #else
+        return UIColor.tintColor
+        #endif
+    }()
+
+    static func font(_ size: CGFloat, bold: Bool = false,
+                     italic: Bool = false, mono: Bool = false) -> PlatformFont {
+        #if os(macOS)
+        var f: PlatformFont = mono
+            ? NSFont.monospacedSystemFont(ofSize: size, weight: bold ? .semibold : .regular)
+            : NSFont.systemFont(ofSize: size, weight: bold ? .semibold : .regular)
+        if italic {
+            f = NSFontManager.shared.convert(f, toHaveTrait: .italicFontMask)
+        }
+        return f
+        #else
+        var f: PlatformFont = mono
+            ? UIFont.monospacedSystemFont(ofSize: size, weight: bold ? .semibold : .regular)
+            : UIFont.systemFont(ofSize: size, weight: bold ? .semibold : .regular)
+        if italic, let d = f.fontDescriptor.withSymbolicTraits(.traitItalic) {
+            f = UIFont(descriptor: d, size: size)
+        }
+        return f
+        #endif
+    }
+
+    static func paragraph(lineSpacing: CGFloat = 3,
+                          before: CGFloat = 0,
+                          after: CGFloat = 0,
+                          headIndent: CGFloat = 0,
+                          firstLineIndent: CGFloat? = nil,
+                          tabAt: CGFloat? = nil) -> NSParagraphStyle {
+        let p = NSMutableParagraphStyle()
+        p.lineSpacing = lineSpacing
+        p.paragraphSpacingBefore = before
+        p.paragraphSpacing = after
+        p.headIndent = headIndent
+        p.firstLineHeadIndent = firstLineIndent ?? headIndent
+        if let tabAt {
+            p.tabStops = [NSTextTab(textAlignment: .left, location: tabAt, options: [:])]
+        }
+        return p
+    }
+}
+
+// MARK: - 代码配色主题（跟随浅色 / 深色外观）
+
+enum CodeTheme {
+    static let background = dynamic(light: "#F7F8FA", dark: "#282C34")
+    static let border = dynamic(light: "#E3E6EB", dark: "#3B4048")
+    static let plain = dynamic(light: "#3B4048", dark: "#ABB2BF")
+    static let keyword = dynamic(light: "#A626A4", dark: "#C678DD")
+    static let string = dynamic(light: "#3E9B4F", dark: "#98C379")
+    static let comment = dynamic(light: "#9AA0A6", dark: "#7F848E")
+    static let number = dynamic(light: "#B76B01", dark: "#D19A66")
+    static let type = dynamic(light: "#B8860B", dark: "#E5C07B")
+    static let function = dynamic(light: "#2F6FEB", dark: "#61AFEF")
+    static let annotation = dynamic(light: "#C18401", dark: "#E5C07B")
+    static let punctuation = dynamic(light: "#767C88", dark: "#9AA0AA")
+
+    static func hex(_ value: String, alpha: CGFloat = 1) -> PlatformColor {
+        var v: UInt64 = 0
+        Scanner(string: value.replacingOccurrences(of: "#", with: "")).scanHexInt64(&v)
+        let r = CGFloat((v >> 16) & 0xFF) / 255
+        let g = CGFloat((v >> 8) & 0xFF) / 255
+        let b = CGFloat(v & 0xFF) / 255
+        #if os(macOS)
+        return NSColor(srgbRed: r, green: g, blue: b, alpha: alpha)
+        #else
+        return UIColor(red: r, green: g, blue: b, alpha: alpha)
+        #endif
+    }
+
+    static func dynamic(light: String, dark: String) -> PlatformColor {
+        #if os(macOS)
+        return NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            return CodeTheme.hex(isDark ? dark : light)
+        }
+        #else
+        return UIColor { trait in
+            CodeTheme.hex(trait.userInterfaceStyle == .dark ? dark : light)
+        }
+        #endif
+    }
+}
+
+// MARK: - 语言语法定义
+
+private struct CodeLanguage {
+    var lineComments: [String] = ["//"]
+    var blockComment: (String, String)? = ("/*", "*/")
+    var quotes: [Character] = ["\""]
+    var keywords: Set<String> = []
+    var upperIsType = false
+    var caseInsensitive = false
+    var markup = false
+}
+
+private enum CodeLanguageSpec {
+
+    static func make(_ raw: String) -> CodeLanguage {
+        let name = raw.lowercased().trimmingCharacters(in: .whitespaces)
+        switch name {
+        case "swift":
+            return CodeLanguage(quotes: ["\"", "'"], keywords: swiftKeywords, upperIsType: true)
+
+        case "objc", "objective-c", "objectivec", "m", "mm":
+            return CodeLanguage(keywords: cKeywords.union(["@interface", "@implementation", "@end", "@property",
+                                                           "self", "super", "nil", "YES", "NO", "BOOL", "id"]),
+                                upperIsType: true)
+
+        case "py", "python", "python3", "ipython":
+            return CodeLanguage(lineComments: ["#"], blockComment: nil,
+                                quotes: ["\"", "'"], keywords: pythonKeywords, upperIsType: true)
+
+        case "js", "javascript", "jsx", "node", "ts", "typescript", "tsx":
+            return CodeLanguage(quotes: ["\"", "'", "`"], keywords: jsKeywords, upperIsType: true)
+
+        case "json", "jsonc":
+            return CodeLanguage(lineComments: [], blockComment: nil,
+                                quotes: ["\""], keywords: ["true", "false", "null"])
+
+        case "sh", "bash", "zsh", "shell", "console", "terminal":
+            return CodeLanguage(lineComments: ["#"], blockComment: nil,
+                                quotes: ["\"", "'"], keywords: bashKeywords)
+
+        case "html", "xml", "svg", "vue", "xhtml":
+            var lang = CodeLanguage()
+            lang.markup = true
+            return lang
+
+        case "css", "scss", "less", "sass":
+            return CodeLanguage(keywords: cssKeywords, caseInsensitive: true)
+
+        case "sql", "mysql", "postgres", "postgresql", "sqlite":
+            return CodeLanguage(lineComments: ["--", "#"], blockComment: nil,
+                                quotes: ["'", "\""], keywords: sqlKeywords, caseInsensitive: true)
+
+        case "go", "golang":
+            return CodeLanguage(quotes: ["\"", "'", "`"], keywords: goKeywords, upperIsType: true)
+
+        case "rs", "rust":
+            return CodeLanguage(quotes: ["\"", "'"], keywords: rustKeywords, upperIsType: true)
+
+        case "java", "kt", "kotlin", "kts", "scala", "groovy", "gradle":
+            return CodeLanguage(quotes: ["\"", "'"], keywords: javaKeywords, upperIsType: true)
+
+        case "c", "h", "cpp", "c++", "cc", "hpp", "cxx", "arduino":
+            return CodeLanguage(quotes: ["\"", "'"], keywords: cKeywords, upperIsType: true)
+
+        case "", "text", "txt", "plain", "plaintext":
+            return CodeLanguage(lineComments: [], blockComment: nil, quotes: [])
+
+        default:
+            return CodeLanguage(quotes: ["\"", "'"], keywords: [], upperIsType: true)
+        }
+    }
+
+    // MARK: 关键字表
+
+    private static let swiftKeywords: Set<String> = [
+        "let", "var", "func", "class", "struct", "enum", "protocol", "extension", "import",
+        "return", "if", "else", "guard", "for", "while", "repeat", "switch", "case", "default",
+        "break", "continue", "throw", "throws", "rethrows", "try", "catch", "defer", "do", "in",
+        "where", "as", "is", "nil", "true", "false", "self", "super", "init", "deinit",
+        "public", "private", "fileprivate", "internal", "open", "static", "final", "override",
+        "lazy", "weak", "unowned", "mutating", "nonmutating", "required", "convenience",
+        "subscript", "operator", "typealias", "associatedtype", "some", "any", "await", "async",
+        "actor", "get", "set", "willSet", "didSet", "inout", "borrowing", "consuming"
+    ]
+
+    private static let pythonKeywords: Set<String> = [
+        "def", "class", "return", "if", "elif", "else", "for", "while", "in", "not", "and", "or",
+        "is", "None", "True", "False", "import", "from", "as", "with", "try", "except", "finally",
+        "raise", "lambda", "yield", "global", "nonlocal", "pass", "break", "continue", "assert",
+        "async", "await", "del", "self", "print", "range", "len"
+    ]
+
+    private static let jsKeywords: Set<String> = [
+        "let", "const", "var", "function", "return", "if", "else", "for", "while", "do", "switch",
+        "case", "break", "continue", "new", "class", "extends", "import", "export", "default",
+        "from", "async", "await", "try", "catch", "finally", "throw", "typeof", "instanceof",
+        "in", "of", "this", "super", "null", "undefined", "true", "false", "interface", "type",
+        "enum", "implements", "namespace", "public", "private", "protected", "readonly", "static",
+        "get", "set", "yield", "delete", "void", "as", "satisfies", "declare"
+    ]
+
+    private static let bashKeywords: Set<String> = [
+        "if", "then", "else", "elif", "fi", "for", "do", "done", "while", "until", "case", "esac",
+        "function", "return", "export", "local", "echo", "cd", "source", "alias", "set", "unset",
+        "readonly", "shift", "exit", "sudo", "grep", "awk", "sed", "curl", "cat", "chmod", "mkdir"
+    ]
+
+    private static let sqlKeywords: Set<String> = [
+        "select", "from", "where", "insert", "into", "values", "update", "set", "delete", "create",
+        "table", "drop", "alter", "index", "join", "left", "right", "inner", "outer", "full", "on",
+        "group", "by", "order", "having", "limit", "offset", "and", "or", "not", "null", "is",
+        "like", "in", "between", "as", "distinct", "count", "sum", "avg", "min", "max", "primary",
+        "key", "foreign", "references", "default", "union", "case", "when", "then", "end"
+    ]
+
+    private static let goKeywords: Set<String> = [
+        "func", "var", "const", "type", "struct", "interface", "package", "import", "return",
+        "if", "else", "for", "range", "switch", "case", "default", "break", "continue", "go",
+        "defer", "chan", "map", "nil", "true", "false", "make", "new", "select", "fallthrough"
+    ]
+
+    private static let rustKeywords: Set<String> = [
+        "fn", "let", "mut", "const", "struct", "enum", "trait", "impl", "mod", "use", "pub",
+        "return", "if", "else", "match", "for", "while", "loop", "in", "where", "as", "self",
+        "Self", "true", "false", "Some", "None", "Ok", "Err", "crate", "super", "move", "async",
+        "await", "dyn", "ref", "unsafe"
+    ]
+
+    private static let javaKeywords: Set<String> = [
+        "class", "interface", "enum", "fun", "val", "var", "if", "else", "for", "while", "return",
+        "public", "private", "protected", "static", "final", "void", "int", "long", "double",
+        "float", "boolean", "char", "byte", "short", "new", "this", "super", "try", "catch",
+        "finally", "throw", "throws", "import", "package", "object", "companion", "override",
+        "suspend", "data", "sealed", "when", "is", "as", "in", "null", "true", "false", "extends",
+        "implements", "abstract", "synchronized", "volatile", "transient", "instanceof"
+    ]
+
+    private static let cKeywords: Set<String> = [
+        "int", "char", "float", "double", "void", "long", "short", "unsigned", "signed", "struct",
+        "class", "union", "enum", "typedef", "static", "const", "return", "if", "else", "for",
+        "while", "do", "switch", "case", "default", "break", "continue", "sizeof", "include",
+        "define", "namespace", "template", "public", "private", "protected", "using", "new",
+        "delete", "NULL", "nullptr", "true", "false", "auto", "extern", "volatile", "inline"
+    ]
+
+    private static let cssKeywords: Set<String> = [
+        "color", "background", "background-color", "margin", "padding", "border", "border-radius",
+        "display", "flex", "grid", "position", "top", "left", "right", "bottom", "width", "height",
+        "font", "font-size", "font-weight", "line-height", "text-align", "opacity", "transform",
+        "transition", "animation", "box-shadow", "overflow", "z-index", "gap", "justify-content",
+        "align-items", "important", "none", "auto", "inherit", "absolute", "relative", "fixed"
+    ]
+}
+
+// MARK: - 语言自动识别
+
+/// 没写语言名的代码块：按特征词打分猜一个语言，猜不出来就当纯文本
+enum CodeLanguageDetector {
+
+    static func detect(_ code: String) -> String {
+        let text = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count > 3 else { return "" }
+        let lower = text.lowercased()
+        var scores: [String: Double] = [:]
+
+        func add(_ language: String, _ token: String, _ weight: Double, ignoreCase: Bool = false) {
+            let hay = ignoreCase ? lower : text
+            let needle = ignoreCase ? token.lowercased() : token
+            guard !needle.isEmpty else { return }
+            let hits = min(hay.components(separatedBy: needle).count - 1, 3)
+            if hits > 0 { scores[language, default: 0] += weight * Double(hits) }
+        }
+
+        // Swift
+        add("swift", "import SwiftUI", 8); add("swift", "import Foundation", 6)
+        add("swift", "func ", 3); add("swift", "guard let", 5); add("swift", "var body", 6)
+        add("swift", "@State", 4); add("swift", "@Published", 4); add("swift", "@ObservedObject", 4)
+        add("swift", "struct ", 2); add("swift", "throws", 2); add("swift", "-> ", 1.5)
+        add("swift", "let ", 1.5); add("swift", "self.", 1); add("swift", "try ", 1.5)
+        add("swift", "Optional<", 3); add("swift", "some View", 5)
+
+        // Python
+        add("python", "def ", 4); add("python", "elif ", 5); add("python", "self.", 2)
+        add("python", "None", 2); add("python", "__init__", 6); add("python", "lambda ", 4)
+        add("python", "range(", 3); add("python", "print(", 1.5); add("python", "import ", 1.5)
+        add("python", "True", 1); add("python", "False", 1); add("python", "**kwargs", 5)
+        add("python", "\n    ", 0.4)
+
+        // JavaScript / TypeScript
+        add("javascript", "=> ", 4); add("javascript", "=>", 2)
+        add("javascript", "console.", 6); add("javascript", "const ", 2.5)
+        add("javascript", "function ", 2); add("javascript", "require(", 4)
+        add("javascript", "===", 3); add("javascript", "async ", 2); add("javascript", "await ", 2)
+        add("javascript", "export ", 2); add("javascript", "document.", 3)
+        add("javascript", "querySelector", 4); add("javascript", "null", 1)
+        add("typescript", "interface ", 4); add("typescript", ": string", 4)
+        add("typescript", ": number", 4); add("typescript", "type ", 2)
+        add("typescript", "as const", 4); add("typescript", "?: ", 2)
+
+        // Shell
+        add("bash", "#!/", 8); add("bash", "echo ", 3); add("bash", "fi\n", 4)
+        add("bash", " fi", 3); add("bash", "then\n", 2); add("bash", "$(", 3)
+        add("bash", "export ", 2); add("bash", "sudo ", 4); add("bash", "if [", 4)
+        add("bash", "\"$", 2); add("bash", "${", 2); add("bash", "cd ", 1.5)
+
+        // SQL
+        add("sql", "select ", 5, ignoreCase: true); add("sql", " from ", 4, ignoreCase: true)
+        add("sql", " where ", 4, ignoreCase: true); add("sql", "insert into", 6, ignoreCase: true)
+        add("sql", "create table", 6, ignoreCase: true); add("sql", "order by", 3, ignoreCase: true)
+        add("sql", "group by", 3, ignoreCase: true); add("sql", " join ", 3, ignoreCase: true)
+        add("sql", "update ", 2, ignoreCase: true); add("sql", "delete from", 5, ignoreCase: true)
+        add("sql", "values (", 3, ignoreCase: true)
+
+        // HTML / XML
+        add("html", "</", 3); add("html", "<div", 6); add("html", "<!doctype", 8)
+        add("html", "<span", 5); add("html", "<html", 8); add("html", "<a href", 6)
+        add("html", "class=", 3); add("html", "<p>", 3); add("html", "<body", 6)
+
+        // CSS
+        add("css", "color:", 3); add("css", "padding:", 3); add("css", "margin:", 3)
+        add("css", "display:", 3); add("css", "@media", 6); add("css", "font-size", 3)
+        add("css", "border-radius", 4); add("css", "px;", 2); add("css", "flex", 1)
+
+        // Go
+        add("go", "package ", 8); add("go", "fmt.", 6); add("go", ":=", 5)
+        add("go", "defer ", 3); add("go", "chan ", 3); add("go", "err != nil", 5)
+        add("go", "go func", 5)
+
+        // Rust
+        add("rust", "fn ", 4); add("rust", "let mut ", 6); add("rust", "impl ", 4)
+        add("rust", "pub fn", 6); add("rust", "&mut ", 3); add("rust", "unwrap()", 5)
+        add("rust", "println!", 5); add("rust", "Some(", 2)
+
+        // Java
+        add("java", "public class", 8); add("java", "System.out", 6); add("java", "@Override", 6)
+        add("java", "import java", 8); add("java", "String[]", 4); add("java", "private ", 2)
+        add("java", "void ", 2); add("java", "new ", 1)
+
+        // Kotlin
+        add("kotlin", "fun ", 4); add("kotlin", "val ", 3); add("kotlin", "println(", 3)
+        add("kotlin", "data class", 6); add("kotlin", "companion object", 6)
+        add("kotlin", ": Int", 3)
+
+        // C / C++ / Objective-C
+        add("c", "#include", 8); add("c", "#define", 6); add("c", "int main", 8)
+        add("c", "printf(", 5); add("c", "std::", 6); add("c", "cout <<", 6)
+        add("c", "NULL", 2); add("c", "size_t", 4)
+
+        // JSON：整体是 {…} / […] 且全是 "key": value 的形状
+        if (text.hasPrefix("{") && text.hasSuffix("}")) || (text.hasPrefix("[") && text.hasSuffix("]")) {
+            let quotedKeys = text.components(separatedBy: "\":").count - 1
+            if quotedKeys > 0 && !text.contains(";") && !text.contains("=") {
+                scores["json", default: 0] += 6 + Double(min(quotedKeys, 3))
+            }
+        }
+
+        // JS / TS 合并判断：有 TS 特征才算 TypeScript，否则归到 JavaScript
+        let jsScore = scores["javascript"] ?? 0
+        let tsScore = scores["typescript"] ?? 0
+        if jsScore > 0 || tsScore > 0 {
+            scores["javascript"] = nil
+            scores["typescript"] = nil
+            if tsScore > 0, tsScore >= jsScore * 0.8 {
+                scores["typescript"] = max(jsScore, tsScore) + tsScore * 0.5
+            } else {
+                scores["javascript"] = jsScore
+            }
+        }
+
+        guard let best = scores.max(by: { $0.value < $1.value }), best.value >= 5 else { return "" }
+        // 分数太接近时不猜（避免把 Swift 认成 Kotlin 之类）
+        let second = scores.filter { $0.key != best.key }.map { $0.value }.max() ?? 0
+        guard best.value >= second * 1.25 else { return "" }
+        return best.key
+    }
+}
+
+// MARK: - 语法高亮
+
+enum CodeHighlighter {
+
+    static func attributed(_ code: String, language: String, size: CGFloat) -> NSAttributedString {
+        let spec = CodeLanguageSpec.make(language)
+        if spec.markup { return markup(code, size: size) }
+
+        let base = MarkdownStyle.font(size, mono: true)
+        let chars = Array(code)
+        let out = NSMutableAttributedString()
+        var plain = ""
+
+        func flush() {
+            guard !plain.isEmpty else { return }
+            out.append(NSAttributedString(string: plain,
+                                          attributes: [.font: base, .foregroundColor: CodeTheme.plain]))
+            plain.removeAll(keepingCapacity: true)
+        }
+        func emit(_ text: String, _ color: PlatformColor, italic: Bool = false) {
+            flush()
+            out.append(NSAttributedString(string: text, attributes: [
+                .font: italic ? MarkdownStyle.font(size, italic: true, mono: true) : base,
+                .foregroundColor: color
+            ]))
+        }
+
+        var i = 0
+        while i < chars.count {
+            let c = chars[i]
+
+            // 块注释 /* … */
+            if let (open, close) = spec.blockComment, matches(open, chars, i) {
+                let stop = find(close, chars, from: i + open.count).map { $0 + close.count } ?? chars.count
+                emit(String(chars[i..<stop]), CodeTheme.comment, italic: true)
+                i = stop
+                continue
+            }
+
+            // 行注释 // 或 # 或 --
+            if let prefix = spec.lineComments.first(where: { matches($0, chars, i) }) {
+                var stop = i
+                while stop < chars.count, chars[stop] != "\n" { stop += 1 }
+                emit(String(chars[i..<stop]), CodeTheme.comment, italic: true)
+                i = stop
+                _ = prefix
+                continue
+            }
+
+            // 字符串
+            if spec.quotes.contains(c) {
+                var stop = i + 1
+                var escaped = false
+                while stop < chars.count {
+                    let ch = chars[stop]
+                    if escaped { escaped = false; stop += 1; continue }
+                    if ch == "\\" { escaped = true; stop += 1; continue }
+                    if ch == c { stop += 1; break }
+                    if ch == "\n" { break }
+                    stop += 1
+                }
+                emit(String(chars[i..<min(stop, chars.count)]), CodeTheme.string)
+                i = min(stop, chars.count)
+                continue
+            }
+
+            // 数字
+            if c.isNumber {
+                var stop = i
+                while stop < chars.count, chars[stop].isHexDigit || chars[stop] == "." || chars[stop] == "_" {
+                    stop += 1
+                }
+                emit(String(chars[i..<stop]), CodeTheme.number)
+                i = stop
+                continue
+            }
+
+            // 注解 / 装饰器 @Name
+            if c == "@", i + 1 < chars.count, isIdentStart(chars[i + 1]) {
+                var stop = i + 1
+                while stop < chars.count, isIdentBody(chars[stop]) { stop += 1 }
+                emit(String(chars[i..<stop]), CodeTheme.annotation)
+                i = stop
+                continue
+            }
+
+            // 标识符：关键字 / 类型 / 函数调用 / 普通
+            if isIdentStart(c) {
+                var stop = i
+                while stop < chars.count, isIdentBody(chars[stop]) { stop += 1 }
+                let word = String(chars[i..<stop])
+                let lookup = spec.caseInsensitive ? word.lowercased() : word
+                var look = stop
+                while look < chars.count, chars[look] == " " { look += 1 }
+                let isCall = look < chars.count && chars[look] == "("
+
+                if spec.keywords.contains(lookup) {
+                    emit(word, CodeTheme.keyword)
+                } else if spec.upperIsType, let first = word.first, first.isUppercase {
+                    emit(word, CodeTheme.type)
+                } else if isCall {
+                    emit(word, CodeTheme.function)
+                } else {
+                    plain += word
+                }
+                i = stop
+                continue
+            }
+
+            // 标点
+            if "{}()[];,.:=+-*/%<>!&|^~?".contains(c) {
+                emit(String(c), CodeTheme.punctuation)
+                i += 1
+                continue
+            }
+
+            plain.append(c)
+            i += 1
+        }
+
+        flush()
+        return out
+    }
+
+    // MARK: 标记语言（HTML / XML）
+
+    private static func markup(_ code: String, size: CGFloat) -> NSAttributedString {
+        let base = MarkdownStyle.font(size, mono: true)
+        let out = NSMutableAttributedString()
+        let chars = Array(code)
+        var plain = ""
+
+        func flush() {
+            guard !plain.isEmpty else { return }
+            out.append(NSAttributedString(string: plain,
+                                          attributes: [.font: base, .foregroundColor: CodeTheme.plain]))
+            plain.removeAll(keepingCapacity: true)
+        }
+        func emit(_ text: String, _ color: PlatformColor, italic: Bool = false) {
+            flush()
+            out.append(NSAttributedString(string: text, attributes: [
+                .font: italic ? MarkdownStyle.font(size, italic: true, mono: true) : base,
+                .foregroundColor: color
+            ]))
+        }
+
+        var i = 0
+        while i < chars.count {
+            // 注释 <!-- … -->
+            if matches("<!--", chars, i), let stop = find("-->", chars, from: i + 4) {
+                emit(String(chars[i..<(stop + 3)]), CodeTheme.comment, italic: true)
+                i = stop + 3
+                continue
+            }
+            guard chars[i] == "<" else {
+                plain.append(chars[i]); i += 1; continue
+            }
+            var stop = i
+            var quote: Character?
+            while stop < chars.count {
+                let ch = chars[stop]
+                if let q = quote {
+                    if ch == q { quote = nil }
+                } else if ch == "\"" || ch == "'" {
+                    quote = ch
+                } else if ch == ">" {
+                    stop += 1
+                    break
+                }
+                stop += 1
+            }
+            let tag = String(chars[i..<min(stop, chars.count)])
+            emitTag(tag, size: size, emit: emit)
+            i = min(stop, chars.count)
+        }
+        flush()
+        return out
+    }
+
+    private static func emitTag(_ tag: String,
+                                size: CGFloat,
+                                emit: (String, PlatformColor, Bool) -> Void) {
+        let chars = Array(tag)
+        var i = 0
+        while i < chars.count {
+            let c = chars[i]
+            if c == "\"" || c == "'" {
+                var stop = i + 1
+                while stop < chars.count, chars[stop] != c { stop += 1 }
+                let end = min(stop + 1, chars.count)
+                emit(String(chars[i..<end]), CodeTheme.string, false)
+                i = end
+                continue
+            }
+            if c == "<" || c == ">" || c == "/" {
+                emit(String(c), CodeTheme.punctuation, false)
+                i += 1
+                continue
+            }
+            if isIdentStart(c) {
+                var stop = i
+                while stop < chars.count, isIdentBody(chars[stop]) || chars[stop] == "-" || chars[stop] == ":" {
+                    stop += 1
+                }
+                let word = String(chars[i..<stop])
+                // 紧跟在 < 或 </ 后面的是标签名
+                let isTagName = i > 0 && (chars[i - 1] == "<" || (chars[i - 1] == "/" && i > 1 && chars[i - 2] == "<"))
+                emit(word, isTagName ? CodeTheme.keyword : CodeTheme.type, false)
+                i = stop
+                continue
+            }
+            emit(String(c), CodeTheme.plain, false)
+            i += 1
+        }
+    }
+
+    // MARK: 小工具
+
+    private static func isIdentStart(_ c: Character) -> Bool {
+        c.isLetter || c == "_" || c == "$"
+    }
+
+    private static func isIdentBody(_ c: Character) -> Bool {
+        c.isLetter || c.isNumber || c == "_" || c == "$"
+    }
+
+    private static func matches(_ token: String, _ chars: [Character], _ index: Int) -> Bool {
+        let t = Array(token)
+        guard index >= 0, index + t.count <= chars.count else { return false }
+        for k in 0..<t.count where chars[index + k] != t[k] { return false }
+        return true
+    }
+
+    private static func find(_ token: String, _ chars: [Character], from index: Int) -> Int? {
+        let t = Array(token)
+        guard !t.isEmpty else { return nil }
+        var i = max(0, index)
+        while i + t.count <= chars.count {
+            if Array(chars[i..<(i + t.count)]) == t { return i }
+            i += 1
+        }
+        return nil
+    }
+}
+
+// MARK: - 渲染成富文本
+
+enum MarkdownRender {
+
+    static func attributed(_ text: String, size: CGFloat) -> NSAttributedString {
+        let out = NSMutableAttributedString()
+        for block in MarkdownBlock.parse(text) {
+            out.append(line(for: block, size: size))
+        }
+        return out
+    }
+
+    private static func line(for block: MarkdownBlock, size: CGFloat) -> NSAttributedString {
+        switch block {
+        case let .heading(level, text):
+            let s = headingSize(level, size)
+            let attr = inline(text, size: s, forceBold: true)
+            attr.addParagraph(MarkdownStyle.paragraph(before: level == 1 ? 12 : 8,
+                                                     after: max(4, s * 0.3)))
+            return attr
+
+        case let .paragraph(text):
+            let attr = inline(text, size: size)
+            attr.addParagraph(MarkdownStyle.paragraph(after: 7))
+            return attr
+
+        case let .bullet(text, level):
+            let base = CGFloat(6 + level * 16)
+            let attr = NSMutableAttributedString(string: bulletMark(level) + "\t",
+                                                 attributes: [.font: MarkdownStyle.font(size),
+                                                              .foregroundColor: MarkdownStyle.secondary])
+            attr.append(inline(text, size: size))
+            attr.addParagraph(MarkdownStyle.paragraph(after: 3,
+                                                      headIndent: base + 18,
+                                                      firstLineIndent: base,
+                                                      tabAt: base + 18))
+            return attr
+
+        case let .numbered(num, text):
+            let base: CGFloat = 6
+            let attr = NSMutableAttributedString(string: num + "\t",
+                                                 attributes: [.font: MarkdownStyle.font(size),
+                                                              .foregroundColor: MarkdownStyle.secondary])
+            attr.append(inline(text, size: size))
+            attr.addParagraph(MarkdownStyle.paragraph(after: 3,
+                                                      headIndent: base + 22,
+                                                      firstLineIndent: base,
+                                                      tabAt: base + 22))
+            return attr
+
+        case let .todo(done, text):
+            let base: CGFloat = 6
+            let mark = NSMutableAttributedString(string: (done ? "☑" : "☐") + "\t",
+                                                 attributes: [.font: MarkdownStyle.font(size + 1),
+                                                              .foregroundColor: done ? MarkdownStyle.accent : MarkdownStyle.secondary])
+            let body = inline(text, size: size)
+            if done {
+                body.addAttributes([.strikethroughStyle: NSUnderlineStyle.single.rawValue,
+                                    .foregroundColor: MarkdownStyle.secondary],
+                                   range: NSRange(location: 0, length: body.length))
+            }
+            mark.append(body)
+            mark.addParagraph(MarkdownStyle.paragraph(after: 3,
+                                                      headIndent: base + 22,
+                                                      firstLineIndent: base,
+                                                      tabAt: base + 22))
+            return mark
+
+        case let .quote(text):
+            let attr = NSMutableAttributedString(string: "▍" + "\t",
+                                                 attributes: [.font: MarkdownStyle.font(size),
+                                                              .foregroundColor: MarkdownStyle.accent.withAlphaComponent(0.55)])
+            let body = inline(text, size: size)
+            body.addAttribute(.foregroundColor, value: MarkdownStyle.secondary,
+                              range: NSRange(location: 0, length: body.length))
+            attr.append(body)
+            attr.addParagraph(MarkdownStyle.paragraph(after: 5,
+                                                      headIndent: 20,
+                                                      firstLineIndent: 4,
+                                                      tabAt: 20))
+            return attr
+
+        case let .code(language, code):
+            return codeBlock(language: language, code: code, size: size)
+
+        case .divider:
+            let attr = NSMutableAttributedString(string: String(repeating: "─", count: 34),
+                                                 attributes: [.font: MarkdownStyle.font(size),
+                                                              .foregroundColor: MarkdownStyle.secondary.withAlphaComponent(0.4)])
+            attr.addParagraph(MarkdownStyle.paragraph(before: 6, after: 8))
+            return attr
+
+        case .blank:
+            return NSMutableAttributedString(string: "\n",
+                                             attributes: [.font: MarkdownStyle.font(size * 0.55),
+                                                          .foregroundColor: MarkdownStyle.label])
+        }
+    }
+
+    // MARK: 代码块（带语言标签 + 语法着色 + 卡片底）
+    // macOS 用 NSTextBlock 画真正的卡片；iOS 的 TextKit 不支持，退化为逐行底色
+
+    private static func codeBlock(language: String, code: String, size: CGFloat) -> NSAttributedString {
+        let resolved = language.isEmpty ? CodeLanguageDetector.detect(code) : language
+        #if os(macOS)
+        return cardCodeBlock(language: resolved, code: code, size: size, auto: language.isEmpty)
+        #else
+        return simpleCodeBlock(language: resolved, code: code, size: size, auto: language.isEmpty)
+        #endif
+    }
+
+    #if os(macOS)
+    private static func cardCodeBlock(language: String, code: String, size: CGFloat,
+                                      auto: Bool = false) -> NSAttributedString {
+        let block = NSTextBlock()
+        block.backgroundColor = CodeTheme.background
+        block.setBorderColor(CodeTheme.border)
+        block.setWidth(1, type: .absoluteValueType, for: .border)
+        block.setWidth(12, type: .absoluteValueType, for: .padding)
+        block.setValue(100, type: .percentageValueType, for: .width)
+
+        let out = NSMutableAttributedString()
+
+        // 顶部语言标签（像 GitHub 那样）
+        let base = language.isEmpty ? "code" : language.lowercased()
+        let label = auto && !language.isEmpty ? base + " · auto" : base
+        let caption = NSMutableAttributedString(string: label, attributes: [
+            .font: MarkdownStyle.font(max(9.5, size - 5), bold: true),
+            .foregroundColor: MarkdownStyle.secondary,
+            .kern: 1.1
+        ])
+        caption.addParagraph(cardParagraph(block, lineSpacing: 0, after: 6))
+        out.append(caption)
+
+        // 代码正文：逐行套段落样式，背景由文本块统一铺满
+        let highlighted = CodeHighlighter.attributed(code, language: language, size: size)
+        let lines = splitLines(highlighted)
+        for (index, line) in lines.enumerated() {
+            let piece = NSMutableAttributedString(attributedString: line)
+            if piece.length == 0 {
+                piece.append(NSAttributedString(string: " ",
+                                                attributes: [.font: MarkdownStyle.font(size, mono: true)]))
+            }
+            piece.addParagraph(cardParagraph(block,
+                                             lineSpacing: 2,
+                                             after: index == lines.count - 1 ? 0 : 0))
+            out.append(piece)
+        }
+        return out
+    }
+
+    private static func cardParagraph(_ block: NSTextBlock,
+                                      lineSpacing: CGFloat,
+                                      after: CGFloat) -> NSParagraphStyle {
+        let p = NSMutableParagraphStyle()
+        p.textBlocks = [block]
+        p.lineSpacing = lineSpacing
+        p.paragraphSpacing = after
+        return p
+    }
+    #else
+    private static func simpleCodeBlock(language: String, code: String, size: CGFloat,
+                                        auto: Bool = false) -> NSAttributedString {
+        let out = NSMutableAttributedString()
+
+        func style(_ attrs: [NSAttributedString.Key: Any], lineSpacing: CGFloat,
+                   after: CGFloat) -> NSMutableAttributedString {
+            let a = NSMutableAttributedString(string: "", attributes: attrs)
+            let p = NSMutableParagraphStyle()
+            p.lineSpacing = lineSpacing
+            p.paragraphSpacing = after
+            p.headIndent = 14
+            p.firstLineHeadIndent = 14
+            a.addAttribute(.paragraphStyle, value: p, range: NSRange(location: 0, length: 0))
+            return a
+        }
+
+        // 语言标签
+        let base = language.isEmpty ? "code" : language.lowercased()
+        let label = auto && !language.isEmpty ? base + " · auto" : base
+        out.append(style([.font: MarkdownStyle.font(max(9.5, size - 5), bold: true),
+                          .foregroundColor: MarkdownStyle.secondary,
+                          .backgroundColor: CodeTheme.background,
+                          .kern: 1.1],
+                         lineSpacing: 0, after: 0))
+        out.append(NSAttributedString(string: " " + label + "\n",
+                                      attributes: [.font: MarkdownStyle.font(max(9.5, size - 5), bold: true),
+                                                   .foregroundColor: MarkdownStyle.secondary,
+                                                   .backgroundColor: CodeTheme.background]))
+
+        // 代码正文：逐行铺底色
+        let highlighted = CodeHighlighter.attributed(code, language: language, size: size)
+        let lines = splitLines(highlighted)
+        for (index, line) in lines.enumerated() {
+            let piece = NSMutableAttributedString(attributedString: line)
+            if piece.length == 0 {
+                piece.append(NSAttributedString(string: " ",
+                                                attributes: [.font: MarkdownStyle.font(size, mono: true),
+                                                             .backgroundColor: CodeTheme.background]))
+            }
+            piece.addAttribute(.backgroundColor, value: CodeTheme.background,
+                               range: NSRange(location: 0, length: piece.length))
+            let p = NSMutableParagraphStyle()
+            p.lineSpacing = 2
+            p.headIndent = 14
+            p.firstLineHeadIndent = 14
+            p.paragraphSpacing = index == lines.count - 1 ? 8 : 0
+            piece.addAttribute(.paragraphStyle, value: p, range: NSRange(location: 0, length: piece.length))
+            if !piece.string.hasSuffix("\n") {
+                piece.append(NSAttributedString(string: "\n"))
+            }
+            out.append(piece)
+        }
+        return out
+    }
+    #endif
+
+    private static func splitLines(_ attr: NSAttributedString) -> [NSAttributedString] {
+        let s = attr.string as NSString
+        var result: [NSAttributedString] = []
+        var start = 0
+        var i = 0
+        while i < s.length {
+            if s.character(at: i) == 10 {
+                result.append(attr.attributedSubstring(from: NSRange(location: start, length: i - start)))
+                start = i + 1
+            }
+            i += 1
+        }
+        result.append(attr.attributedSubstring(from: NSRange(location: start, length: s.length - start)))
+        return result
+    }
+
+    // MARK: 行内标记
+
+    /// 支持 **粗体**、*斜体*、~~删除线~~、`代码`、==高亮==、[文字](链接)
+    static func inline(_ text: String, size: CGFloat, forceBold: Bool = false) -> NSMutableAttributedString {
+        let baseFont = MarkdownStyle.font(size, bold: forceBold)
+        let result = NSMutableAttributedString()
+        var buffer = ""
+        let chars = Array(text)
+        var i = 0
+
+        func flush() {
+            guard !buffer.isEmpty else { return }
+            result.append(NSAttributedString(string: buffer,
+                                             attributes: [.font: baseFont,
+                                                          .foregroundColor: MarkdownStyle.label]))
+            buffer.removeAll(keepingCapacity: true)
+        }
+
+        func styled(_ body: String, _ attrs: [NSAttributedString.Key: Any]) {
+            flush()
+            var a: [NSAttributedString.Key: Any] = [.font: baseFont,
+                                                    .foregroundColor: MarkdownStyle.label]
+            a.merge(attrs) { _, new in new }
+            result.append(NSAttributedString(string: body, attributes: a))
+        }
+
+        while i < chars.count {
+            let c = chars[i]
+
+            // **粗体**
+            if c == "*" || c == "_", i + 1 < chars.count, chars[i + 1] == c {
+                if let close = find(String(repeating: c, count: 2), in: chars, from: i + 2) {
+                    styled(String(chars[(i + 2)..<close]),
+                           [.font: MarkdownStyle.font(size, bold: true)])
+                    i = close + 2
+                    continue
+                }
+            }
+
+            // ~~删除线~~
+            if c == "~", i + 1 < chars.count, chars[i + 1] == "~" {
+                if let close = find("~~", in: chars, from: i + 2) {
+                    styled(String(chars[(i + 2)..<close]),
+                           [.strikethroughStyle: NSUnderlineStyle.single.rawValue])
+                    i = close + 2
+                    continue
+                }
+            }
+
+            // ==高亮==
+            if c == "=", i + 1 < chars.count, chars[i + 1] == "=" {
+                if let close = find("==", in: chars, from: i + 2) {
+                    styled(String(chars[(i + 2)..<close]),
+                           [.backgroundColor: PlatformColor.systemYellow.withAlphaComponent(0.35)])
+                    i = close + 2
+                    continue
+                }
+            }
+
+            // `行内代码`
+            if c == "`" {
+                if let close = find("`", in: chars, from: i + 1) {
+                    styled(String(chars[(i + 1)..<close]),
+                           [.font: MarkdownStyle.font(size - 1, mono: true),
+                            .backgroundColor: MarkdownStyle.label.withAlphaComponent(0.07)])
+                    i = close + 1
+                    continue
+                }
+            }
+
+            // *斜体*
+            if c == "*" || c == "_" {
+                if let close = find(String(c), in: chars, from: i + 1) {
+                    let body = String(chars[(i + 1)..<close])
+                    if !body.isEmpty {
+                        styled(body, [.font: MarkdownStyle.font(size, bold: forceBold, italic: true)])
+                        i = close + 1
+                        continue
+                    }
+                }
+            }
+
+            // [文字](链接)
+            if c == "[" {
+                if let mid = find("](", in: chars, from: i + 1),
+                   let end = find(")", in: chars, from: mid + 2) {
+                    let label = String(chars[(i + 1)..<mid])
+                    let url = String(chars[(mid + 2)..<end]).trimmingCharacters(in: .whitespaces)
+                    styled(label, [.link: url,
+                                   .foregroundColor: MarkdownStyle.accent,
+                                   .underlineStyle: NSUnderlineStyle.single.rawValue])
+                    i = end + 1
+                    continue
+                }
+            }
+
+            buffer.append(c)
+            i += 1
+        }
+
+        flush()
+        return result
+    }
+
+    private static func find(_ token: String, in chars: [Character], from: Int) -> Int? {
+        let t = Array(token)
+        guard !t.isEmpty, chars.count >= t.count else { return nil }
+        var i = max(0, from)
+        while i + t.count <= chars.count {
+            if Array(chars[i..<(i + t.count)]) == t { return i }
+            i += 1
+        }
+        return nil
+    }
+
+    private static func bulletMark(_ level: Int) -> String {
+        switch level {
+        case 0: return "•"
+        case 1: return "◦"
+        case 2: return "▪"
+        default: return "·"
+        }
+    }
+
+    private static func headingSize(_ level: Int, _ base: CGFloat) -> CGFloat {
+        switch level {
+        case 1: return base + 8
+        case 2: return base + 5
+        case 3: return base + 3
+        default: return base + 1
+        }
+    }
+}
+
+private extension NSMutableAttributedString {
+    /// 给整段套段落样式；末尾没有换行就补一个，保证段落样式生效
+    func addParagraph(_ style: NSParagraphStyle) {
+        if !string.hasSuffix("\n") {
+            append(NSAttributedString(string: "\n",
+                                      attributes: [.font: MarkdownStyle.font(9),
+                                                   .foregroundColor: MarkdownStyle.label]))
+        }
+        addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: length))
+    }
+}
+
+// MARK: - 预览（只读文本视图：可跨段落选中复制）
+
+struct MarkdownPreview: View {
+    let text: String
+    var baseSize: CGFloat = 14
+    /// 缩放倍率（1 = 原始排版）
+    var scale: CGFloat = 1
+
+    var body: some View {
+        MarkdownReadOnlyText(
+            attributed: MarkdownRender.attributed(text, size: baseSize * scale),
+            version: Int((baseSize * scale * 10).rounded())
+        )
+    }
+}
+
+#if os(macOS)
+
+private struct MarkdownReadOnlyText: NSViewRepresentable {
+    let attributed: NSAttributedString
+    /// 排版指纹：字号变化（缩放）时字符串可能相同，靠它触发重排
+    let version: Int
+
+    final class Coordinator {
+        var lastVersion = -1
+        var selectionObserver: NSObjectProtocol?
+        deinit {
+            if let selectionObserver { NotificationCenter.default.removeObserver(selectionObserver) }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = NSTextView.scrollableTextView()
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.borderType = .noBorder
+        scroll.scrollerStyle = .overlay
+
+        guard let tv = scroll.documentView as? NSTextView else { return scroll }
+        tv.isEditable = false
+        tv.isSelectable = true
+        tv.drawsBackground = false
+        tv.textContainerInset = NSSize(width: 22, height: 16)
+        tv.textContainer?.widthTracksTextView = true
+        tv.textStorage?.setAttributedString(attributed)
+        context.coordinator.lastVersion = version
+
+        // 预览模式：选中即自动复制（底部剪贴板状态会跟着更新）
+        context.coordinator.selectionObserver = NotificationCenter.default.addObserver(
+            forName: NSTextView.didChangeSelectionNotification, object: tv, queue: .main
+        ) { [weak tv] _ in
+            guard let tv, tv.isSelectable else { return }
+            let sel = tv.selectedRange()
+            guard sel.length > 0 else { return }
+            let ns = tv.string as NSString
+            guard sel.location != NSNotFound, NSMaxRange(sel) <= ns.length else { return }
+            ClipboardStatus.shared.report(ns.substring(with: sel))
+        }
+        return scroll
+    }
+
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        guard let tv = scroll.documentView as? NSTextView else { return }
+        if tv.textStorage?.string != attributed.string || context.coordinator.lastVersion != version {
+            // 记住缩放前的滚动位置比例，缩放后恢复，避免跳回顶部
+            let scrollRatio = scrollVerticalRatio(scroll)
+            tv.textStorage?.setAttributedString(attributed)
+            context.coordinator.lastVersion = version
+            if scrollRatio > 0 { DispatchQueue.main.async { restoreScroll(scroll, ratio: scrollRatio) } }
+        }
+    }
+
+    private func scrollVerticalRatio(_ scroll: NSScrollView) -> CGFloat {
+        let docHeight = scroll.documentView?.bounds.height ?? 0
+        guard docHeight > 0 else { return 0 }
+        return (scroll.contentView.bounds.origin.y + scroll.contentView.bounds.height) / docHeight
+    }
+
+    private func restoreScroll(_ scroll: NSScrollView, ratio: CGFloat) {
+        let docHeight = scroll.documentView?.bounds.height ?? 0
+        guard docHeight > 0 else { return }
+        let y = max(0, min(1, ratio)) * docHeight - scroll.contentView.bounds.height
+        scroll.documentView?.scroll(NSPoint(x: 0, y: max(0, y)))
+    }
+}
+
+#else
+
+private struct MarkdownReadOnlyText: UIViewRepresentable {
+    let attributed: NSAttributedString
+    let version: Int
+
+    final class Coordinator { var lastVersion = -1 }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> UITextView {
+        let tv = UITextView()
+        tv.isEditable = false
+        tv.isSelectable = true
+        tv.backgroundColor = .clear
+        tv.textContainerInset = UIEdgeInsets(top: 14, left: 14, bottom: 20, right: 14)
+        tv.alwaysBounceVertical = true
+        tv.attributedText = attributed
+        context.coordinator.lastVersion = version
+        return tv
+    }
+
+    func updateUIView(_ tv: UITextView, context: Context) {
+        if tv.attributedText?.string != attributed.string || context.coordinator.lastVersion != version {
+            let offset = tv.contentOffset
+            tv.attributedText = attributed
+            context.coordinator.lastVersion = version
+            if offset.y > 0 {
+                DispatchQueue.main.async {
+                    tv.setContentOffset(offset, animated: false)
+                }
+            }
+        }
+    }
+}
+
+#endif
+
+// MARK: - 编辑区文本处理
+
+enum MarkdownEditing {
+
+    /// 跨行套标记：每行各自包一层，空行原样保留，行首缩进留在标记外面
+    static func wrapLines(_ selection: String, prefix: String, suffix: String) -> String {
+        selection.components(separatedBy: "\n").map { line -> String in
+            let lead = String(line.prefix { $0 == " " || $0 == "\t" })
+            let body = String(line.dropFirst(lead.count))
+            if body.trimmingCharacters(in: .whitespaces).isEmpty { return line }
+            if body.hasPrefix(prefix), body.hasSuffix(suffix),
+               body.count >= prefix.count + suffix.count { return line }   // 已经包过，不重复包
+            return lead + prefix + body + suffix
+        }.joined(separator: "\n")
+    }
+
+    /// 跨行摘掉标记（再点一次同一个格式就取消）
+    static func unwrapLines(_ selection: String, prefix: String, suffix: String) -> String {
+        selection.components(separatedBy: "\n").map { line -> String in
+            let lead = String(line.prefix { $0 == " " || $0 == "\t" })
+            var body = String(line.dropFirst(lead.count))
+            if body.hasPrefix(prefix) { body.removeFirst(prefix.count) }
+            if body.hasSuffix(suffix) { body.removeLast(suffix.count) }
+            return lead + body
+        }.joined(separator: "\n")
+    }
+
+    /// 选中区块里每一行（非空）是否都已经包着这对标记
+    static func allLinesWrapped(_ selection: String, prefix: String, suffix: String) -> Bool {
+        let lines = selection.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard !lines.isEmpty else { return false }
+        return lines.allSatisfy { line in
+            line.hasPrefix(prefix) && line.hasSuffix(suffix)
+                && line.count >= prefix.count + suffix.count
+        }
+    }
+}

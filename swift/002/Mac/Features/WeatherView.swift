@@ -493,39 +493,29 @@ final class WeatherModel: ObservableObject {
 struct WeatherView: View {
     @ObservedObject var model: WeatherModel
     @State private var showCityOrder = false
-    /// 上一次选中的城市，用于判断滑动方向（iOS 15 的 onChange 拿不到旧值）
-    @State private var lastCity: City?
+    /// 城市单行滑动的偏移量（鼠标拖动 / 滚轮 / 触控板横扫共用）
+    @StateObject private var cityScroll = CityRowScroller()
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 0) {
             cityPicker
 
-            // 城市分页，可左右滑动切换城市
-            TabView(selection: cityIndex) {
-                ForEach(model.cities.indices, id: \.self) { i in
-                    weatherContent.tag(i)
-                }
-            }
-            .tabViewStyle(.automatic)
+            // macOS 上 TabView(.automatic) 会自绘一条原生标签条（城市页没有标题 → 一排空白灰块），
+            // 且所有城市页共用同一数据源，桌面端直接展示当前城市内容即可。
+            weatherContent
+        }
+        .onPreferenceChange(CityContentWidthKey.self) { w in
+            cityScroll.contentWidth = w
+        }
+        .onPreferenceChange(CityViewWidthKey.self) { w in
+            cityScroll.viewWidth = w
         }
         .onAppear {
             model.loadIfNeeded()
-            lastCity = model.city
         }
         .sheet(isPresented: $showCityOrder) {
             CityOrderSheet(model: model)
         }
-    }
-
-    // MARK: 城市索引 ↔ 分页选择（双向绑定）
-    private var cityIndex: Binding<Int> {
-        Binding(
-            get: { model.cities.firstIndex(of: model.city) ?? 0 },
-            set: { idx in
-                guard model.cities.indices.contains(idx) else { return }
-                model.select(model.cities[idx])
-            }
-        )
     }
 
     // MARK: 单页内容（所有城市页共用当前数据源）
@@ -611,78 +601,122 @@ struct WeatherView: View {
 
     // MARK: 城市选择
 
+    /// 城市只占一行。macOS 上横向 ScrollView 鼠标滚轮滚不动（要按 Shift），
+    /// 所以这里自己做偏移量：按住拖动 / 滚轮 / 触控板横扫都能左右滑，滑到头有回弹边界。
     private var cityPicker: some View {
-        HStack(spacing: 6) {
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(model.cities) { c in
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    model.select(c)
-                                }
-                            } label: {
-                                Text(c.name)
-                                    .font(.system(size: 13, weight: c == model.city ? .bold : .regular))
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 7)
-                                    .background(Capsule().fill(c == model.city ? Color.orange : Color(nsColor: .systemGray).opacity(0.25)))
-                                    .foregroundStyle(c == model.city ? Color.white : Color.primary)
-                            }
-                            .id(c.name)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                }
-                // 按滑动方向贴边：往左滑（下一个城市）选中胶囊贴最左，
-                // 往右滑（上一个城市）选中胶囊贴最右，方便继续同方向滑
-                .onChange(of: model.city) { newCity in
-                    let idx = model.cities.firstIndex(of: newCity) ?? 0
-                    let oldIdx = lastCity.flatMap { model.cities.firstIndex(of: $0) } ?? idx
-                    let anchor: UnitPoint = idx >= oldIdx ? .leading : .trailing
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        proxy.scrollTo(newCity.name, anchor: anchor)
-                    }
-                    lastCity = newCity
-                }
-            }
+        HStack(spacing: 8) {
+            citiesRow
+                // minWidth: 0 必须显式给——否则 frame 的最小宽度取内容的固有宽度，
+                // HStack 会把它当成不可压缩的固定子视图，整行超出窗口被居中裁掉两边
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                .background(GeometryReader { g in
+                    Color.clear.preference(key: CityViewWidthKey.self, value: g.size.width)
+                })
+                .clipped()
+                .mask(edgeFadeMask)
+                .contentShape(Rectangle())
+                .gesture(cityDrag)
 
-            // 手动刷新 + 城市排序
-            HStack(spacing: 8) {
-                Button {
-                    Task { await model.refresh() }
-                } label: {
-                    ZStack {
-                        if model.loading {
-                            ProgressView()
-                                .scaleEffect(0.65)
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 12, weight: .semibold))
-                        }
+            Button {
+                Task { await model.refresh() }
+            } label: {
+                ZStack {
+                    if model.loading {
+                        ProgressView()
+                            .scaleEffect(0.65)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 12, weight: .semibold))
                     }
+                }
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(Color.primary.opacity(0.07)))
+                .foregroundStyle(Color.orange)
+            }
+            .buttonStyle(.plain)
+            .disabled(model.loading)
+            .accessibilityLabel("刷新天气")
+
+            Button {
+                showCityOrder = true
+            } label: {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 12, weight: .semibold))
                     .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color(nsColor: .systemGray).opacity(0.25)))
+                    .background(Circle().fill(Color.primary.opacity(0.07)))
                     .foregroundStyle(Color.orange)
-                }
-                .buttonStyle(.plain)
-                .disabled(model.loading)
-                .accessibilityLabel("刷新天气")
-
-                Button {
-                    showCityOrder = true
-                } label: {
-                    Image(systemName: "arrow.up.arrow.down")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color(nsColor: .systemGray).opacity(0.25)))
-                        .foregroundStyle(Color.orange)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("城市排序")
             }
-            .padding(.trailing, 14)
+            .buttonStyle(.plain)
+            .accessibilityLabel("城市排序")
         }
+        .padding(.leading, 16)
+        .padding(.trailing, 12)
+        .padding(.vertical, 10)
+        .onContinuousHover { phase in
+            cityScroll.setHovering(phase != .ended)
+        }
+        .onDisappear { cityScroll.setHovering(false) }
+    }
+
+    private var citiesRow: some View {
+        HStack(spacing: 8) {
+            ForEach(model.cities) { c in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        model.select(c)
+                    }
+                    reveal(c)
+                } label: {
+                    Text(c.name)
+                        .font(.system(size: 13, weight: c == model.city ? .semibold : .regular))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .frame(minWidth: 52)
+                        .background(Capsule().fill(c == model.city ? Color.orange : Color.primary.opacity(0.07)))
+                        .foregroundStyle(c == model.city ? Color.white : Color.primary)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .fixedSize()
+        .offset(x: cityScroll.offset)
+        .background(GeometryReader { g in
+            Color.clear.preference(key: CityContentWidthKey.self, value: g.size.width)
+        })
+    }
+
+    // MARK: 单行滑动（偏移量控制）
+
+    /// 选中城市后确保它露出来
+    private func reveal(_ city: City) {
+        if city == model.cities.first {
+            cityScroll.scrollToStart()
+        } else if city == model.cities.last {
+            cityScroll.scrollToEnd()
+        }
+    }
+
+    private var edgeFadeMask: some View {
+        ZStack {
+            Rectangle().fill(.black)
+            if cityScroll.offset < -0.5 {
+                LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: 24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if cityScroll.offset > cityScroll.maxOffset + 0.5 {
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: 24)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        }
+    }
+
+    private var cityDrag: some Gesture {
+        DragGesture(minimumDistance: 4)
+            .onChanged { v in cityScroll.drag(by: v.translation.width) }
+            .onEnded { _ in cityScroll.endDrag() }
     }
 
     private var card: some View {
@@ -827,45 +861,136 @@ struct CityOrderSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavStackCompat {
+        // macOS 的 sheet 是随窗口宽度的模态面板（List / NavigationStack 没有固有高度，
+        // 直接套 NavStackCompat 会被压扁）。内容自己铺满面板，头部/脚注留足内边距。
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Text("城市排序")
+                    .font(.system(size: 15, weight: .semibold))
+                Spacer()
+                Button("恢复默认") { model.resetCityOrder() }
+                Button("完成") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(.leading, 24)
+            .padding(.trailing, 16)
+            .padding(.vertical, 12)
+
+            Divider()
+
             List {
-                Section {
-                    ForEach(model.cities) { c in
-                        HStack(spacing: 10) {
-                            Text(c.name)
-                                .font(.system(size: 15))
-                            if c == model.city {
-                                Text("当前")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Capsule().fill(Color.orange.opacity(0.15)))
-                                    .foregroundStyle(Color.orange)
-                            }
-                            Spacer()
+                ForEach(model.cities) { c in
+                    HStack(spacing: 10) {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 16)
+                        Text(c.name)
+                            .font(.system(size: 14))
+                        if c == model.city {
+                            Text("当前")
+                                .font(.system(size: 10, weight: .medium))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.orange.opacity(0.15)))
+                                .foregroundStyle(Color.orange)
                         }
-                        .padding(.vertical, 2)
+                        Spacer()
                     }
-                    .onMove { source, destination in
-                        model.moveCity(from: source, to: destination)
-                    }
-                } footer: {
-                    Text("拖动调整顺序，改完自动保存。城市栏的排列和左右滑动顺序都按这里来。")
-                        .font(.system(size: 12))
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 8)
+                }
+                .onMove { source, destination in
+                    model.moveCity(from: source, to: destination)
                 }
             }
-            // Mac: editMode 不可用，List onMove 直接支持拖拽排序
-            .navigationTitle("城市排序")
-            .toolbar {
-                ToolbarItem(placement: .navigation) {
-                    Button("恢复默认") {
-                        model.resetCityOrder()
-                    }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("完成") { dismiss() }
-                }
-            }
+            .listStyle(.inset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider()
+
+            Text("拖动调整顺序，改完自动保存。城市栏的排列顺序按这里来。")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 10)
         }
+        // 必须给确定尺寸：List 没有固有高度，用 maxHeight: .infinity 会让 sheet
+        // 压到最小高度，行与行叠在一起（"都缩在一起"的老问题）。
+        .frame(width: 460, height: 580)
+    }
+}
+
+// MARK: - 城市单行滑动控制
+
+/// 单一水平偏移量的控制器：拖动、滚轮、触控板横扫都改这里。
+/// 用类而不是 @State，因为 NSEvent 监视器是逃逸闭包，捕获 struct 会拿到旧值。
+final class CityRowScroller: ObservableObject {
+    @Published private(set) var offset: CGFloat = 0
+
+    var contentWidth: CGFloat = 0 { didSet { clampOffset() } }
+    var viewWidth: CGFloat = 0 { didSet { clampOffset() } }
+
+    private var dragStart: CGFloat?
+    private var hovering = false
+    private var wheelMonitor: Any?
+
+    var maxOffset: CGFloat { min(0, viewWidth - contentWidth) }
+    var canScroll: Bool { maxOffset < -0.5 }
+
+    private func clamped(_ v: CGFloat) -> CGFloat { min(0, max(maxOffset, v)) }
+
+    private func clampOffset() {
+        let c = clamped(offset)
+        if c != offset { offset = c }
+    }
+
+    func endDrag() { dragStart = nil }
+
+    // 选中首/尾城市时贴边
+    func scrollToStart() { withAnimation(.easeInOut(duration: 0.22)) { offset = 0 } }
+    func scrollToEnd() { withAnimation(.easeInOut(duration: 0.22)) { offset = maxOffset } }
+    func drag(by t: CGFloat) {
+        if dragStart == nil { dragStart = offset }
+        offset = clamped((dragStart ?? offset) + t)
+    }
+
+    // 悬停时接管滚轮：macOS 横向容器默认不吃鼠标滚轮（要按 Shift）
+    func setHovering(_ on: Bool) {
+        guard hovering != on else { return }
+        hovering = on
+        if on, wheelMonitor == nil {
+            wheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] e in
+                guard let self, self.hovering, self.canScroll else { return e }
+                let dx = abs(e.scrollingDeltaX) > abs(e.scrollingDeltaY) ? e.scrollingDeltaX : e.scrollingDeltaY
+                guard dx != 0 else { return e }
+                self.offset = self.clamped(self.offset + dx)
+                return nil
+            }
+        } else if !on, let m = wheelMonitor {
+            NSEvent.removeMonitor(m)
+            wheelMonitor = nil
+        }
+    }
+
+    deinit {
+        if let m = wheelMonitor { NSEvent.removeMonitor(m) }
+    }
+}
+
+// MARK: - 城市行测量用的偏好
+
+private struct CityContentWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct CityViewWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

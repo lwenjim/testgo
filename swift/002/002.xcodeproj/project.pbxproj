@@ -16,6 +16,11 @@
 			path = 002;
 			sourceTree = "<group>";
 		};
+		385344A030A7657600D3386C /* 002/Core */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = 002/Core;
+			sourceTree = SOURCE_ROOT;
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -34,6 +39,7 @@
 			children = (
 				3853449230A7657600D3386C /* 002 */,
 				3853449130A7657600D3386C /* Products */,
+				385B305330AC971F005627FF /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -43,6 +49,14 @@
 				3853449030A7657600D3386C /* 002.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		385B305330AC971F005627FF /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				385344A030A7657600D3386C /* 002/Core */,
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -62,6 +76,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				3853449230A7657600D3386C /* 002 */,
+				385344A030A7657600D3386C /* 002/Core */,
 			);
 			name = 002;
 			packageProductDependencies = (

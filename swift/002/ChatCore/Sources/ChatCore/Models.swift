@@ -280,18 +280,42 @@ public struct Note: Identifiable, Codable, Equatable {
         deleted = try c.decodeIfPresent(Bool.self, forKey: .deleted) ?? false
     }
 
-    /// 第一行作为标题
+    /// 第一行作为标题（去掉 Markdown 标记，列表里不显示 #、- [ ] 之类）
     public var title: String {
         let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
-        let first = lines.first.map(String.init)?.trimmingCharacters(in: .whitespaces) ?? ""
+        let first = Note.plain(lines.first.map(String.init) ?? "")
         return first.isEmpty ? "无标题" : first
     }
 
     /// 除标题外的正文，列表里做预览
     public var preview: String {
         let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .map { Note.plain(String($0)) }
+            .filter { !$0.isEmpty }
         return lines.dropFirst().joined(separator: " ")
+    }
+
+    /// 去掉 Markdown 语法符号，只留可读文字
+    static func plain(_ line: String) -> String {
+        var s = line.trimmingCharacters(in: .whitespaces)
+        if s.hasPrefix("```") || s.hasPrefix("~~~") { return "" }
+        // 行首标记：标题 / 引用 / 列表 / 待办
+        while let first = s.first, "#>-*+".contains(first) || first == " " {
+            if first == "#" || first == ">" || first == "-" || first == "*" || first == "+" {
+                s.removeFirst()
+            } else {
+                s.removeFirst()
+            }
+            if s.isEmpty { break }
+        }
+        if s.hasPrefix("[ ] ") || s.hasPrefix("[x] ") || s.hasPrefix("[X] ") {
+            s = String(s.dropFirst(4))
+        }
+        // 行内标记
+        for mark in ["**", "__", "~~", "==", "`"] {
+            s = s.replacingOccurrences(of: mark, with: "")
+        }
+        return s.trimmingCharacters(in: .whitespaces)
     }
 
     public var isEmpty: Bool {
@@ -306,6 +330,69 @@ public extension Notification.Name {
     static let chatNotesDidReceive = Notification.Name("chatNotesDidReceive")
     /// 笔记页请求主动拉取：LANChatModel 收到后向所有连接设备发 notes.req
     static let chatNotesRequestRefresh = Notification.Name("chatNotesRequestRefresh")
+}
+
+/// 记账：两端共用同一份模型，LocalStore + 局域网同步都走它。
+/// updatedAt 用于跨设备合并，deleted 是同步用的墓碑：删除时只打标记，
+/// 避免对方旧版本把这笔账「复活」。
+public enum LedgerKind: String, Codable, CaseIterable, Identifiable {
+    case expense = "支出"
+    case income = "收入"
+
+    public var id: String { rawValue }
+    public var sign: String { self == .expense ? "−" : "+" }
+}
+
+public struct LedgerEntry: Identifiable, Codable, Equatable {
+    public var id: UUID
+    public var amount: Double      // 始终为正数，方向由 kind 决定
+    public var kind: LedgerKind
+    public var category: String
+    public var note: String
+    public var date: Date
+    public var updatedAt: Date
+    public var deleted: Bool
+
+    public init(id: UUID = UUID(), amount: Double, kind: LedgerKind,
+                category: String, note: String = "", date: Date = Date(),
+                updatedAt: Date = Date(), deleted: Bool = false) {
+        self.id = id
+        self.amount = amount
+        self.kind = kind
+        self.category = category
+        self.note = note
+        self.date = date
+        self.updatedAt = updatedAt
+        self.deleted = deleted
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, amount, kind, category, note, date, updatedAt, deleted
+    }
+
+    /// 兼容升级前没有 updatedAt / deleted 字段的账本文件
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        amount = try c.decode(Double.self, forKey: .amount)
+        kind = try c.decode(LedgerKind.self, forKey: .kind)
+        category = try c.decodeIfPresent(String.self, forKey: .category) ?? "其他"
+        note = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
+        date = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? date
+        deleted = try c.decodeIfPresent(Bool.self, forKey: .deleted) ?? false
+    }
+}
+
+public extension Notification.Name {
+    /// 本机账目有改动：userInfo["entries"] = [LedgerEntry]
+    static let chatLedgerDidChange = Notification.Name("chatLedgerDidChange")
+    /// 收到对端账目：userInfo["entries"] = [LedgerEntry]
+    static let chatLedgerDidReceive = Notification.Name("chatLedgerDidReceive")
+    /// 记账页请求主动拉取：LANChatModel 收到后向所有连接设备发 ledger.req
+    static let chatLedgerRequestRefresh = Notification.Name("chatLedgerRequestRefresh")
+    /// 头像有更新（本机修改 / 收到对端头像资源）：聊天 UI 刷新头像显示
+    static let chatAvatarDidChange = Notification.Name("chatAvatarDidChange")
 }
 
 public struct ChatEnvelope: Codable {

@@ -1,13 +1,15 @@
 #!/bin/zsh
-# deploy.sh — 编译一次，并行安装到所有已连接的真机
+# deploy.sh — 编译一次，并行安装到所有已连接的真机；也可单独装 Mac 版
 #
 # 用法：
-#   ./deploy.sh               # Release 编译 → 装到所有在线设备 → 自动启动
+#   ./deploy.sh               # Release 编译 → 装到所有在线 iOS 设备 → 自动启动
 #   ./deploy.sh -d            # Debug 编译（保留调试符号，便于连 Xcode 排查）
 #   ./deploy.sh iPhone13 iPad # 只装指定设备（名字或 UDID 片段，模糊匹配）
-#   ./deploy.sh -l            # 只看当前有哪些设备在线
+#   ./deploy.sh -l            # 只看当前有哪些 iOS 设备在线
+#   ./deploy.sh mac           # 只编译 + 覆盖安装 Mac 版（到「应用程序」），并启动
+#   ./deploy.sh -a            # Mac + 所有 iOS 设备，两边一起装
 #
-# 前提：设备已经用数据线或 Xcode「无线调试」配对过一次，处于 connected 状态。
+# 前提：iOS 设备已经用数据线或 Xcode「无线调试」配对过一次；Mac 版无需配对。
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -18,16 +20,78 @@ BUNDLE_ID="songshuai.-02"
 DERIVED="build"
 CONFIG="Release"
 LAUNCH=1
+MAC=0        # 是否顺带编 Mac
+IOS=1        # 是否装 iOS
 FILTERS=()
+
+MAC_PROJECT="Mac/ShenSuanziMac.xcodeproj"
+MAC_SCHEME="ShenSuanziMac"
+MAC_APP_NAME="ShenSuanziMac.app"
+MAC_INSTALL="/Applications/$MAC_APP_NAME"
+
+# ---------- Mac 版：编译 → 退出旧进程 → 覆盖安装 → 启动 ----------
+# Mac 端是独立工程，不走 devicectl；用 ditto 原地覆盖，避免 rm -rf 整个 .app
+deploy_mac() {
+  echo "\n▶︎ 编译 Mac 版（Release）…"
+  local out="$PWD/Mac/build/Build/Products/Release/$MAC_APP_NAME"
+  local log
+  log=$(mktemp -t macbuild)
+  local st=0
+  set +e
+  xcodebuild -project "$MAC_PROJECT" -scheme "$MAC_SCHEME" -configuration Release \
+    -derivedDataPath Mac/build -allowProvisioningUpdates build > "$log" 2>&1
+  st=$?
+  set -e
+  grep -E "error:|\*\* BUILD" "$log" | tail -10 || true
+  if [[ $st -ne 0 ]] || ! grep -q "\*\* BUILD SUCCEEDED" "$log"; then
+    echo "✗ Mac 编译失败（xcodebuild 退出码 $st），完整日志：$log"
+    return 1
+  fi
+  if [[ ! -d "$out" ]]; then
+    echo "✗ Mac 产物缺失：$out"
+    return 1
+  fi
+
+  # 覆盖前必须先退出：直接覆盖正在运行的 Mach-O 会报 "Text file busy"
+  if pgrep -x "${MAC_APP_NAME%.app}" >/dev/null 2>&1; then
+    echo "  退出正在运行的 Mac 版…"
+    pkill -x "${MAC_APP_NAME%.app}" 2>/dev/null || true
+    for _ in {1..20}; do
+      pgrep -x "${MAC_APP_NAME%.app}" >/dev/null 2>&1 || break
+      sleep 0.2
+    done
+  fi
+
+  # ditto 原地覆盖：保留签名与资源分支；首次安装时就是新建
+  if ! ditto "$out" "$MAC_INSTALL" 2>/dev/null; then
+    echo "  覆盖安装失败（可能在「应用程序」里没有写权限），尝试用户目录…"
+    MAC_INSTALL="$HOME/Applications/$MAC_APP_NAME"
+    mkdir -p "$HOME/Applications"
+    ditto "$out" "$MAC_INSTALL"
+  fi
+  echo "✓ 已安装：$MAC_INSTALL"
+  open "$MAC_INSTALL"
+  echo "✅ Mac 版已启动"
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -d|--debug)  CONFIG="Debug"; shift ;;
     -l|--list)   LAUNCH=2; shift ;;
     -n|--no-launch) LAUNCH=0; shift ;;
+    -a|--all)    MAC=1; shift ;;
+    -m|--mac)    MAC=1; IOS=0; shift ;;
+    mac|macos|macOS|Mac) MAC=1; IOS=0; shift ;;
     *) FILTERS+=("$1"); shift ;;
   esac
 done
+
+if [[ $MAC -eq 1 && $LAUNCH -ne 2 ]]; then
+  deploy_mac || exit 1
+fi
+if [[ $IOS -eq 0 ]]; then
+  exit 0
+fi
 
 # ---------- 1. 找设备 ----------
 DEVJSON=$(mktemp -t devicectl)

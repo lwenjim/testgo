@@ -16,7 +16,7 @@ struct ShenSuanziMacApp: App {
         WindowGroup {
             MacRootView()
                 .environmentObject(model)
-                .frame(minWidth: 900, minHeight: 620)
+                .frame(minWidth: 900, minHeight: 700)
                 .onAppear {
                     // 连接从启动就建立：笔记同步不再依赖先切到聊天板块
                     model.start()
@@ -27,8 +27,13 @@ struct ShenSuanziMacApp: App {
                         guard let w else { return }
                         // 标题栏的软件名后面直接带上构建时间，一眼看出跑的是哪一版
                         w.title = "神算子  v\(BuildInfo.versionTag)"
-                        if w.frame.width < 900 {
-                            w.setContentSize(NSSize(width: 1060, height: 720))
+                        // macOS 不会把 SwiftUI 的 frame(minHeight:) 强加到恢复出来的旧窗口上，
+                        // 残留的小窗口会让内容比窗口高、底部被裁（科学计算器顶栏被顶掉就是它）。
+                        // 启动时把小于最小尺寸的窗口补齐。
+                        let minSize = NSSize(width: 900, height: 760)
+                        if w.frame.width < minSize.width || w.frame.height < minSize.height {
+                            w.setContentSize(NSSize(width: max(w.frame.width, 1060),
+                                                    height: max(w.frame.height, minSize.height)))
                             w.center()
                         }
                     }

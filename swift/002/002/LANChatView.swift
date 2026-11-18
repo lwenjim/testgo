@@ -12,6 +12,7 @@ import UIKit
 import PhotosUI
 import MultipeerConnectivity
 import AVFoundation
+import AVKit
 import CoreLocation
 import UniformTypeIdentifiers
 
@@ -30,111 +31,195 @@ enum AvatarPalette {
     }
 }
 
-// MARK: - 会话列表页
-
-struct GroupTarget: Identifiable {
-    let id: String
-}
-
-struct ChatTarget: Identifiable {
-    let id = UUID()
-    var name: String
-}
-
-/// 测量折叠内容自然高度，用于手风琴高度动画
-private struct FoldHeightPreference: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
-/// 手风琴折叠容器：内容始终以自然高度布局，外层只裁剪可见高度。
-/// 展开/收起时动画的是高度本身，内容不参与位移或淡入淡出，
-/// 因此不会出现「向上插入 + 渐变错乱」，下方区块也会平滑跟随。
-private struct FoldContent<Content: View>: View {
-    @Binding var expanded: Bool
-    let content: Content
-    @State private var measuredHeight: CGFloat = 0
-
-    init(expanded: Binding<Bool>, @ViewBuilder content: () -> Content) {
-        self._expanded = expanded
-        self.content = content()
-    }
+/// 用户头像：有自定义头像（头像同步落盘）就显示图片，否则显示默认的首字母圆头像。
+/// 收到对端头像后通过 chatAvatarDidChange 通知自动刷新。
+struct ChatAvatar: View {
+    let name: String
+    var size: CGFloat = 40
+    var dot: Color? = nil
+    @State private var refresh = UUID()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            content
-                .fixedSize(horizontal: false, vertical: true)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear
-                            .preference(key: FoldHeightPreference.self, value: geo.size.height)
-                    }
-                )
+        ZStack(alignment: .bottomTrailing) {
+            avatarCore
+            if let dot {
+                Circle()
+                    .fill(dot)
+                    .frame(width: size * 0.28, height: size * 0.28)
+                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: expanded ? measuredHeight : 0, alignment: .top)
-        .clipped()
-        .onPreferenceChange(FoldHeightPreference.self) { measuredHeight = $0 }
-        .animation(.easeInOut(duration: 0.3), value: expanded)
+        .frame(width: size, height: size)
+        .id(refresh)
+        .onReceive(NotificationCenter.default.publisher(for: .chatAvatarDidChange)) { _ in
+            refresh = UUID()
+        }
     }
+
+    @ViewBuilder
+    private var avatarCore: some View {
+        if let ui = UIImage(contentsOfFile: ChatImageStore.url("avatar-\(name).jpg").path) {
+            Image(uiImage: ui)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+        } else {
+            ZStack {
+                Circle()
+                    .fill(AvatarPalette.color(for: name).opacity(0.16))
+                    .frame(width: size, height: size)
+                Text(AvatarPalette.initial(name))
+                    .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
+                    .foregroundStyle(AvatarPalette.color(for: name))
+            }
+        }
+    }
+}
+
+/// 本机头像是否存在（ChatImageStore.exists 的轻量包装，供 ChatAvatar 用）
+private func model_hasAvatar(_ name: String) -> Bool {
+    FileManager.default.fileExists(atPath: ChatImageStore.url("avatar-\(name).jpg").path)
+}
+
+/// 聊天主页底部页签
+enum ChatTab: String, CaseIterable {
+    case convo = "会话"
+    case contacts = "通讯录"
+    case mine = "我的"
+
+    var icon: String {
+        switch self {
+        case .convo: return "bubble.left.and.bubble.right.fill"
+        case .contacts: return "person.2.fill"
+        case .mine: return "person.fill"
+        }
+    }
+}
+
+/// 视频消息播放器（全屏黑底）
+struct ChatVideoViewer: View {
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+    @State private var player: AVPlayer?
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if let player {
+                VideoPlayer(player: player)
+                    .ignoresSafeArea()
+            }
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(Color.white.opacity(0.18)))
+                            .foregroundStyle(Color.white)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                Spacer()
+            }
+        }
+        .onAppear {
+            let p = AVPlayer(url: url)
+            player = p
+            p.play()
+        }
+        .onDisappear { player?.pause() }
+    }
+}
+
+// MARK: - 会话列表页
+
+/// 微信式会话列表条目：私聊和群聊混排，按最近更新时间倒序
+private struct Convo: Identifiable {
+    let id: String
+    let isGroup: Bool
+    let thread: ChatThread?
+    let group: ChatGroup?
+
+    var date: Date { isGroup ? group!.updatedAt : thread!.updatedAt }
+    var title: String { isGroup ? (group?.name ?? "群聊") : (thread?.peer ?? "") }
+    var preview: String { isGroup ? (group?.preview ?? "") : (thread?.preview ?? "") }
 }
 
 struct LANChatView: View {
     @ObservedObject var model: LANChatModel
 
-    @State private var target: ChatTarget?
-    @State private var groupTarget: GroupTarget?
     @State private var showRename = false
     @State private var showNewGroup = false
-    /// 私聊 / 群聊分区是否折叠（默认展开）
-    @State private var directExpanded = true
-    @State private var groupExpanded = true
     /// 收藏列表
     @State private var showFavorites = false
+    /// 底部页签
+    @State private var tab: ChatTab = .convo
+    /// 会话搜索
+    @State private var searchText = ""
+    /// 修改头像
+    @State private var showAvatarPicker = false
 
-    private var hasAnything: Bool {
-        !model.friendThreads.isEmpty || !model.nearby.isEmpty || !model.incomingRequests.isEmpty
+    /// 私聊 + 群聊合成一条会话流（微信排版），按 updatedAt 倒序
+    private var conversations: [Convo] {
+        var list = model.friendThreads.map {
+            Convo(id: "d-\($0.peer)", isGroup: false, thread: $0, group: nil)
+        }
+        list += model.groups.map {
+            Convo(id: "g-\($0.id)", isGroup: true, thread: nil, group: $0)
+        }
+        let keyword = searchText.trimmingCharacters(in: .whitespaces)
+        if !keyword.isEmpty {
+            list = list.filter {
+                $0.title.localizedCaseInsensitiveContains(keyword) ||
+                $0.preview.localizedCaseInsensitiveContains(keyword)
+            }
+        }
+        return list.sorted { $0.date > $1.date }
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 12) {
-                statusCard
-                foldBar
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
-
-            // 私聊 / 群聊 纵向排列，各区可独立折叠
-            ScrollView {
-                VStack(spacing: 14) {
-                    foldSection(
-                        title: "私聊",
-                        icon: "bubble.left.and.bubble.right",
-                        count: model.friendThreads.count,
-                        expanded: $directExpanded
-                    ) {
-                        directPage
+        NavStackCompat {
+            if #available(iOS 26.0, *) {
+                chatContent.toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        plusMenu
+                            .opacity(tab == .mine ? 0 : 1)
+                            .allowsHitTesting(tab != .mine)
                     }
-                    foldSection(
-                        title: "群聊",
-                        icon: "person.2",
-                        count: model.groups.count,
-                        expanded: $groupExpanded
-                    ) {
-                        groupPage
+                    .sharedBackgroundVisibility(.hidden)
+                }
+            } else {
+                chatContent.toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        plusMenu
+                            .opacity(tab == .mine ? 0 : 1)
+                            .allowsHitTesting(tab != .mine)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 2)
-                .padding(.bottom, 24)
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            bottomBar
+        .sheet(isPresented: $showNewGroup) {
+            GroupEditor(model: model, group: nil)
+        }
+        .sheet(isPresented: $showRename) {
+            RenameSheet(model: model)
+        }
+        .sheet(isPresented: $showFavorites) {
+            FavoritesView(model: model)
+        }
+        .sheet(isPresented: $showAvatarPicker) {
+            PhotoLibraryPicker(onPick: { image in
+                showAvatarPicker = false
+                setMyAvatar(image)
+            }, onCancel: { showAvatarPicker = false })
+            .ignoresSafeArea()
         }
         .overlay(alignment: .top) {
             if let toast = model.toast {
@@ -149,47 +234,412 @@ struct LANChatView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: model.toast)
-        .sheet(item: $target) { t in
-            ChatDetailView(model: model, peer: t.name)
-        }
-        .sheet(item: $groupTarget) { t in
-            GroupChatView(model: model, groupId: t.id)
-        }
-        .sheet(isPresented: $showNewGroup) {
-            GroupEditor(model: model, group: nil)
-        }
-        .sheet(isPresented: $showRename) {
-            RenameSheet(model: model)
-        }
-        .sheet(isPresented: $showFavorites) {
-            FavoritesView(model: model)
-        }
         .onAppear {
             model.start()
         }
         // scenePhase 由 ContentView 全局统一处理（含笔记同步），这里不再重复响应
     }
 
-    // MARK: 两区内容（纵向，各自放在折叠容器里）
-
-    private var directPage: some View {
-        VStack(spacing: 14) {
-            if !model.incomingRequests.isEmpty {
-                requestSection
-            }
-
-            if !model.friendThreads.isEmpty {
-                threadSection
-            }
-
-            if !model.nearby.isEmpty {
-                nearbySection
-            }
-
-            if !hasAnything {
-                emptyHint
+    /// 聊天主页内容（不含 toolbar：iOS 26 要去掉玻璃圆圈，toolbar 写在 body 分支里）
+    private var chatContent: some View {
+        VStack(spacing: 0) {
+            switch tab {
+            case .convo: convoPage
+            case .contacts: contactsPage
+            case .mine: minePage
             }
         }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .navigationTitle(tab == .mine ? "我的" : (tab == .contacts ? "通讯录" : "聊天"))
+        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            chatTabBar
+        }
+    }
+
+    // MARK: 底部页签栏（微信式）
+
+    private var chatTabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(ChatTab.allCases, id: \.self) { t in
+                Button {
+                    if t != tab {
+                        UISelectionFeedbackGenerator().selectionChanged()
+                        tab = t
+                    }
+                } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: t.icon)
+                            .font(.system(size: 19, weight: .medium))
+                            .symbolVariant(tab == t ? .fill : .none)
+                        Text(t.rawValue)
+                            .font(.system(size: 10, weight: tab == t ? .semibold : .regular))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .foregroundStyle(tab == t ? Color.orange : Color.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.top, 6)
+        .padding(.bottom, 4)
+        .background(
+            Color(.systemBackground)
+                .overlay(Divider(), alignment: .top)
+                .ignoresSafeArea(edges: .bottom)
+        )
+    }
+
+    // MARK: 页签 1：会话（搜索 + 会话流）
+
+    private var convoPage: some View {
+        VStack(spacing: 0) {
+            // 搜索框
+            HStack(spacing: 7) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                TextField("搜索会话", text: $searchText)
+                    .font(.system(size: 14))
+                    .submitLabel(.search)
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color(.tertiaryLabel))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color(.secondarySystemBackground))
+            )
+            .padding(.horizontal, 12)
+            .padding(.top, 6)
+            .padding(.bottom, 4)
+
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(conversations) { c in
+                        convoRow(c)
+                    }
+                    if conversations.isEmpty {
+                        Text(searchText.isEmpty ? "还没有会话\n去「通讯录」加个好友，或新建群聊"
+                                               : "没有匹配的会话")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(3)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 42)
+                    }
+                }
+                .padding(.bottom, 24)
+            }
+            .background(Color(.systemBackground))
+        }
+    }
+
+    // MARK: 页签 2：通讯录（好友申请 / 群聊 / 好友 / 附近设备）
+
+    private var contactsPage: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                if !model.incomingRequests.isEmpty {
+                    requestSection
+                }
+                if !model.groupInvites.isEmpty {
+                    groupInviteSection
+                }
+                if !model.groups.isEmpty {
+                    contactSection("群聊", count: model.groups.count) {
+                        ForEach(Array(model.groups.enumerated()), id: \.element.id) { idx, g in
+                            if idx > 0 { Divider().padding(.leading, 60) }
+                            contactGroupRow(g)
+                        }
+                    }
+                }
+                if !model.friendThreads.isEmpty {
+                    contactSection("好友", count: model.friendThreads.count) {
+                        ForEach(Array(model.friendThreads.enumerated()), id: \.element.id) { idx, t in
+                            if idx > 0 { Divider().padding(.leading, 60) }
+                            contactFriendRow(t)
+                        }
+                    }
+                }
+                if !model.nearby.isEmpty {
+                    nearbySection
+                }
+                if model.friendThreads.isEmpty && model.groups.isEmpty && model.nearby.isEmpty
+                    && model.incomingRequests.isEmpty && model.groupInvites.isEmpty {
+                    emptyHint
+                }
+            }
+            .padding(.bottom, 24)
+        }
+        .background(Color(.systemGroupedBackground))
+    }
+
+    /// 通讯录通用分组卡片
+    private func contactSection<Content: View>(_ title: String, count: Int,
+                                               @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(title, trailing: "\(count)")
+            content()
+        }
+        .padding(.top, 8)
+    }
+
+    /// 通讯录里的好友行（同会话行样式，点击进详情）
+    private func contactFriendRow(_ t: ChatThread) -> some View {
+        let isOnline = model.online.contains(t.peer)
+        return NavigationLink(destination: ChatDetailView(model: model, peer: t.peer)) {
+            HStack(spacing: 12) {
+                ChatAvatar(name: t.peer, size: 40, dot: isOnline ? .green : nil)
+                Text(t.peer)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.primary)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                Text(isOnline ? "在线" : "离线")
+                    .font(.system(size: 11))
+                    .foregroundStyle(isOnline ? Color.green : Color.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+            .background(Color(.systemBackground))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 通讯录里的群聊行
+    private func contactGroupRow(_ g: ChatGroup) -> some View {
+        let count = model.onlineMembers(of: g).count
+        return NavigationLink(destination: GroupChatView(model: model, groupId: g.id)) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(Color.orange.opacity(0.14))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.orange)
+                }
+                Text(g.name)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.primary)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                Text(count > 0 ? "\(count + 1) 人在线" : "仅本机在线")
+                    .font(.system(size: 11))
+                    .foregroundStyle(count > 0 ? Color.green : Color.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+            .background(Color(.systemBackground))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: 页签 3：我的
+
+    private var minePage: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                // 个人卡片：头像 + 昵称
+                Button {
+                    showAvatarPicker = true
+                } label: {
+                    HStack(spacing: 14) {
+                        ZStack(alignment: .bottomTrailing) {
+                            ChatAvatar(name: model.nickname, size: 64)
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 9, weight: .bold))
+                                .frame(width: 22, height: 22)
+                                .background(Circle().fill(Color.orange))
+                                .foregroundStyle(Color.white)
+                                .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(model.nickname)
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(Color.primary)
+                                .lineLimit(1)
+                            Text("点头像可修改")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.tertiary)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color(.tertiaryLabel))
+                    }
+                    .padding(16)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(.systemBackground))
+                )
+                .padding(.horizontal, 12)
+
+                // 连接状态 + 设备信息
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 10) {
+                        ZStack {
+                            Circle()
+                                .fill((model.running ? Color.green : Color.gray).opacity(0.14))
+                                .frame(width: 30, height: 30)
+                            Image(systemName: model.running ? "wifi" : "wifi.slash")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(model.running ? Color.green : Color.secondary)
+                        }
+                        Text(model.running ? statusText : "服务未启动")
+                            .font(.system(size: 14, weight: .medium))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        if model.hasOfflineThreads {
+                            Button {
+                                model.resetSession()
+                            } label: {
+                                Text("重置连接")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Capsule().fill(Color(.secondarySystemBackground)))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+
+                    if !model.online.isEmpty {
+                        Divider().padding(.leading, 54)
+                        ForEach(Array(model.online.sorted()).enumerated(), id: \.element) { idx, name in
+                            HStack(spacing: 10) {
+                                ChatAvatar(name: name, size: 30, dot: .green)
+                                Text(name)
+                                    .font(.system(size: 13))
+                                    .lineLimit(1)
+                                Spacer(minLength: 0)
+                                if model.isFriend(name) {
+                                    NavigationLink(destination: ChatDetailView(model: model, peer: name)) {
+                                        Text("聊天")
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 4)
+                                            .background(Capsule().fill(Color.orange.opacity(0.14)))
+                                            .foregroundStyle(Color.orange)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            if idx < model.online.count - 1 {
+                                Divider().padding(.leading, 54)
+                            }
+                        }
+                    }
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(.systemBackground))
+                )
+                .padding(.horizontal, 12)
+
+                // 功能入口
+                VStack(spacing: 0) {
+                    mineRow(icon: "bookmark", label: model.favoriteCount > 0 ? "收藏 (\(model.favoriteCount))" : "收藏") {
+                        showFavorites = true
+                    }
+                    Divider().padding(.leading, 46)
+                    mineRow(icon: "pencil", label: "改昵称") {
+                        showRename = true
+                    }
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(.systemBackground))
+                )
+                .padding(.horizontal, 12)
+
+                Text("点对点直连 · 不经过服务器 · 记录只存本机")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 4)
+            }
+            .padding(.top, 10)
+            .padding(.bottom, 24)
+        }
+    }
+
+    private func mineRow(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.orange)
+                    .frame(width: 26)
+                Text(label)
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color.primary)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color(.tertiaryLabel))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: 右上角 + 菜单（收起次要入口）
+
+    private var plusMenu: some View {
+        Menu {
+            Button {
+                showNewGroup = true
+            } label: {
+                Label("新建群聊", systemImage: "person.2.badge.plus")
+            }
+            Button {
+                showFavorites = true
+            } label: {
+                Label(model.favoriteCount > 0 ? "收藏 (\(model.favoriteCount))" : "收藏",
+                      systemImage: "bookmark")
+            }
+            Button {
+                showRename = true
+            } label: {
+                Label("改昵称", systemImage: "pencil")
+            }
+            if model.hasOfflineThreads {
+                Button(role: .destructive) {
+                    model.resetSession()
+                } label: {
+                    Label("重置连接", systemImage: "arrow.triangle.2.circlepath")
+                }
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(Color.orange)
+        }
+        .buttonStyle(.plain)
+
     }
 
     // MARK: 好友申请
@@ -200,21 +650,16 @@ struct LANChatView: View {
 
             ForEach(Array(model.incomingRequests.enumerated()), id: \.element.id) { idx, req in
                 if idx > 0 {
-                    Divider().padding(.leading, 54)
+                    Divider().padding(.leading, 60)
                 }
                 requestRow(req)
             }
         }
-        .padding(.vertical, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.systemBackground))
-        )
     }
 
     private func requestRow(_ req: FriendRequest) -> some View {
         HStack(spacing: 11) {
-            avatar(req.name, dot: nil)
+            ChatAvatar(name: req.name, size: 40)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(req.name)
@@ -257,20 +702,6 @@ struct LANChatView: View {
         .padding(.vertical, 10)
     }
 
-    private var groupPage: some View {
-        VStack(spacing: 14) {
-            if !model.groupInvites.isEmpty {
-                groupInviteSection
-            }
-
-            if model.groups.isEmpty {
-                if model.groupInvites.isEmpty { groupEmptyHint }
-            } else {
-                groupSection
-            }
-        }
-    }
-
     // MARK: 群邀请
 
     private var groupInviteSection: some View {
@@ -279,16 +710,11 @@ struct LANChatView: View {
 
             ForEach(Array(model.groupInvites.enumerated()), id: \.element.id) { idx, inv in
                 if idx > 0 {
-                    Divider().padding(.leading, 54)
+                    Divider().padding(.leading, 60)
                 }
                 groupInviteRow(inv)
             }
         }
-        .padding(.vertical, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.systemBackground))
-        )
     }
 
     private func groupInviteRow(_ inv: GroupInvite) -> some View {
@@ -344,64 +770,7 @@ struct LANChatView: View {
         .padding(.vertical, 10)
     }
 
-    // MARK: 顶部状态卡
-
-    private var statusCard: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(AvatarPalette.color(for: model.nickname).opacity(0.16))
-                    .frame(width: 44, height: 44)
-                Text(AvatarPalette.initial(model.nickname))
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .foregroundStyle(AvatarPalette.color(for: model.nickname))
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(model.nickname)
-                    .font(.system(size: 15, weight: .semibold))
-                    .lineLimit(1)
-                HStack(spacing: 5) {
-                    if model.running && model.errorText == nil {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 6, height: 6)
-                        Text(statusText)
-                    } else if let err = model.errorText {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(Color.orange)
-                        Text(err)
-                            .lineLimit(1)
-                    } else {
-                        Text("未启动")
-                    }
-                }
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 0)
-
-            Button {
-                UISelectionFeedbackGenerator().selectionChanged()
-                showRename = true
-            } label: {
-                Text("改昵称")
-                    .font(.system(size: 12, weight: .medium))
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(Color(.secondarySystemBackground)))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.secondarySystemBackground).opacity(0.7))
-        )
-    }
+    // MARK: 顶部状态卡（已移到「我的」页签）
 
     private var statusText: String {
         let on = model.online.count
@@ -412,42 +781,40 @@ struct LANChatView: View {
         return "正在搜索附近设备…"
     }
 
-    // MARK: 会话
+    // MARK: 会话（私聊 + 群聊混排，微信排版）
 
-    private var threadSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("好友", trailing: "\(model.friendThreads.count)")
+    /// 微信式会话行：整行白色背景、通栏分隔线，点击推入聊天详情页
+    private func convoRow(_ c: Convo) -> some View {
+        let isGroup = c.isGroup
+        let peer = c.thread?.peer ?? ""
+        let isOnline = !isGroup && model.online.contains(peer)
+        let isReconnecting = !isGroup && !isOnline && model.reconnecting.contains(peer)
+        let unread = isGroup ? (c.group?.unread ?? 0) : (model.unread[peer] ?? 0)
+        let onlineMembers = isGroup ? model.onlineMembers(of: c.group!).count : 0
 
-            ForEach(Array(model.friendThreads.enumerated()), id: \.element.id) { idx, t in
-                if idx > 0 {
-                    Divider().padding(.leading, 54)
+        return NavigationLink(destination: isGroup
+            ? AnyView(GroupChatView(model: model, groupId: c.group!.id))
+            : AnyView(ChatDetailView(model: model, peer: peer))
+        ) {
+            HStack(spacing: 12) {
+                if isGroup {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .fill(Color.orange.opacity(0.14))
+                            .frame(width: 46, height: 46)
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(Color.orange)
+                    }
+                } else {
+                    ChatAvatar(name: peer, size: 46, dot: isOnline ? .green : (isReconnecting ? .orange : nil))
                 }
-                threadRow(t)
-            }
-        }
-        .padding(.vertical, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.systemBackground))
-        )
-    }
 
-    private func threadRow(_ t: ChatThread) -> some View {
-        let isOnline = model.online.contains(t.peer)
-        let isReconnecting = !isOnline && model.reconnecting.contains(t.peer)
-        let count = model.unread[t.peer] ?? 0
-
-        return Button {
-            UISelectionFeedbackGenerator().selectionChanged()
-            target = ChatTarget(name: t.peer)
-        } label: {
-            HStack(spacing: 11) {
-                avatar(t.peer, dot: isOnline ? .green : (isReconnecting ? .orange : nil))
-
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 5) {
-                        Text(t.peer)
-                            .font(.system(size: 15, weight: .medium))
+                        Text(c.title)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Color.primary)
                             .lineLimit(1)
                         if isReconnecting {
                             Text("重连中")
@@ -457,271 +824,71 @@ struct LANChatView: View {
                                 .background(Capsule().fill(Color.orange.opacity(0.14)))
                                 .foregroundStyle(Color.orange)
                         }
-                    }
-                    Text(t.preview)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 6)
-
-                VStack(alignment: .trailing, spacing: 5) {
-                    Text(Self.stamp(t.updatedAt, short: true))
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.system(size: 10, weight: .bold))
-                            .padding(.horizontal, 5)
-                            .frame(minWidth: 17, minHeight: 17)
-                            .background(Capsule().fill(Color.orange))
-                            .foregroundStyle(Color.white)
-                    }
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button(role: .destructive) {
-                model.clear(t.peer)
-            } label: {
-                Label("删除会话", systemImage: "trash")
-            }
-            Button(role: .destructive) {
-                model.removeFriend(t.peer)
-            } label: {
-                Label("解除好友", systemImage: "person.badge.minus")
-            }
-        }
-    }
-
-    // MARK: 折叠控制
-
-    /// 顶部一行：全部展开 / 全部折叠 + 收藏入口
-    private var foldBar: some View {
-        HStack(spacing: 8) {
-            Button {
-                UISelectionFeedbackGenerator().selectionChanged()
-                let expand = !(directExpanded && groupExpanded)
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    directExpanded = expand
-                    groupExpanded = expand
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: directExpanded && groupExpanded ? "chevron.up.chevron.up" : "chevron.down.chevron.down")
-                        .font(.system(size: 10, weight: .bold))
-                    Text(directExpanded && groupExpanded ? "全部折叠" : "全部展开")
-                        .font(.system(size: 11, weight: .medium))
-                }
-                .foregroundStyle(Color.secondary)
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
-
-            Button {
-                UISelectionFeedbackGenerator().selectionChanged()
-                showFavorites = true
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "bookmark.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text("收藏")
-                        .font(.system(size: 11, weight: .medium))
-                    if model.favoriteCount > 0 {
-                        Text("\(model.favoriteCount)")
-                            .font(.system(size: 10, weight: .bold))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Capsule().fill(Color.orange))
-                            .foregroundStyle(Color.white)
-                    }
-                }
-                .foregroundStyle(model.favoriteCount > 0 ? Color.orange : Color.secondary)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-    }
-
-    /// 可折叠分区：点标题栏展开 / 收起，右侧带 chevron 指示
-    private func foldSection<Content: View>(
-        title: String,
-        icon: String,
-        count: Int,
-        expanded: Binding<Bool>,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button {
-                UISelectionFeedbackGenerator().selectionChanged()
-                expanded.wrappedValue.toggle()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.orange)
-                    Text(title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.primary)
-                    Text("\(count)")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(expanded.wrappedValue ? 180 : 0))
-                        .animation(.easeInOut(duration: 0.3), value: expanded.wrappedValue)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            FoldContent(expanded: expanded) {
-                VStack(spacing: 14) {
-                    content()
-                }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 10)
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.systemGroupedBackground))
-        )
-    }
-
-    // MARK: 群聊列表
-
-    private var groupSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("群聊", trailing: "\(model.groups.count)")
-
-            ForEach(Array(model.groups.enumerated()), id: \.element.id) { idx, g in
-                if idx > 0 {
-                    Divider().padding(.leading, 54)
-                }
-                groupRow(g)
-            }
-        }
-        .padding(.vertical, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.systemBackground))
-        )
-    }
-
-    private func groupRow(_ g: ChatGroup) -> some View {
-        let count = model.onlineMembers(of: g).count
-
-        return Button {
-            UISelectionFeedbackGenerator().selectionChanged()
-            groupTarget = GroupTarget(id: g.id)
-        } label: {
-            HStack(spacing: 11) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.orange.opacity(0.14))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "person.2.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color.orange)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 5) {
-                        Text(g.name)
-                            .font(.system(size: 15, weight: .medium))
-                            .lineLimit(1)
-                        Text(count > 0 ? "\(count + 1) 人在线" : "仅本机在线")
-                            .font(.system(size: 9, weight: .semibold))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill((count > 0 ? Color.green : Color.secondary).opacity(0.14)))
-                            .foregroundStyle(count > 0 ? Color.green : Color.secondary)
-                        if let pending = g.pending, !pending.isEmpty {
-                            Text("待同意 \(pending.count)")
+                        if isGroup {
+                            Text(onlineMembers > 0 ? "\(onlineMembers + 1) 人在线" : "仅本机在线")
                                 .font(.system(size: 9, weight: .semibold))
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
-                                .background(Capsule().fill(Color.orange.opacity(0.14)))
-                                .foregroundStyle(Color.orange)
+                                .background(Capsule().fill((onlineMembers > 0 ? Color.green : Color.secondary).opacity(0.14)))
+                                .foregroundStyle(onlineMembers > 0 ? Color.green : Color.secondary)
+                            if let pending = c.group?.pending, !pending.isEmpty {
+                                Text("待同意 \(pending.count)")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(Color.orange.opacity(0.14)))
+                                    .foregroundStyle(Color.orange)
+                            }
                         }
                     }
-                    Text(g.preview)
-                        .font(.system(size: 12))
+                    Text(c.preview)
+                        .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
 
                 Spacer(minLength: 6)
 
-                VStack(alignment: .trailing, spacing: 5) {
-                    Text(Self.stamp(g.updatedAt, short: true))
-                        .font(.system(size: 10))
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(Self.stamp(c.date, short: true))
+                        .font(.system(size: 11))
                         .foregroundStyle(.tertiary)
-                    if g.unread > 0 {
-                        Text("\(g.unread)")
+                    if unread > 0 {
+                        Text("\(unread)")
                             .font(.system(size: 10, weight: .bold))
                             .padding(.horizontal, 5)
-                            .frame(minWidth: 17, minHeight: 17)
+                            .frame(minWidth: 18, minHeight: 18)
                             .background(Capsule().fill(Color.orange))
                             .foregroundStyle(Color.white)
                     }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
             .contentShape(Rectangle())
+            .background(Color(.systemBackground))
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button(role: .destructive) {
-                model.deleteGroup(g.id)
-            } label: {
-                Label("解散群聊", systemImage: "trash")
+            if isGroup {
+                Button(role: .destructive) {
+                    model.deleteGroup(c.group!.id)
+                } label: {
+                    Label("解散群聊", systemImage: "trash")
+                }
+            } else {
+                Button(role: .destructive) {
+                    model.clear(peer)
+                } label: {
+                    Label("删除会话", systemImage: "trash")
+                }
+                Button(role: .destructive) {
+                    model.removeFriend(peer)
+                } label: {
+                    Label("解除好友", systemImage: "person.badge.minus")
+                }
             }
         }
-    }
-
-    private var groupEmptyHint: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "person.2.badge.plus")
-                .font(.system(size: 34, weight: .light))
-                .foregroundStyle(Color.orange.opacity(0.7))
-            Text("建一个群，把同一 Wi-Fi 下的设备拉进来\n消息会同时发给所有在线成员")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .lineSpacing(3)
-            Button {
-                showNewGroup = true
-            } label: {
-                Text("新建群聊")
-                    .font(.system(size: 13, weight: .semibold))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(Color.orange))
-                    .foregroundStyle(Color.white)
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 2)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 36)
     }
 
     // MARK: 附近设备
@@ -732,21 +899,16 @@ struct LANChatView: View {
 
             ForEach(Array(model.nearby.enumerated()), id: \.element.id) { idx, p in
                 if idx > 0 {
-                    Divider().padding(.leading, 54)
+                    Divider().padding(.leading, 60)
                 }
                 nearbyRow(p)
             }
         }
-        .padding(.vertical, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.systemBackground))
-        )
     }
 
     private func nearbyRow(_ p: LanPeer) -> some View {
         HStack(spacing: 11) {
-            avatar(p.name, dot: nil)
+            ChatAvatar(name: p.name, size: 40)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(p.name)
@@ -763,10 +925,7 @@ struct LANChatView: View {
                 ProgressView()
                     .scaleEffect(0.8)
             } else if model.isFriend(p.name) {
-                Button {
-                    UISelectionFeedbackGenerator().selectionChanged()
-                    target = ChatTarget(name: p.name)
-                } label: {
+                NavigationLink(destination: ChatDetailView(model: model, peer: p.name)) {
                     Text("聊天")
                         .font(.system(size: 12, weight: .semibold))
                         .padding(.horizontal, 13)
@@ -828,85 +987,25 @@ struct LANChatView: View {
         .padding(.vertical, 42)
     }
 
-    // MARK: 底部悬浮
-
-    private var bottomBar: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "antenna.radiowaves.left.and.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.orange)
-            Text(model.running ? "局域网直连中" : "点上方启动")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-            Button {
-                UISelectionFeedbackGenerator().selectionChanged()
-                groupExpanded = true
-                showNewGroup = true
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 10, weight: .bold))
-                    Text("新建群聊")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(Color.orange))
-                .foregroundStyle(Color.white)
-            }
-            .buttonStyle(.plain)
-            if model.hasOfflineThreads {
-                Button {
-                    model.resetSession()
-                } label: {
-                    Text("重置连接")
-                        .font(.system(size: 11, weight: .medium))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(Color(.secondarySystemBackground)))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            } else if model.running {
-                ProgressView()
-                    .scaleEffect(0.7)
-                    .frame(width: 14, height: 14)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-        .background(
-            LinearGradient(
-                colors: [Color(.systemGroupedBackground).opacity(0),
-                         Color(.systemGroupedBackground)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea(edges: .bottom)
-        )
-    }
-
     // MARK: 小组件
 
-    private func avatar(_ name: String, dot: Color?) -> some View {
-        ZStack(alignment: .bottomTrailing) {
-            ZStack {
-                Circle()
-                    .fill(AvatarPalette.color(for: name).opacity(0.16))
-                    .frame(width: 40, height: 40)
-                Text(AvatarPalette.initial(name))
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(AvatarPalette.color(for: name))
-            }
-            if let dot {
-                Circle()
-                    .fill(dot)
-                    .frame(width: 10, height: 10)
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
-            }
+    /// 修改本机头像：正方形裁剪 → 压缩 JPEG → 存盘并广播给所有已连接设备
+    private func setMyAvatar(_ image: UIImage) {
+        let side = min(image.size.width, image.size.height)
+        guard side > 0, let cg = image.cgImage else { return }
+        let cropRect = CGRect(
+            x: (image.size.width - side) / 2,
+            y: (image.size.height - side) / 2,
+            width: side, height: side
+        )
+        guard let cropped = cg.cropping(to: cropRect) else { return }
+        let scaled = UIGraphicsImageRenderer(size: CGSize(width: 480, height: 480)).image { _ in
+            UIImage(cgImage: cropped).draw(in: CGRect(x: 0, y: 0, width: 480, height: 480))
         }
+        guard let data = scaled.jpegData(compressionQuality: 0.8) else { return }
+        model.setAvatar(data)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        model.toast = "头像已更新"
     }
 
     private func sectionHeader(_ title: String, trailing: String) -> some View {
@@ -970,38 +1069,77 @@ struct ChatDetailView: View {
         return isReconnecting ? .orange : .secondary
     }
 
+    // MARK: 右上角 … 菜单（收起会话操作）
+
+    private var moreMenu: some View {
+        Menu {
+            Button(role: .destructive) {
+                model.clear(peer)
+                dismiss()
+            } label: {
+                Label("删除会话", systemImage: "trash")
+            }
+            Button(role: .destructive) {
+                model.removeFriend(peer)
+            } label: {
+                Label("解除好友", systemImage: "person.badge.minus")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.orange)
+        }
+        .buttonStyle(.plain)
+
+    }
+
+    /// 页面主体（不含 toolbar：iOS 26 去玻璃圆圈的分支写在 body）
+    private var pageContent: some View {
+        VStack(spacing: 0) {
+            if !model.isFriend(peer) {
+                friendLockBanner
+            } else if !isOnline {
+                reconnectBanner
+            }
+            messageList
+            if model.isFriend(peer) {
+                inputBar
+            } else {
+                lockedBar
+            }
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .navigationBarBackButtonHidden(true)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
     var body: some View {
-        NavStackCompat {
-            VStack(spacing: 0) {
-                if !model.isFriend(peer) {
-                    friendLockBanner
-                } else if !isOnline {
-                    reconnectBanner
+        PlainToolbar(base: pageContent) {
+            ToolbarItem(placement: .navigationBarLeading) {
+                // 自定义返回键：不套系统玻璃圆圈
+                Button {
+                    dismiss()
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundStyle(Color.orange)
                 }
-                messageList
-                if model.isFriend(peer) {
-                    inputBar
-                } else {
-                    lockedBar
+                .buttonStyle(.plain)
+            }
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 1) {
+                    Text(peer)
+                        .font(.system(size: 16, weight: .semibold))
+                        .lineLimit(1)
+                    Text(statusText)
+                        .font(.system(size: 10))
+                        .foregroundStyle(statusColor)
                 }
             }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 1) {
-                        Text(peer)
-                            .font(.system(size: 16, weight: .semibold))
-                            .lineLimit(1)
-                        Text(statusText)
-                            .font(.system(size: 10))
-                            .foregroundStyle(statusColor)
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("完成") { dismiss() }
-                        .font(.system(size: 15, weight: .medium))
-                }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                moreMenu
             }
         }
         .onAppear {
@@ -1188,14 +1326,7 @@ struct ChatDetailView: View {
                 Spacer(minLength: width * 0.16)
                 messageBody(msg, mine: true)
             } else {
-                ZStack {
-                    Circle()
-                        .fill(AvatarPalette.color(for: peer).opacity(0.16))
-                        .frame(width: 30, height: 30)
-                    Text(AvatarPalette.initial(peer))
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(AvatarPalette.color(for: peer))
-                }
+                ChatAvatar(name: peer, size: 30)
                 messageBody(msg, mine: false)
                 Spacer(minLength: width * 0.16)
             }
@@ -1397,41 +1528,69 @@ struct GroupChatView: View {
     private var messages: [ChatMessage] { group?.messages ?? [] }
     private var onlineCount: Int { group.map { model.onlineMembers(of: $0).count } ?? 0 }
 
-    var body: some View {
-        NavStackCompat {
-            VStack(spacing: 0) {
-                if onlineCount == 0 { offlineBanner }
-                messageList
-                inputBar
+    // MARK: 右上角 … 菜单（收起群聊操作）
+
+    private var moreMenu: some View {
+        Menu {
+            Button {
+                showSettings = true
+            } label: {
+                Label("群设置", systemImage: "person.2.circle")
             }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 1) {
-                        Text(group?.name ?? "群聊")
-                            .font(.system(size: 16, weight: .semibold))
-                            .lineLimit(1)
-                        // 「人在线」= 群里在线的设备数，含本机（自己和对方都算），
-                        // 三台设备全连上时三台都显示 3，不会再出现 2 / 2 / 1 各说各的
-                        Text(onlineCount > 0 ? "\(onlineCount + 1) 人在线 · 点对点广播" : "暂无成员在线")
-                            .font(.system(size: 10))
-                            .foregroundStyle(onlineCount > 0 ? Color.green : Color.secondary)
-                    }
+            Button(role: .destructive) {
+                model.deleteGroup(groupId)
+                dismiss()
+            } label: {
+                Label("解散群聊", systemImage: "trash")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.orange)
+        }
+        .buttonStyle(.plain)
+
+    }
+
+    /// 页面主体（不含 toolbar：iOS 26 去玻璃圆圈的分支写在 body）
+    private var pageContent: some View {
+        VStack(spacing: 0) {
+            if onlineCount == 0 { offlineBanner }
+            messageList
+            inputBar
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .navigationBarBackButtonHidden(true)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    var body: some View {
+        PlainToolbar(base: pageContent) {
+            ToolbarItem(placement: .navigationBarLeading) {
+                // 自定义返回键：不套系统玻璃圆圈
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.orange)
                 }
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "person.2.circle")
-                            .font(.system(size: 16))
-                    }
-                    .foregroundStyle(Color.orange)
+                .buttonStyle(.plain)
+            }
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 1) {
+                    Text(group?.name ?? "群聊")
+                        .font(.system(size: 16, weight: .semibold))
+                        .lineLimit(1)
+                    // 「人在线」= 群里在线的设备数，含本机（自己和对方都算），
+                    // 三台设备全连上时三台都显示 3，不会再出现 2 / 2 / 1 各说各的
+                    Text(onlineCount > 0 ? "\(onlineCount + 1) 人在线 · 点对点广播" : "暂无成员在线")
+                        .font(.system(size: 10))
+                        .foregroundStyle(onlineCount > 0 ? Color.green : Color.secondary)
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("完成") { dismiss() }
-                        .font(.system(size: 15, weight: .medium))
-                }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                moreMenu
             }
         }
         .onAppear {
@@ -1557,14 +1716,7 @@ struct GroupChatView: View {
                 Spacer(minLength: width * 0.16)
                 messageBody(msg, mine: true)
             } else {
-                ZStack {
-                    Circle()
-                        .fill(AvatarPalette.color(for: who).opacity(0.16))
-                        .frame(width: 30, height: 30)
-                    Text(AvatarPalette.initial(who))
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(AvatarPalette.color(for: who))
-                }
+                ChatAvatar(name: who, size: 30)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(who)
                         .font(.system(size: 10))
@@ -1911,11 +2063,13 @@ struct RenameSheet: View {
 
 // MARK: - 富媒体气泡与面板
 
-/// 附件气泡：显示类型 / 文件名 / 大小，点击用系统分享面板打开
+/// 附件气泡：显示类型 / 文件名 / 大小；视频点击直接播放，其余用系统分享面板打开
 struct AttachmentBubble: View {
     let att: ChatAttachment
     let mine: Bool
     @State private var expanded = false
+    /// 视频消息：点按播放
+    @State private var playingVideo: VideoItem?
 
     private var icon: String {
         switch att.kind {
@@ -1942,9 +2096,13 @@ struct AttachmentBubble: View {
             Button {
                 guard ChatFileStore.exists(att.fileName) else { return }
                 let url = ChatFileStore.url(att.fileName)
-                let vc = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-                if let top = UIApplication.topViewController {
-                    top.present(vc, animated: true)
+                if att.kind == .video {
+                    playingVideo = VideoItem(url: url)
+                } else {
+                    let vc = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                    if let top = UIApplication.topViewController {
+                        top.present(vc, animated: true)
+                    }
                 }
             } label: {
                 HStack(spacing: 10) {
@@ -1955,6 +2113,15 @@ struct AttachmentBubble: View {
                         Image(systemName: icon)
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(mine ? Color.white : Color.orange)
+                        if att.kind == .video {
+                            // 视频角标：提示点按播放
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(mine ? Color.orange : Color.white)
+                                .frame(width: 14, height: 14)
+                                .background(Circle().fill(mine ? Color.white : Color.orange))
+                                .offset(x: 12, y: 12)
+                        }
                     }
                     VStack(alignment: .leading, spacing: 3) {
                         Text(att.displayName)
@@ -2012,7 +2179,16 @@ struct AttachmentBubble: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.black.opacity(0.05), lineWidth: 0.5)
         )
+        .sheet(item: $playingVideo) { item in
+            ChatVideoViewer(url: item.url)
+        }
     }
+}
+
+/// 可播放的视频附件
+struct VideoItem: Identifiable {
+    let id = UUID()
+    let url: URL
 }
 
 /// 位置气泡：显示经纬度，点击在合规地图 App（腾讯 / 高德 / 百度）中打开

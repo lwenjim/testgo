@@ -151,6 +151,9 @@ struct NotesView: View {
     @ObservedObject var model: NotesModel
     @State private var query = ""
     @State private var target: NoteTarget?
+    /// 多选模式：批量删除
+    @State private var selectMode = false
+    @State private var multiSelection = Set<UUID>()
 
     private var list: [Note] { model.filtered(query) }
 
@@ -165,7 +168,7 @@ struct NotesView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomBar
         }
-        .sheet(item: $target) { t in
+        .fullScreenCover(item: $target) { t in
             NoteEditor(model: model, target: t)
         }
         .onAppear {
@@ -177,6 +180,54 @@ struct NotesView: View {
     // MARK: 底部悬浮：搜索 + 新建
 
     private var bottomBar: some View {
+        VStack(spacing: 0) {
+            if selectMode { selectBar } else { normalBar }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .background(
+            LinearGradient(
+                colors: [Color(.systemGroupedBackground).opacity(0),
+                         Color(.systemGroupedBackground)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: .bottom)
+        )
+    }
+
+    // 多选态：全选 / 删除 / 完成
+    private var selectBar: some View {
+        HStack(spacing: 12) {
+            Text("已选 \(multiSelection.count) 条")
+                .font(.system(size: 15, weight: .semibold))
+
+            Spacer()
+
+            Button("全选") {
+                multiSelection = Set(list.map { $0.id })
+            }
+            .font(.system(size: 15))
+
+            Button {
+                deleteSelected()
+            } label: {
+                Text("删除")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(multiSelection.isEmpty ? Color.secondary : Color.red)
+            }
+            .disabled(multiSelection.isEmpty)
+
+            Button("完成") {
+                exitSelectMode()
+            }
+            .font(.system(size: 15, weight: .semibold))
+        }
+        .frame(height: 40)
+    }
+
+    private var normalBar: some View {
         HStack(spacing: 10) {
             HStack(spacing: 7) {
                 Image(systemName: "magnifyingglass")
@@ -228,19 +279,20 @@ struct NotesView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("新建笔记")
+
+            // 多选
+            Button {
+                selectMode = true
+            } label: {
+                Image(systemName: "checklist")
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(Color(.secondarySystemBackground)))
+                    .foregroundStyle(Color.primary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("多选笔记")
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
-        .background(
-            LinearGradient(
-                colors: [Color(.systemGroupedBackground).opacity(0),
-                         Color(.systemGroupedBackground)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea(edges: .bottom)
-        )
     }
 
     // MARK: 列表
@@ -260,23 +312,33 @@ struct NotesView: View {
     }
 
     private func card(_ note: Note) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(note.title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                Text(Self.dateLabel(note.updatedAt))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+        let checked = selectMode && multiSelection.contains(note.id)
+        return HStack(alignment: .top, spacing: 10) {
+            if selectMode {
+                Image(systemName: checked ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 19))
+                    .foregroundStyle(checked ? Color.accentColor : Color.secondary.opacity(0.5))
+                    .padding(.top, 1)
             }
-            if !note.preview.isEmpty {
-                Text(note.preview)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(note.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text(Self.dateLabel(note.updatedAt))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                if !note.preview.isEmpty {
+                    Text(note.preview)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(13)
@@ -286,19 +348,37 @@ struct NotesView: View {
         )
         .contentShape(Rectangle())
         .onTapGesture {
-            target = NoteTarget(note: note, isNew: false)
+            if selectMode {
+                if multiSelection.contains(note.id) {
+                    multiSelection.remove(note.id)
+                } else {
+                    multiSelection.insert(note.id)
+                }
+                let g = UISelectionFeedbackGenerator()
+                g.selectionChanged()
+            } else {
+                target = NoteTarget(note: note, isNew: false)
+            }
         }
         .contextMenu {
-            Button {
-                target = NoteTarget(note: note, isNew: false)
-            } label: {
-                Label("编辑", systemImage: "square.and.pencil")
-            }
-            Button(role: .destructive) {
-                model.delete(note)
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            } label: {
-                Label("删除", systemImage: "trash")
+            if !selectMode {
+                Button {
+                    target = NoteTarget(note: note, isNew: false)
+                } label: {
+                    Label("编辑", systemImage: "square.and.pencil")
+                }
+                Button {
+                    selectMode = true
+                    multiSelection.insert(note.id)
+                } label: {
+                    Label("多选", systemImage: "checkmark.circle")
+                }
+                Button(role: .destructive) {
+                    model.delete(note)
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                } label: {
+                    Label("删除", systemImage: "trash")
+                }
             }
         }
     }
@@ -322,6 +402,21 @@ struct NotesView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: 多选
+
+    private func exitSelectMode() {
+        selectMode = false
+        multiSelection.removeAll()
+    }
+
+    private func deleteSelected() {
+        let ids = multiSelection
+        let targets = model.notes.filter { ids.contains($0.id) }
+        for note in targets { model.delete(note) }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        exitSelectMode()
     }
 
     // MARK: 时间文案
@@ -369,7 +464,11 @@ struct NoteEditor: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var text: String
-    @FocusState private var focused: Bool
+    @State private var previewMode = false
+    /// 预览缩放（双指捏合调整，双击还原）
+    @State private var previewScale: CGFloat = 1
+    @GestureState private var pinchScale: CGFloat = 1
+    @StateObject private var editor = NoteEditorController()
 
     init(model: NotesModel, target: NoteTarget) {
         self.model = model
@@ -379,30 +478,37 @@ struct NoteEditor: View {
 
     var body: some View {
         NavStackCompat {
-            VStack(spacing: 0) {
-                ZStack(alignment: .topLeading) {
-                    TextEditor(text: $text)
-                        .font(.system(size: 16))
-                        .focused($focused)
-                        .padding(.horizontal, 0)
-                        .onAppear {
-                            // TextEditor 默认背景不透明（iOS 15 兼容写法）
-                            UITextView.appearance().backgroundColor = .clear
-                        }
-                        .background(Color.clear)
+            ZStack {
+                editorArea
+                    .opacity(previewMode ? 0 : 1)
+                    .allowsHitTesting(!previewMode)
 
-                    // 占位文字画在编辑器上层，不拦截触摸
-                    if text.isEmpty {
-                        Text("写点什么…")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.tertiary)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 8)
-                            .allowsHitTesting(false)
-                    }
+                if previewMode {
+                    MarkdownPreview(text: text, baseSize: 15,
+                                    scale: previewScale * pinchScale)
+                        .background(Color(.systemBackground))
+                        .transition(.opacity)
+                        .simultaneousGesture(
+                            MagnificationGesture()
+                                .updating($pinchScale) { value, state, _ in
+                                    state = value
+                                }
+                                .onEnded { value in
+                                    let next = previewScale * value
+                                    withAnimation(.easeInOut(duration: 0.15)) {
+                                        previewScale = min(max((next * 10).rounded() / 10, 0.6), 3.0)
+                                    }
+                                }
+                        )
+                        .onTapGesture(count: 2) {
+                            if previewScale != 1 {
+                                withAnimation(.easeInOut(duration: 0.15)) { previewScale = 1 }
+                            }
+                        }
                 }
-                .padding(.horizontal, 12)
-                .padding(.top, 6)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                bottomBar
             }
             .navigationTitle(target.isNew ? "新建笔记" : "编辑笔记")
             .navigationBarTitleDisplayMode(.inline)
@@ -411,14 +517,71 @@ struct NoteEditor: View {
                     Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("保存") { save() }
-                        .font(.system(size: 16, weight: .semibold))
+                    HStack(spacing: 14) {
+                        Button {
+                            togglePreview()
+                        } label: {
+                            Image(systemName: previewMode ? "pencil" : "eye")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                        .accessibilityLabel(previewMode ? "回到编辑" : "预览排版")
+
+                        Button("保存") { save() }
+                            .font(.system(size: 16, weight: .semibold))
+                    }
                 }
             }
         }
-        .onAppear {
-            if target.isNew { focused = true }
+    }
+
+    // MARK: 编辑区
+
+    private var editorArea: some View {
+        ZStack(alignment: .topLeading) {
+            NoteMarkdownTextView(text: $text, controller: editor, autoFocus: target.isNew)
+            if text.isEmpty {
+                Text("写点什么…\n支持 **粗体**、- 列表、- [ ] 待办、> 引用、``` 代码块")
+                    .font(.system(size: 17))
+                    .foregroundStyle(.tertiary)
+                    .lineSpacing(4)
+                    .padding(.horizontal, 19)
+                    .padding(.vertical, 15)
+                    .allowsHitTesting(false)
+            }
         }
+    }
+
+    // MARK: 底部：工具栏 / 预览时给一个「回到编辑」
+
+    private var bottomBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+            if previewMode {
+                Button {
+                    togglePreview()
+                } label: {
+                    Label("回到编辑", systemImage: "pencil")
+                        .font(.system(size: 15, weight: .medium))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Text("双指捏合缩放 · 双击还原")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                    .padding(.bottom, 4)
+            } else {
+                NoteFormatBar(controller: editor)
+            }
+        }
+        .background(Color(.secondarySystemBackground))
+    }
+
+    private func togglePreview() {
+        if !previewMode { editor.endEditing() }
+        withAnimation(.easeInOut(duration: 0.15)) { previewMode.toggle() }
+        if !previewMode { editor.focus() }
     }
 
     private func save() {

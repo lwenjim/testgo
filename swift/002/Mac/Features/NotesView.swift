@@ -150,17 +150,33 @@ struct NotesView: View {
     @State private var draft = ""
     @State private var isNew = false
     @State private var flashSaved = false
+    @State private var previewMode = false
+    /// 预览缩放倍率（1 = 原始排版）
+    @State private var previewScale: CGFloat = 1
+    /// 列模式（Option 拖动纵向框选）
+    @State private var columnMode = false
+    @StateObject private var editor = MarkdownEditorController()
+    /// 编辑 / 预览选中文本自动复制后的底栏状态
+    @ObservedObject private var clipboardStatus = ClipboardStatus.shared
+    /// 多选模式：批量删除用
+    @State private var selectMode = false
+    @State private var multiSelection = Set<UUID>()
+    /// 编辑区铺满窗口（收起左侧列表）
+    @State private var listCollapsed = false
 
     private var list: [Note] { model.filtered(query) }
     private var selected: Note? { model.notes.first { $0.id == selectedID } }
 
     var body: some View {
         HSplitView {
-            listPane
-                .frame(minWidth: 260, idealWidth: 320, maxWidth: 380)
+            if !listCollapsed {
+                listPane
+                    .frame(minWidth: 260, idealWidth: 320, maxWidth: 380)
+            }
             editorPane
-                .frame(minWidth: 420, idealWidth: 620, maxHeight: .infinity)
+                .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
         }
+        .animation(.easeInOut(duration: 0.18), value: listCollapsed)
         .onAppear {
             if selectedID == nil, let first = list.first { select(first) }
             // 进笔记页就主动向已连接设备拉一遍，避免漏掉后台期间推来的改动
@@ -173,27 +189,62 @@ struct NotesView: View {
     private var listPane: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Text("笔记")
+                Text(selectMode ? "已选 \(multiSelection.count) 条" : "笔记")
                     .font(.system(size: 17, weight: .bold))
                 Spacer()
-                Button {
-                    model.reload()
-                    model.refreshFromPeers()
-                } label: {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 13))
+
+                if selectMode {
+                    Button("全选") {
+                        multiSelection = Set(list.map { $0.id })
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.system(size: 12))
+
+                    Button {
+                        deleteSelected()
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 13))
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(multiSelection.isEmpty)
+                    .help("删除选中的笔记")
+
+                    Button("完成") {
+                        exitSelectMode()
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.system(size: 12))
+                } else {
+                    Button {
+                        model.reload()
+                        model.refreshFromPeers()
+                    } label: {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 13))
+                    }
+                    .buttonStyle(.borderless)
+                    .help("从已连接设备同步笔记")
+
+                    Button {
+                        selectMode = true
+                    } label: {
+                        Image(systemName: "checklist")
+                            .font(.system(size: 13))
+                    }
+                    .buttonStyle(.borderless)
+                    .help("多选笔记（批量删除）")
+
+                    Button {
+                        createNew()
+                    } label: {
+                        Label("新建", systemImage: "plus")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .help("新建笔记（⌘N）")
+                    .keyboardShortcut("n", modifiers: .command)
                 }
-                .buttonStyle(.borderless)
-                .help("从已连接设备同步笔记")
-                Button {
-                    createNew()
-                } label: {
-                    Label("新建", systemImage: "plus")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                .buttonStyle(.borderedProminent)
-                .help("新建笔记（⌘N）")
-                .keyboardShortcut("n", modifiers: .command)
             }
             .padding(.horizontal, 14)
             .padding(.top, 14)
@@ -236,23 +287,33 @@ struct NotesView: View {
     }
 
     private func noteCard(_ note: Note) -> some View {
-        let active = !isNew && selectedID == note.id
-        return VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(note.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                Text(Self.dateLabel(note.updatedAt))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+        let checked = selectMode && multiSelection.contains(note.id)
+        let active = selectMode ? checked : (!isNew && selectedID == note.id)
+        return HStack(alignment: .top, spacing: 8) {
+            if selectMode {
+                Image(systemName: checked ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 15))
+                    .foregroundStyle(checked ? Color.accentColor : Color.secondary.opacity(0.55))
+                    .padding(.top, 1)
             }
-            if !note.preview.isEmpty {
-                Text(note.preview)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(note.title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text(Self.dateLabel(note.updatedAt))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+                if !note.preview.isEmpty {
+                    Text(note.preview)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
             }
+            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(11)
@@ -265,15 +326,36 @@ struct NotesView: View {
                 .stroke(active ? Color.accentColor.opacity(0.7) : Color.clear, lineWidth: 1)
         )
         .contentShape(Rectangle())
-        .onTapGesture { select(note) }
+        .onTapGesture {
+            if selectMode {
+                if multiSelection.contains(note.id) {
+                    multiSelection.remove(note.id)
+                } else {
+                    multiSelection.insert(note.id)
+                }
+            } else {
+                select(note)
+            }
+        }
         .contextMenu {
-            Button("编辑") { select(note) }
-            Button(role: .destructive) {
-                if selectedID == note.id { isNew = false }
-                model.delete(note)
-                if selectedID == note.id { resetSelection() }
-            } label: {
-                Label("删除", systemImage: "trash")
+            if !selectMode {
+                Button("编辑") { select(note) }
+                Button("铺满窗口编辑") {
+                    select(note)
+                    withAnimation { listCollapsed = true }
+                }
+                Button(multiSelection.isEmpty ? "多选" : "多选（已选 \(multiSelection.count)）") {
+                    selectMode = true
+                    multiSelection.insert(note.id)
+                }
+                Divider()
+                Button(role: .destructive) {
+                    if selectedID == note.id { isNew = false }
+                    model.delete(note)
+                    if selectedID == note.id { resetSelection() }
+                } label: {
+                    Label("删除", systemImage: "trash")
+                }
             }
         }
     }
@@ -294,6 +376,16 @@ struct NotesView: View {
                         }
                     }
                     Spacer()
+                    Button {
+                        withAnimation { listCollapsed.toggle() }
+                    } label: {
+                        Image(systemName: listCollapsed
+                              ? "sidebar.left"
+                              : "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .buttonStyle(.borderless)
+                    .help(listCollapsed ? "显示笔记列表" : "编辑区铺满窗口")
                     if flashSaved {
                         Label("已保存", systemImage: "checkmark.circle.fill")
                             .font(.system(size: 12))
@@ -306,26 +398,76 @@ struct NotesView: View {
 
                 Divider()
 
-                ZStack(alignment: .topLeading) {
-                    TextEditor(text: $draft)
-                        .font(.system(size: 15))
-                        .scrollContentBackground(.hidden)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                    if draft.isEmpty {
-                        Text("写点什么…")
-                            .font(.system(size: 15))
-                            .foregroundStyle(.tertiary)
-                            .padding(.horizontal, 19)
-                            .padding(.vertical, 18)
-                            .allowsHitTesting(false)
+                // 排版工具栏：标题 / 粗体 / 斜体 / 列表 / 待办 / 引用 / 链接 / 预览…
+                NoteFormatBar(controller: editor,
+                              preview: $previewMode,
+                              zoomScale: $previewScale,
+                              columnMode: $columnMode)
+                    .background(
+                        // 键盘快捷键（不占视觉位置）
+                        HStack(spacing: 0) {
+                            Button("") { editor.wrap("**", "**", sample: "加粗文字") }
+                                .keyboardShortcut("b", modifiers: .command)
+                            Button("") { editor.wrap("*", "*", sample: "斜体文字") }
+                                .keyboardShortcut("i", modifiers: .command)
+                            Button("") { editor.applyLinePrefix("- [ ] ") }
+                                .keyboardShortcut("k", modifiers: [.command, .shift])
+                            Button("") { editor.applyLinePrefix("- ") }
+                                .keyboardShortcut("l", modifiers: [.command, .shift])
+                            // 预览缩放（仅预览态生效）
+                            Button("") { if previewMode { zoomPreview(+1) } }
+                                .keyboardShortcut("=", modifiers: .command)
+                            Button("") { if previewMode { zoomPreview(-1) } }
+                                .keyboardShortcut("-", modifiers: .command)
+                            Button("") { if previewMode { previewScale = 1 } }
+                                .keyboardShortcut("0", modifiers: .command)
+                        }
+                        .opacity(0)
+                        .frame(width: 0, height: 0)
+                    )
+
+                Divider()
+
+                if previewMode {
+                    MarkdownPreview(text: draft, scale: previewScale)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ZStack(alignment: .topLeading) {
+                        MarkdownTextView(text: $draft, controller: editor, columnMode: columnMode)
+                        if draft.isEmpty {
+                            Text("写点什么… 支持 Markdown：**粗体**、- 列表、- [ ] 待办、> 引用")
+                                .font(.system(size: 15))
+                                .foregroundStyle(.tertiary)
+                                .padding(.horizontal, 23)
+                                .padding(.vertical, 18)
+                                .allowsHitTesting(false)
+                        }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 Divider()
 
                 HStack(spacing: 10) {
+                    Text("\(countWords(draft)) 字 · \(draft.components(separatedBy: "\n").count) 行")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+
+                    // 剪贴板状态：编辑 / 预览里选中文本即自动复制
+                    if let clip = clipboardStatus.content {
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc.on.doc.fill")
+                                .font(.system(size: 10))
+                            Text("已复制：\(clip)")
+                                .font(.system(size: 11))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .frame(maxWidth: 300, alignment: .leading)
+                        }
+                        .foregroundStyle(Color.accentColor)
+                        .transition(.opacity)
+                    }
+
                     Spacer()
                     Text("保存后自动同步到已连接的设备")
                         .font(.system(size: 11))
@@ -362,12 +504,47 @@ struct NotesView: View {
         selectedID = note.id
         isNew = false
         draft = note.text
+        previewMode = false
+        previewScale = 1
+    }
+
+    /// 预览缩放：每档 ±20%，范围 0.6–3.0
+    private func zoomPreview(_ direction: Int) {
+        let step: CGFloat = 0.2
+        let next = previewScale + CGFloat(direction) * step
+        withAnimation(.easeInOut(duration: 0.12)) {
+            previewScale = min(max((next * 10).rounded() / 10, 0.6), 3.0)
+        }
+    }
+
+    /// 正文字数（不含空白）
+    private func countWords(_ text: String) -> Int {
+        text.filter { !$0.isWhitespace && !$0.isNewline }.count
+    }
+
+    private func exitSelectMode() {
+        selectMode = false
+        multiSelection.removeAll()
+    }
+
+    private func deleteSelected() {
+        let ids = multiSelection
+        let targets = model.notes.filter { ids.contains($0.id) }
+        for note in targets { model.delete(note) }
+        if let id = selectedID, ids.contains(id), !isNew {
+            selectedID = nil
+            draft = ""
+            previewMode = false
+            resetSelection()
+        }
+        exitSelectMode()
     }
 
     private func createNew() {
         selectedID = nil
         isNew = true
         draft = ""
+        previewMode = false
     }
 
     private func resetSelection() {

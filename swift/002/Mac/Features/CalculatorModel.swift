@@ -212,15 +212,14 @@ final class CalculatorModel: ObservableObject {
         if history.count > 50 { history.removeLast(history.count - 50) }
     }
 
+    /// 点击历史记录：把结果粘到当前输入里（而不是替换显示区）
     func reuse(_ item: HistoryItem) {
         if let d = item.valueD {
-            committed = DecimalEngine.format(d)
-            ansDecimal = d
-            expression = ""
+            // 负数用括号包住，避免 "−5" 直接拼进表达式被当成减号
+            let s = DecimalEngine.plainString(d)
+            append(d < 0 ? "(" + s + ")" : s)
         } else if let i = item.valueI {
-            mode = .programmer
-            progCommitted = i
-            progExpression = ""
+            appendProg(ProgrammerEngine.rawDigits(i, radix: radix, bits: wordSize))
         }
     }
 
