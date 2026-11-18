@@ -2,12 +2,13 @@
 # deploy.sh — 编译一次，并行安装到所有已连接的真机；也可单独装 Mac 版
 #
 # 用法：
-#   ./deploy.sh               # Release 编译 → 装到所有在线 iOS 设备 → 自动启动
+#   ./deploy.sh               # Release 编译 → 先更新 Mac 版（到「应用程序」）→ 再装到所有在线 iOS 设备
 #   ./deploy.sh -d            # Debug 编译（保留调试符号，便于连 Xcode 排查）
-#   ./deploy.sh iPhone13 iPad # 只装指定设备（名字或 UDID 片段，模糊匹配）
+#   ./deploy.sh iPhone13 iPad # 只装指定 iOS 设备（名字或 UDID 片段，模糊匹配）
 #   ./deploy.sh -l            # 只看当前有哪些 iOS 设备在线
-#   ./deploy.sh mac           # 只编译 + 覆盖安装 Mac 版（到「应用程序」），并启动
-#   ./deploy.sh -a            # Mac + 所有 iOS 设备，两边一起装
+#   ./deploy.sh mac           # 只编译 + 覆盖安装 Mac 版，并启动（不动 iOS）
+#   ./deploy.sh -i            # 只装 iOS，跳过 Mac 版
+#   ./deploy.sh -a            # 强制 Mac + 所有 iOS 设备（与默认行为相同）
 #
 # 前提：iOS 设备已经用数据线或 Xcode「无线调试」配对过一次；Mac 版无需配对。
 
@@ -20,7 +21,7 @@ BUNDLE_ID="songshuai.-02"
 DERIVED="build"
 CONFIG="Release"
 LAUNCH=1
-MAC=0        # 是否顺带编 Mac
+MAC=1        # 默认顺带更新 Mac 版（-i 可关掉）
 IOS=1        # 是否装 iOS
 FILTERS=()
 
@@ -80,6 +81,7 @@ while [[ $# -gt 0 ]]; do
     -l|--list)   LAUNCH=2; shift ;;
     -n|--no-launch) LAUNCH=0; shift ;;
     -a|--all)    MAC=1; shift ;;
+    -i|--ios)    MAC=0; shift ;;
     -m|--mac)    MAC=1; IOS=0; shift ;;
     mac|macos|macOS|Mac) MAC=1; IOS=0; shift ;;
     *) FILTERS+=("$1"); shift ;;
@@ -113,6 +115,10 @@ PY
 )
 
 if [[ -z "$DEVICES" ]]; then
+  if [[ $MAC -eq 1 ]]; then
+    echo "⚠︎ 没有找到任何已配对的 iOS 设备（Mac 版已更新完成）"
+    exit 0
+  fi
   echo "✗ 没有找到任何已配对的设备（先在 Xcode 里连一次设备）"
   exit 1
 fi
@@ -129,6 +135,7 @@ fi
 if [[ -z "$SELECTED" ]]; then
   echo "✗ 没有匹配到在线设备。当前状态："
   echo "$DEVICES" | awk -F'\t' '{ printf "  %-22s %-12s %s\n", $2, $3, $1 }'
+  [[ $MAC -eq 1 ]] && { echo "（Mac 版已更新完成）"; exit 0; }
   exit 1
 fi
 
