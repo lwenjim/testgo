@@ -308,6 +308,8 @@ struct MarkdownTextView: NSViewRepresentable {
     var noteKey: String = ""
     /// 抓手模式：左键拖动平移（Shift+拖动仍可选文本）
     var panMode: Bool = true
+    /// 滚动条开关：默认隐藏（overlay 自动隐藏），打开后常显可拖
+    var showScrollers: Bool = false
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -315,8 +317,7 @@ struct MarkdownTextView: NSViewRepresentable {
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = true   // 不换行后靠横向滚动看长行
-        scroll.autohidesScrollers = false      // 滚动条常显，鼠标左键可直接拖动
-        scroll.scrollerStyle = .legacy         // 传统滚动条：随时可见、可点可拖
+        Self.applyScrollerConfig(scroll, show: showScrollers)
         scroll.drawsBackground = true
         scroll.backgroundColor = .white
         scroll.borderType = .noBorder
@@ -378,6 +379,12 @@ struct MarkdownTextView: NSViewRepresentable {
             tv.window?.invalidateCursorRects(for: tv)
             NSCursor.iBeam.set()
         }
+        // 滚动条开关：overlay（隐藏、滚动时浮现）↔ legacy（常显）
+        if context.coordinator.lastShowScrollers != showScrollers {
+            context.coordinator.lastShowScrollers = showScrollers
+            Self.applyScrollerConfig(scroll, show: showScrollers)
+            scroll.needsLayout = true
+        }
 
         // 换笔记（含新建、保存新笔记后拿到 UUID）：无论文本是否相同都重置视图状态。
         // 之前只在 tv.string != text 时归零，切到两篇内容相同的笔记就会保留横向位置。
@@ -406,6 +413,17 @@ struct MarkdownTextView: NSViewRepresentable {
         if switched {
             forceSyncLayout(tv)
             controller.scrollToTopLeft()
+        }
+    }
+
+    /// 滚动条形态：show = legacy 常显可拖；否则 overlay 默认隐藏、滚动时浮现
+    private static func applyScrollerConfig(_ scroll: NSScrollView, show: Bool) {
+        if show {
+            scroll.scrollerStyle = .legacy
+            scroll.autohidesScrollers = false
+        } else {
+            scroll.scrollerStyle = .overlay
+            scroll.autohidesScrollers = true
         }
     }
 
@@ -453,6 +471,8 @@ struct MarkdownTextView: NSViewRepresentable {
         var parent: MarkdownTextView
         /// 上一次渲染对应的笔记标识，用于检测「换笔记」
         var lastNoteKey = ""
+        /// 上一次的滚动条开关，避免 updateNSView 反复重设
+        var lastShowScrollers: Bool?
 
         init(_ parent: MarkdownTextView) { self.parent = parent }
 
@@ -583,11 +603,27 @@ final class ColumnTextView: NSTextView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        drawLineNumbers()
-        super.draw(dirtyRect)
+        // ① 行号条带必须在 super.draw 之前画：实测 NSTextView 的 super.draw 返回后，
+        //    再追加的任何填充/文字都不会出现在屏幕上（原因未明，CTM 为单位阵仍如此）。
+        // ② 条带用不透明底色铺满，行号画在条带上。
+        // ③ 正文用「裁掉条带区域」后的剪裁区绘制：横向滚动后正文从条带下方穿过时，
+        //    物理上不可能叠上行号（比先画正文再盖条带的方案可靠）。
+        drawLineNumbers(dirtyRect)
+
+        let visible = visibleRect
+        let textRegion = NSRect(x: visible.minX + lineNumberWidth, y: visible.minY,
+                                width: max(0, visible.width - lineNumberWidth),
+                                height: visible.height)
+        let textClip = textRegion.intersection(dirtyRect)
+        if textClip.width > 0, textClip.height > 0 {
+            NSGraphicsContext.saveGraphicsState()
+            NSBezierPath(rect: textClip).addClip()
+            super.draw(dirtyRect)
+            NSGraphicsContext.restoreGraphicsState()
+        }
     }
 
-    private func drawLineNumbers() {
+    private func drawLineNumbers(_ dirtyRect: NSRect) {
         guard let lm = layoutManager, textContainer != nil else { return }
         let ns = string as NSString
         let total = ns.length
@@ -600,6 +636,14 @@ final class ColumnTextView: NSTextView {
                                                            .foregroundColor: NSColor.controlAccentColor]
         // 条带右缘固定在可视区左缘 + 行号带宽；数字右对齐，距正文 8pt 间隙
         let bandRight = visible.minX + lineNumberWidth
+
+        // 条带铺不透明底色（与 scroll view 背景一致），把从下方穿过的正文盖掉
+        let band = NSRect(x: visible.minX, y: visible.minY,
+                          width: lineNumberWidth, height: visible.height)
+        if band.intersects(dirtyRect) {
+            (enclosingScrollView?.backgroundColor ?? .white).setFill()
+            band.intersection(dirtyRect).fill()
+        }
         var lineNo = 1
         var idx = 0
         while idx <= total {
@@ -915,6 +959,8 @@ struct NoteFormatBar: View {
     @Binding var zoomScale: CGFloat
     /// 列模式开关（按住 Option 拖动 = 纵向框选）
     @Binding var columnMode: Bool
+    /// 滚动条开关：默认隐藏，打开后常显
+    @Binding var showScrollers: Bool
 
     /// 显示用的百分比（85%、120%…）
     private var percentText: String {
@@ -983,6 +1029,26 @@ struct NoteFormatBar: View {
             .opacity(preview ? 0.45 : 1)
 
             Spacer(minLength: 4)
+
+            // 滚动条开关（编辑 / 预览都生效）
+            Button {
+                showScrollers.toggle()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "rectangle.bottomthird.inset.filled")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("滚动条")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .padding(.horizontal, 8)
+                .frame(height: 24)
+                .background(RoundedRectangle(cornerRadius: 6)
+                    .fill(showScrollers ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.06)))
+                .foregroundStyle(showScrollers ? Color.accentColor : Color.secondary)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("显示 / 隐藏纵向、横向滚动条（默认隐藏，滚动时浮现）")
 
             // 列模式开关（编辑态生效）
             if !preview {

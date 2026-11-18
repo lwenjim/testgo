@@ -406,6 +406,34 @@ struct GroupChatPane: View {
 
 // MARK: - 输入栏（富媒体）
 
+/// 功能条图标按钮：悬停时浮起一块圆角底色，离开恢复透明
+private struct ComposerIconButton: View {
+    let icon: String
+    let label: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Color.secondary)
+                .frame(width: 30, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(hovering ? Color.primary.opacity(0.08) : Color.clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            hovering = inside
+            if inside { NSCursor.pointingHand.set() }
+        }
+        .help(label)
+    }
+}
+
 enum MacSendTarget {
     case peer(String)
     case group(String)
@@ -444,8 +472,26 @@ struct MacComposer: View {
     }
 
     var body: some View {
-        VStack(spacing: 5) {
-            // 多行输入框：白色背景、右侧顶到窗口右边框；有内容才出垂直滚动条
+        VStack(spacing: 4) {
+            // 微信式功能条：浮在输入区上方（悬浮态带圆角底色）
+            HStack(spacing: 4) {
+                iconButton("face.smiling", "表情") { showEmojiPanel = true }
+                    .popover(isPresented: $showEmojiPanel, arrowEdge: .bottom) { emojiGrid }
+                iconButton("cube.transparent", "收藏") { showFavoritesPanel = true }
+                    .popover(isPresented: $showFavoritesPanel, arrowEdge: .bottom) { favoritesPanel }
+                iconButton("photo", "图片") { showImagePanel = true }
+                iconButton("folder", "文件") { showFilePanel = true }
+                iconButton("scissors", "截屏发送") { captureScreen() }
+                iconButton("video", "视频") { showVideoPanel = true }
+                iconButton("mic", "录音") { showRecorder = true }
+                iconButton("mappin.circle", "位置") { showLocationSheet = true }
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 14)
+            .padding(.trailing, 10)
+            .padding(.top, 4)
+
+            // 多行输入框：白色圆角卡片，沉到功能条下方贴底
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $draft)
                     .font(.system(size: 13))
@@ -453,9 +499,9 @@ struct MacComposer: View {
                     .background(Color.clear)
                     .scrollIndicators(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                       ? .never : .automatic)
-                    .frame(minHeight: 56, maxHeight: 130)
+                    .frame(minHeight: 64, maxHeight: 130)
                     .padding(.leading, 14)
-                    .padding(.trailing, 4)
+                    .padding(.trailing, 6)
                     .padding(.vertical, 8)
                     // 回车直接发送；Shift+回车 交回默认行为（换行）
                     .onKeyPress { press in
@@ -475,38 +521,13 @@ struct MacComposer: View {
                 }
             }
             .background(Color.white)
-            // 右侧顶到窗口右边框：只给左侧圆角
-            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 10,
-                                              bottomLeadingRadius: 10,
-                                              style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
-                UnevenRoundedRectangle(topLeadingRadius: 10,
-                                       bottomLeadingRadius: 10,
-                                       style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(Color.secondary.opacity(0.14), lineWidth: 0.5)
             )
-
-            // 微信式功能条（在下）：悬浮在输入区下方，无背景，底部贴窗口底
-            HStack(spacing: 4) {
-                iconButton("face.smiling", "表情") { showEmojiPanel = true }
-                    .popover(isPresented: $showEmojiPanel, arrowEdge: .bottom) { emojiGrid }
-                iconButton("cube.transparent", "收藏") { showFavoritesPanel = true }
-                    .popover(isPresented: $showFavoritesPanel, arrowEdge: .bottom) { favoritesPanel }
-                iconButton("photo", "图片") { showImagePanel = true }
-                iconButton("folder", "文件") { showFilePanel = true }
-                iconButton("scissors", "截屏发送") { captureScreen() }
-                iconButton("video", "视频") { showVideoPanel = true }
-                iconButton("mic", "录音") { showRecorder = true }
-                iconButton("mappin.circle", "位置") { showLocationSheet = true }
-                Spacer(minLength: 0)
-                Text("回车发送 · Shift+回车换行")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.tertiary)
-                    .padding(.trailing, 10)
-            }
-            .padding(.leading, 12)
-            .padding(.trailing, 8)
-            .padding(.bottom, 3)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 10)
         }
         // 输入区顶边框 2px，分隔聊天记录
         .overlay(alignment: .top) {
@@ -564,25 +585,10 @@ struct MacComposer: View {
         }
     }
 
-    // MARK: 功能条按钮（微信风格：只放图标，不配文字）
+    // MARK: 功能条按钮（微信风格：只放图标，悬停浮起圆角底色）
 
     private func iconButton(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(Color.secondary)
-                .frame(width: 30, height: 26)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.clear)
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { inside in
-            if inside { NSCursor.pointingHand.set() }
-        }
-        .help(label)
+        ComposerIconButton(icon: icon, label: label, action: action)
     }
 
     // MARK: 表情面板

@@ -177,6 +177,8 @@ struct NotesView: View {
     /// 状态栏开关（默认隐藏）、抓手平移开关
     @AppStorage("macNotesStatusBar") private var showStatusBar = false
     @AppStorage("macNotesPanMode") private var panMode = true
+    /// 滚动条开关（默认隐藏，滚动时浮现；打开后常显可拖）
+    @AppStorage("macNotesShowScrollers") private var showScrollers = false
     /// 外部文件双向同步
     @StateObject private var fileSync = NoteFileSync()
     /// 上次载入 / 保存的正文：用来判断是否有未保存改动、接收外部文件更新
@@ -475,7 +477,8 @@ struct NotesView: View {
                 NoteFormatBar(controller: editor,
                               preview: $previewMode,
                               zoomScale: $previewScale,
-                              columnMode: $columnMode)
+                              columnMode: $columnMode,
+                              showScrollers: $showScrollers)
                     .background(
                         // 键盘快捷键（不占视觉位置）
                         HStack(spacing: 0) {
@@ -522,7 +525,8 @@ struct NotesView: View {
                     ZStack(alignment: .topLeading) {
                         MarkdownTextView(text: $draft, controller: editor,
                                          columnMode: columnMode,
-                                         noteKey: noteKey, panMode: panMode)
+                                         noteKey: noteKey, panMode: panMode,
+                                         showScrollers: showScrollers)
                         if draft.isEmpty {
                             Text("写点什么… 支持 Markdown：**粗体**、- 列表、- [ ] 待办、> 引用")
                                 .font(.system(size: 15))
