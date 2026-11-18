@@ -55,14 +55,56 @@ final class MarkdownEditorController: ObservableObject {
     /// 切换笔记时清掉旧笔记的撤销栈，避免 ⌘Z 把上一篇的文字带进来
     func clearUndo() { textView?.undoManager?.removeAllActions() }
 
-    /// 换笔记 / 新建时回到左上角（横向滚动条停在最左侧）
+    /// 换笔记 / 新建 / 启动进入时把编辑区收敛到左上角。
+    ///
+    /// NSScrollView 的滚动条占位、clipView 尺寸、documentView.frame 是**分阶段**才定稳的：
+    /// 首帧几何还没定稳就绘制，正文会挤到底部 / 横向偏移，滚一下滚轮让滚动条
+    /// 「腾出空间」、再把滑块拖到最左才恢复正常（用户实测复现）。
+    /// 所以每一拍都先强制完成 scroll view 布局 + 文本排版 + sizeToFit，再让 AppKit
+    /// 用官方 API 把第 0 个字符滚到可见（自动处理 flipped / 文档高度 / inset，比手算 y 可靠），
+    /// 最后显式把横向归零并整体重绘。分多拍覆盖 window 显示、scroller 占位、尺寸稳定各阶段。
     func scrollToTopLeft() {
         guard let tv = textView, let scroll = tv.enclosingScrollView else { return }
-        let clip = scroll.contentView
-        let y: CGFloat = tv.isFlipped ? 0
-            : max(0, tv.bounds.height - clip.bounds.height)
-        clip.scroll(to: NSPoint(x: 0, y: y))
-        scroll.reflectScrolledClipView(clip)
+        let apply = {
+            // ① 先让 scroll view 完成一次布局：滚动条占位、contentSize、clipView 尺寸
+            //    都要等这一步才准确。
+            scroll.layoutSubtreeIfNeeded()
+            if let lm = tv.layoutManager, let tc = tv.textContainer {
+                lm.ensureLayout(for: tc)
+            }
+            // ② 用 tile 之后的 contentSize 刷新 minSize 并 sizeToFit：
+            //    documentView 至少与可视区等高（短笔记也不会被底对齐），
+            //    且不会沿用 makeNSView 时的初始尺寸。
+            let visible = scroll.contentSize
+            tv.minSize = visible
+            tv.sizeToFit()
+            var frame = tv.frame.size
+            frame.width = max(frame.width, visible.width)
+            frame.height = max(frame.height, visible.height)
+            if frame != tv.frame.size { tv.setFrameSize(frame) }
+            // ③ 官方定位：把第 0 个字符滚到可见（自动处理 flipped / 文档高度 / inset）
+            tv.scrollRangeToVisible(NSRange(location: 0, length: 0))
+            let clip = scroll.contentView
+            var origin = clip.bounds.origin
+            origin.x = 0
+            // flipped 文档顶部 = 0；非 flipped 顶部 = 文档高 - 可视高
+            origin.y = tv.isFlipped ? 0
+                : max(0, tv.bounds.height - clip.bounds.height)
+            clip.scroll(to: origin)
+            scroll.reflectScrolledClipView(clip)
+            // ④ legacy 滚动条：x 已是 0 时 scroll(to:) 是空操作，滑块 floatValue 会停在
+            //    旧值（实测 0.028），必须显式钉到 0 才「看起来」顶在最左边。
+            scroll.horizontalScroller?.floatValue = 0
+            scroll.horizontalScroller?.setNeedsDisplay()
+            scroll.verticalScroller?.floatValue = 0
+            scroll.verticalScroller?.setNeedsDisplay()
+            tv.needsDisplay = true
+            scroll.needsDisplay = true
+        }
+        apply()
+        DispatchQueue.main.async(execute: apply)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: apply)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: apply)
     }
 
     // MARK: 查找高亮
@@ -292,7 +334,6 @@ struct MarkdownTextView: NSViewRepresentable {
 
         let tv = ColumnTextView(frame: .zero, textContainer: container)
         tv.isPanMode = panMode
-        tv.installSpacePanMonitor()
         scroll.documentView = tv
         tv.isVerticallyResizable = true
         tv.isHorizontallyResizable = true
@@ -317,16 +358,10 @@ struct MarkdownTextView: NSViewRepresentable {
         // 笔记里常是代码 / SQL / 配置，正文与行号统一用等宽字体，视觉才整齐对齐
         tv.string = text
         applyTextStyle(to: tv)
-
-        // 行号标尺：背景交给图层，严格锁在标尺自己的宽度内，不会画到编辑器顶部/底部
-        let ruler = LineNumberRulerView(textView: tv)
-        ruler.wantsLayer = true
-        ruler.layer?.backgroundColor = NSColor.white.cgColor
-        // 关键：强制裁剪，行号/分隔线绝不会画到标尺之外（工具栏、状态栏）
-        ruler.layer?.masksToBounds = true
-        scroll.hasVerticalRuler = true
-        scroll.verticalRulerView = ruler
-        scroll.rulersVisible = true
+        tv.syncLineNumberMetrics()
+        forceSyncLayout(tv)
+        // 行号画在文本视图自身内（不走 vertical ruler）：横向滚动时监听 clip 钉住左缘
+        tv.installScrollObserver()
 
         controller.textView = tv
         return scroll
@@ -337,28 +372,63 @@ struct MarkdownTextView: NSViewRepresentable {
         context.coordinator.parent = self
         controller.textView = tv
         tv.isColumnMode = columnMode
-        tv.isPanMode = panMode
+        if tv.isPanMode != panMode {
+            tv.isPanMode = panMode
+            // 开关抓手模式后立刻重算光标（左键恒为 I 型，右键拖动时才切手形）
+            tv.window?.invalidateCursorRects(for: tv)
+            NSCursor.iBeam.set()
+        }
 
         // 换笔记（含新建、保存新笔记后拿到 UUID）：无论文本是否相同都重置视图状态。
         // 之前只在 tv.string != text 时归零，切到两篇内容相同的笔记就会保留横向位置。
-        if context.coordinator.lastNoteKey != noteKey {
+        let switched = context.coordinator.lastNoteKey != noteKey
+        if switched {
             context.coordinator.lastNoteKey = noteKey
             controller.clearUndo()
             controller.clearFindHighlights()
-            controller.scrollToTopLeft()
+            // 关键：别沿用旧笔记的光标位置。NSTextView 会在布局后把光标
+            // scrollRangeToVisible，若旧光标停在长行右侧，横向滚动条就被推回右边。
+            controller.textView?.setSelectedRange(NSRange(location: 0, length: 0))
         }
 
-        // 外部换笔记时同步内容（保留光标位置，避免编辑时被回写打断）
+        // 外部换笔记 / 同步推来新文本（保留光标位置，避免编辑时被回写打断）
         if tv.string != text {
             let max = (text as NSString).length
-            let loc = min(tv.selectedRange().location, max)
+            let loc = switched ? 0 : min(tv.selectedRange().location, max)
             tv.string = text
             applyTextStyle(to: tv)
             tv.setSelectedRange(NSRange(location: loc, length: 0))
-            // 换笔记时横向滚动归零，滚动条停在最左侧
-            scroll.contentView.scroll(to: NSPoint(x: 0, y: scroll.contentView.bounds.origin.y))
-            scroll.reflectScrolledClipView(scroll.contentView)
         }
+
+        // 文本 / 选区就位之后再收敛布局与滚动位置。放在前面等于白做：
+        // 那时 documentView 还是初始尺寸，scroll view 尚未 tile，
+        // 首帧就会「内容贴底 + 滚动条没占位」，要等滚一下滚轮才恢复。
+        if switched {
+            forceSyncLayout(tv)
+            controller.scrollToTopLeft()
+        }
+    }
+
+    /// 设置文本后立即完成同步布局并整体重绘。
+    /// 除了文本排版，还要强制 scroll view tile 并把 documentView 撑到至少可视区大小：
+    /// 否则首帧 documentView 仍是初始 200x200、被底对齐，正文「插到行号底部」，
+    /// 要滚一下滚轮触发 tile 才腾出空间（用户实测复现）。
+    private func forceSyncLayout(_ tv: NSTextView) {
+        guard let lm = tv.layoutManager, let container = tv.textContainer else { return }
+        let scroll = tv.enclosingScrollView
+        scroll?.layoutSubtreeIfNeeded()
+        lm.ensureLayout(for: container)
+        tv.sizeToFit()
+        if let scroll {
+            let visible = scroll.contentSize
+            tv.minSize = visible
+            var frame = tv.frame.size
+            frame.width = max(frame.width, visible.width)
+            frame.height = max(frame.height, visible.height)
+            if frame != tv.frame.size { tv.setFrameSize(frame) }
+            scroll.needsDisplay = true
+        }
+        tv.needsDisplay = true
     }
 
     /// 全文套用等宽中等字重 + 正文色，中文笔画更实、浅色背景下不发虚。
@@ -394,6 +464,7 @@ struct MarkdownTextView: NSViewRepresentable {
         /// 编辑模式：选中即复制到底部展示的剪贴板
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
+            tv.needsDisplay = true  // 光标换行后行号「当前行」高亮要跟着挪
             let sel = tv.selectedRange()
             guard sel.length > 0 else { return }
             let ns = tv.string as NSString
@@ -459,52 +530,177 @@ struct MarkdownTextView: NSViewRepresentable {
 // MARK: - 支持列模式的文本视图（Option + 拖动 = 纵向框选）
 
 final class ColumnTextView: NSTextView {
-    /// 开关由 SwiftUI 侧传入；关掉时不拦截鼠标，恢复原生行为
+    /// 开关由 SwiftUI 侧传入；关掉时不拦截右键，恢复原生上下文菜单
     var isColumnMode = false
-    /// 抓手模式：直接按住左键拖动即可平移（Shift+拖动仍可选文本）
+    /// 抓手模式：按住「右键」拖动即可平移画布；左键始终是原生文本编辑
     var isPanMode = true
+
+    // MARK: 行号（画在文本视图自身内，不再走 NSScrollView 的 vertical ruler）
+    //
+    // 不用 NSRulerView 的原因：SwiftUI 首帧下 NSScrollView 不会为 ruler 顶开
+    // contentView（标尺白色图层压住正文行首），滚动一下触发 tile 又会顶开——
+    // 「顶开/不顶开」两种状态怎么补丁都不稳。行号画进自身后：
+    // 正文 inset 恒定为「行号带宽 + 间隙」，间隙任何时刻都紧凑一致。
+    //
+    // y 用文档坐标（自然随垂直滚动）；x 每帧取 visibleRect.minX（横向滚动时
+    // 行号钉在可视区左缘——通过监听 clip 横向变化强制全量重绘实现）。
+
+    private let numberFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+    /// 正文段落的额外行距（applyTextStyle 里 para.lineSpacing = 3），
+    /// lineFragmentRect 高度含这段行距，行号居中时要扣掉，否则整体偏低
+    private let extraLineSpacing: CGFloat = 3
+    /// 行号条带宽度，随行数位数变化；正文 inset.width = 条带宽 + 8 间隙
+    private(set) var lineNumberWidth: CGFloat = 38
+    private var scrollObserver: NSObjectProtocol?
+    private var lastClipX: CGFloat = -1
+
+    /// 按总行数位数定行号带宽，并同步正文 inset（不要在 draw 里改，会抖动）
+    func syncLineNumberMetrics() {
+        let lines = (string as NSString).components(separatedBy: "\n").count
+        let sample = String(repeating: "0", count: max(2, String(lines).count))
+        let width = ceil((sample as NSString).size(withAttributes: [.font: numberFont]).width) + 16
+        if abs(lineNumberWidth - width) > 0.5 {
+            lineNumberWidth = width
+            textContainerInset = NSSize(width: width + 8, height: 14)
+        }
+    }
+
+    /// 横向滚动时 clip bounds 变化，行号必须全量重绘才能钉在可视区左缘
+    /// （AppKit 滚动是像素拷贝，只重绘新露出的区域，旧区域的行号会跟着内容平移走）
+    func installScrollObserver() {
+        guard scrollObserver == nil,
+              let clip = enclosingScrollView?.contentView else { return }
+        lastClipX = clip.bounds.origin.x
+        scrollObserver = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification, object: clip, queue: .main
+        ) { [weak self] _ in
+            guard let self, let clip = self.enclosingScrollView?.contentView else { return }
+            if clip.bounds.origin.x != self.lastClipX {
+                self.lastClipX = clip.bounds.origin.x
+                self.needsDisplay = true
+            }
+        }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        drawLineNumbers()
+        super.draw(dirtyRect)
+    }
+
+    private func drawLineNumbers() {
+        guard let lm = layoutManager, textContainer != nil else { return }
+        let ns = string as NSString
+        let total = ns.length
+        guard total > 0 else { return }
+        let visible = visibleRect
+        let cursorLine = ns.lineNumber(at: selectedRange().location)
+        let normalAttrs: [NSAttributedString.Key: Any] = [.font: numberFont,
+                                                          .foregroundColor: NSColor.secondaryLabelColor]
+        let currentAttrs: [NSAttributedString.Key: Any] = [.font: numberFont,
+                                                           .foregroundColor: NSColor.controlAccentColor]
+        // 条带右缘固定在可视区左缘 + 行号带宽；数字右对齐，距正文 8pt 间隙
+        let bandRight = visible.minX + lineNumberWidth
+        var lineNo = 1
+        var idx = 0
+        while idx <= total {
+            var lineStart = 0, lineEnd = 0, contentsEnd = 0
+            ns.getLineStart(&lineStart, end: &lineEnd, contentsEnd: &contentsEnd,
+                            for: NSRange(location: min(idx, total), length: 0))
+            // 空行取 1 个字符（换行符）定位，避免行号漏画
+            let charLength = max(1, contentsEnd - lineStart)
+            let charRange = NSRange(location: lineStart,
+                                    length: min(charLength, total - lineStart))
+            let glyphRange = lm.glyphRange(forCharacterRange: charRange, actualCharacterRange: nil)
+            if glyphRange.location != NSNotFound, glyphRange.location < lm.numberOfGlyphs {
+                let lineRect = lm.lineFragmentRect(forGlyphAt: glyphRange.location, effectiveRange: nil)
+                let docY = lineRect.minY + textContainerInset.height
+                if docY > visible.maxY { break }  // 行按文档顺序递增，越过可视区即可停
+                if docY >= visible.minY - lineRect.height {
+                    let label = "\(lineNo)" as NSString
+                    let attrs = lineNo == cursorLine ? currentAttrs : normalAttrs
+                    let size = label.size(withAttributes: attrs)
+                    let textHeight = max(0, lineRect.height - extraLineSpacing)
+                    let centerY = docY + (textHeight - size.height) / 2
+                    label.draw(at: NSPoint(x: bandRight - size.width - 6, y: centerY),
+                               withAttributes: attrs)
+                }
+            }
+            if lineEnd >= total { break }
+            idx = lineEnd
+            lineNo += 1
+        }
+    }
+
+    /// 输入 / 程序设置文本都会走到这里：同步行号带宽并重绘
+    override func didChangeText() {
+        super.didChangeText()
+        syncLineNumberMetrics()
+        needsDisplay = true
+    }
 
     private var isColumnDragging = false
     private var anchorLineStart = 0
     private var anchorCol = 0
 
-    /// 空格 + 左键拖动 = 平移画布（抓手模式关闭时仍可用）
-    private var spaceHeld = false
+    /// 右键平移状态：起点与事件用来区分「纯点击弹菜单」和「拖动平移」
     private var isPanning = false
     private var panLastWindow = NSPoint.zero
+    private var panStartWindow = NSPoint.zero
+    private var panDownEvent: NSEvent?
+    private var panDidMove = false
     private var panVelocity = NSPoint.zero
     private var momentumTimer: Timer?
-    private var keyMonitors: [Any] = []
+    /// 右键拖动期间显示握紧的手形光标
+    private var panCursorClosed = false
+
+    override func resetCursorRects() {
+        if panCursorClosed {
+            addCursorRect(bounds, cursor: .closedHand)
+        } else {
+            super.resetCursorRects()
+        }
+    }
+
+    /// NSTextView 的 I 型光标来自 cursorUpdate 事件，这里必须放行 super，
+    /// 否则悬停会一直是手形，误导左键文本编辑。
+    override func cursorUpdate(with event: NSEvent) {
+        if panCursorClosed {
+            NSCursor.closedHand.set()
+        } else {
+            super.cursorUpdate(with: event)
+        }
+    }
+
+    override func flagsChanged(with event: NSEvent) {
+        window?.invalidateCursorRects(for: self)
+        super.flagsChanged(with: event)
+    }
+
+    /// 按下右键开始抓手拖动：立即切到握紧的手
+    private func beginPanCursor() {
+        panCursorClosed = true
+        NSCursor.closedHand.set()
+        window?.invalidateCursorRects(for: self)
+    }
+
+    /// 松开右键结束拖动：回到 I 型光标
+    private func endPanCursor() {
+        guard panCursorClosed else { return }
+        panCursorClosed = false
+        NSCursor.iBeam.set()
+        window?.invalidateCursorRects(for: self)
+    }
 
     deinit {
-        keyMonitors.forEach { NSEvent.removeMonitor($0) }
+        if let scrollObserver { NotificationCenter.default.removeObserver(scrollObserver) }
         momentumTimer?.invalidate()
     }
 
-    func installSpacePanMonitor() {
-        guard keyMonitors.isEmpty else { return }
-        keyMonitors.append(NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            guard let self else { return event }
-            if event.keyCode == 49, !event.modifierFlags.contains(.command) { // 49 = Space
-                self.spaceHeld = true
-            }
-            return event
-        })
-        keyMonitors.append(NSEvent.addLocalMonitorForEvents(matching: [.keyUp]) { [weak self] event in
-            guard let self else { return event }
-            if event.keyCode == 49 {
-                self.spaceHeld = false
-                self.isPanning = false
-            }
-            return event
-        })
-    }
-
     override func mouseDown(with event: NSEvent) {
+        // 左键一按下就停掉右键拖动残留的惯性，避免点进正文时画布还在滑
         stopMomentum()
         let mods = event.modifierFlags
-
-        // 列模式优先：Option + 左键拖动 = 纵向框选
+        // 列模式：Option + 左键拖动 = 纵向框选（独立功能，保留）
         if isColumnMode, event.clickCount == 1, mods.contains(.option) {
             let point = convert(event.locationInWindow, from: nil)
             if let anchor = lineColumn(at: point) {
@@ -515,32 +711,12 @@ final class ColumnTextView: NSTextView {
                 return
             }
         }
-
-        // 抓手模式（或空格）下，普通左键拖动 = 平移；Shift + 拖动保留原生选文本
-        let wantsPan = (isPanMode || spaceHeld)
-            && event.clickCount == 1
-            && !mods.contains(.shift)
-        if wantsPan {
-            // 不调用 super 会漏掉「点击后成为第一响应者」，这里补上，保证能继续打字
-            window?.makeFirstResponder(self)
-            isPanning = true
-            panLastWindow = event.locationInWindow
-            panVelocity = .zero
-            return
-        }
+        // 左键完全交回 NSTextView 原生：点击定位、拖动选文本、双击选词、
+        // Shift 扩展选区都按系统行为，不再被平移拦截。
         super.mouseDown(with: event)
     }
 
     override func mouseDragged(with event: NSEvent) {
-        if isPanning, let scroll = enclosingScrollView {
-            let now = event.locationInWindow
-            let dx = now.x - panLastWindow.x
-            let dy = now.y - panLastWindow.y
-            panLastWindow = now
-            panVelocity = NSPoint(x: dx, y: dy)
-            pan(by: dx, dy: dy, in: scroll)
-            return
-        }
         if isColumnDragging {
             applyColumnSelection(to: convert(event.locationInWindow, from: nil))
             return
@@ -549,21 +725,78 @@ final class ColumnTextView: NSTextView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        if isPanning {
-            isPanning = false
-            startMomentum()
-            return
-        }
         isColumnDragging = false
         super.mouseUp(with: event)
     }
 
-    /// 内容跟着鼠标走，和触摸板「自然滚动」一致
+    // MARK: 右键拖动 = 平移画布（抓手）
+
+    override func rightMouseDown(with event: NSEvent) {
+        stopMomentum()
+        guard isPanMode else {
+            super.rightMouseDown(with: event)
+            return
+        }
+        // 不调用 super：默认实现会立刻弹出上下文菜单并进入菜单跟踪，
+        // 右键就拖不动了。纯点击的菜单在 rightMouseUp 里补回。
+        isPanning = true
+        panLastWindow = event.locationInWindow
+        panStartWindow = event.locationInWindow
+        panDownEvent = event
+        panDidMove = false
+        panVelocity = .zero
+        beginPanCursor()
+    }
+
+    override func rightMouseDragged(with event: NSEvent) {
+        guard isPanning, let scroll = enclosingScrollView else {
+            super.rightMouseDragged(with: event)
+            return
+        }
+        let now = event.locationInWindow
+        let dx = now.x - panLastWindow.x
+        let dy = now.y - panLastWindow.y
+        panLastWindow = now
+        // 手抖不算拖动：超过 3pt 才真正平移，纯点击留给上下文菜单
+        if hypot(now.x - panStartWindow.x, now.y - panStartWindow.y) >= 3 {
+            panDidMove = true
+        }
+        panVelocity = NSPoint(x: dx, y: dy)
+        if panDidMove { pan(by: dx, dy: dy, in: scroll) }
+    }
+
+    override func rightMouseUp(with event: NSEvent) {
+        guard isPanning else {
+            super.rightMouseUp(with: event)
+            return
+        }
+        isPanning = false
+        endPanCursor()
+        if panDidMove {
+            startMomentum()
+        } else if let down = panDownEvent {
+            // 右键纯点击：补回被拦下的原生上下文菜单
+            super.rightMouseDown(with: down)
+        }
+        panDownEvent = nil
+    }
+
+    /// 内容跟着鼠标走，和触摸板「自然滚动」一致。
+    /// 水平：鼠标右移 → 内容右移 → bounds.x 左移（-dx），这个方向是对的；
+    /// 垂直：clip 的 y 轴与鼠标 window y 轴方向相反，要用 +dy（之前 -dy 是反的）。
     private func pan(by dx: CGFloat, dy: CGFloat, in scroll: NSScrollView) {
         let clip = scroll.contentView
-        let origin = NSPoint(x: clip.bounds.origin.x - dx,
-                             y: clip.bounds.origin.y - dy)
-        clip.scroll(to: origin)
+        let current = clip.bounds.origin
+        let proposed = NSRect(origin: NSPoint(x: current.x - dx,
+                                              y: current.y + dy),
+                              size: clip.bounds.size)
+        // AppKit 官方边界钳制：自动处理 flipped / 文档尺寸 / contentInsets。
+        // 滚到顶、底、最左、最右后返回的就是边界值，继续拖或惯性都推不动。
+        let allowed = clip.constrainBoundsRect(proposed).origin
+        if abs(allowed.x - current.x) < 0.01, abs(allowed.y - current.y) < 0.01 {
+            return
+        }
+        clip.scroll(to: allowed)
         scroll.reflectScrolledClipView(clip)
     }
 
@@ -652,113 +885,6 @@ final class ColumnTextView: NSTextView {
         ranges.sort { $0.location < $1.location }
         setSelectedRanges(ranges.map { NSValue(range: $0) },
                           affinity: .downstream, stillSelecting: false)
-    }
-}
-
-// MARK: - 行号标尺
-
-final class LineNumberRulerView: NSRulerView {
-    weak var textView: NSTextView?
-
-    /// 与正文同族的等宽字体，稍小一号、右对齐。字号跟随正文（15）→ 12。
-    private let numberFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-    /// 正文段落的额外行距（makeNSView 里 para.lineSpacing = 3），
-    /// lineFragmentRect 的高度含这段行距，居中时要扣掉，否则行号整体偏低。
-    private let extraLineSpacing: CGFloat = 3
-    private var textObserver: NSObjectProtocol?
-    private var scrollObserver: NSObjectProtocol?
-
-    init(textView: NSTextView) {
-        self.textView = textView
-        super.init(scrollView: textView.enclosingScrollView, orientation: .verticalRuler)
-        clientView = textView
-        ruleThickness = 38
-        updateThickness()
-        textObserver = NotificationCenter.default.addObserver(
-            forName: NSText.didChangeNotification, object: textView, queue: .main
-        ) { [weak self] _ in
-            self?.updateThickness()
-            self?.needsDisplay = true
-        }
-        // 滚动时 clipView 的 bounds 会变，行号要跟着重画，否则滚动后行号停在原地
-        if let clip = textView.enclosingScrollView?.contentView {
-            scrollObserver = NotificationCenter.default.addObserver(
-                forName: NSView.boundsDidChangeNotification, object: clip, queue: .main
-            ) { [weak self] _ in self?.needsDisplay = true }
-        }
-    }
-
-    required init(coder: NSCoder) { fatalError("init(coder:) 未实现") }
-
-    deinit {
-        if let textObserver { NotificationCenter.default.removeObserver(textObserver) }
-        if let scrollObserver { NotificationCenter.default.removeObserver(scrollObserver) }
-    }
-
-    /// 按总行数定宽，且只在文本变化时同步更新（不要在 draw 里异步改，会抖动/循环重绘）
-    private func updateThickness() {
-        guard let tv = textView else { return }
-        let lines = (tv.string as NSString).components(separatedBy: "\n").count
-        let sample = String(repeating: "0", count: max(2, String(lines).count))
-        let width = ceil((sample as NSString).size(withAttributes: [.font: numberFont]).width) + 20
-        if abs(ruleThickness - width) > 0.5 { ruleThickness = width }
-    }
-
-    override func drawHashMarksAndLabels(in rect: NSRect) {
-        guard let tv = textView, let lm = tv.layoutManager else { return }
-        let ns = tv.string as NSString
-        let total = ns.length
-        guard total > 0 else { return }
-
-        // 裁剪到标尺自身边界：任何绘制都不会画到标尺外（顶部工具栏 / 底部状态栏）
-        if let cg = NSGraphicsContext.current?.cgContext {
-            cg.clip(to: self.bounds)
-        }
-
-        // 行号栏背景交给图层，严格锁在标尺宽度内。不再画右侧分隔线。
-
-        let normalAttrs: [NSAttributedString.Key: Any] = [.font: numberFont,
-                                                          .foregroundColor: NSColor.secondaryLabelColor]
-        let currentAttrs: [NSAttributedString.Key: Any] = [.font: numberFont,
-                                                           .foregroundColor: NSColor.controlAccentColor]
-
-        // 把文本视图原点换算到标尺坐标系，行号随滚动走
-        let relativePoint = self.convert(NSPoint.zero, from: tv)
-        let visible = tv.visibleRect
-        let cursorLine = ns.lineNumber(at: tv.selectedRange().location)
-
-        // 按逻辑行逐行遍历，行号绝对准确；不换行时每行只有一个 fragment。
-        // 可见性用文档坐标判断，超出可视区的行不画（配合 masksToBounds，绝不穿出上下栏）。
-        var lineNo = 1
-        var idx = 0
-        while idx <= total {
-            var lineStart = 0, lineEnd = 0, contentsEnd = 0
-            ns.getLineStart(&lineStart, end: &lineEnd, contentsEnd: &contentsEnd,
-                            for: NSRange(location: min(idx, total), length: 0))
-            // 空行取 1 个字符（换行符）定位，避免行号漏画
-            let charLength = max(1, contentsEnd - lineStart)
-            let charRange = NSRange(location: lineStart,
-                                    length: min(charLength, total - lineStart))
-            let glyphRange = lm.glyphRange(forCharacterRange: charRange, actualCharacterRange: nil)
-            if glyphRange.location != NSNotFound, glyphRange.location < lm.numberOfGlyphs {
-                let lineRect = lm.lineFragmentRect(forGlyphAt: glyphRange.location, effectiveRange: nil)
-                let docY = lineRect.minY + tv.textContainerInset.height
-                // 只画落在可视区内的行
-                if docY >= visible.minY - lineRect.height, docY <= visible.maxY {
-                    let y = docY + relativePoint.y
-                    let label = "\(lineNo)" as NSString
-                    let attrs = lineNo == cursorLine ? currentAttrs : normalAttrs
-                    let size = label.size(withAttributes: attrs)
-                    let textHeight = max(0, lineRect.height - extraLineSpacing)
-                    let centerY = y + (textHeight - size.height) / 2
-                    label.draw(at: NSPoint(x: bounds.maxX - size.width - 9, y: centerY),
-                               withAttributes: attrs)
-                }
-            }
-            if lineEnd >= total { break }
-            idx = lineEnd
-            lineNo += 1
-        }
     }
 }
 

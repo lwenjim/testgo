@@ -202,6 +202,9 @@ struct NotesView: View {
             fileSync.bind(model)
             fileSync.start()
             if selectedID == nil, let first = list.first { select(first) }
+            // 从别的板块切回笔记页时 noteKey 不变，updateNSView 不会触发归零，
+            // 这里兜底把横向滚动条钉回最左侧（延后一拍等编辑器挂到窗口上）。
+            DispatchQueue.main.async { editor.scrollToTopLeft() }
             // 进笔记页就主动向已连接设备拉一遍，避免漏掉后台期间推来的改动
             model.refreshFromPeers()
         }
@@ -582,7 +585,7 @@ struct NotesView: View {
     private var settingsMenu: some View {
         Menu {
             Toggle("显示状态栏", isOn: $showStatusBar)
-            Toggle("左键拖动平移（抓手）", isOn: $panMode)
+            Toggle("右键拖动平移（抓手）", isOn: $panMode)
             Divider()
             Toggle("笔记映射为外部文件", isOn: Binding(
                 get: { fileSync.enabled },
@@ -856,6 +859,9 @@ struct NotesView: View {
         previewMode = false
         previewScale = 1
         resetFind()
+        // 打开/新建笔记后把横向滚动条钉回最左：点当前已选中那篇时
+        // noteKey 不变，updateNSView 的换笔记分支不会触发，这里显式补一次
+        DispatchQueue.main.async { editor.scrollToTopLeft() }
     }
 
     /// 预览缩放：每档 ±20%，范围 0.6–3.0
@@ -901,6 +907,9 @@ struct NotesView: View {
         previewMode = false
         previewScale = 1
         resetFind()
+        // 打开/新建笔记后把横向滚动条钉回最左：点当前已选中那篇时
+        // noteKey 不变，updateNSView 的换笔记分支不会触发，这里显式补一次
+        DispatchQueue.main.async { editor.scrollToTopLeft() }
     }
 
     private func resetSelection() {

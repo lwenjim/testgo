@@ -74,10 +74,11 @@ struct MacRootView: View {
         }
     }
 
-    /// 顶部标签栏是否显示（自动隐藏模式下滑出/收起）
-    @State private var headerShown = true
-    /// 默认常显：应用启动后顶部标签栏就一直显示，鼠标不碰顶部也不收起
-    @AppStorage("macHeaderPinned") private var headerPinned = true
+    /// 顶部标签栏是否显示：启动即隐藏，鼠标移到窗口最上沿才拉出来
+    @State private var headerShown = false
+    /// 默认自动隐藏：启动后菜单不显示，鼠标离开标签栏 0.6 秒收起
+    /// （图钉按钮可在本次运行内切回常显，并记住该选择）
+    @AppStorage("macHeaderPinned") private var headerPinned = false
     @State private var hideWork: DispatchWorkItem?
 
     private func select(_ item: MacSection) {
