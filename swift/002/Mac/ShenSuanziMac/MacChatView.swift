@@ -33,11 +33,13 @@ struct MacAvatar: View {
             core
         }
         .frame(width: size, height: size)
+        // 方形圆角头像（所有位置统一）
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
         .overlay(alignment: .bottomTrailing) {
             if online {
                 Circle().fill(.green)
                     .frame(width: size * 0.3, height: size * 0.3)
-                    .overlay(Circle().stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 2))
+                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
                     .offset(x: 1, y: 1)
             }
         }
@@ -54,7 +56,7 @@ struct MacAvatar: View {
                 .resizable()
                 .scaledToFill()
                 .frame(width: size, height: size)
-                .clipShape(Circle())
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
         } else {
             LinearGradient(colors: [tint, tint.opacity(0.62)],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -336,6 +338,9 @@ struct MacChatView: View {
 struct ChatPane: View {
     let peer: String
     @EnvironmentObject var model: LANChatModel
+    /// 消息列表内容高度：不满一屏时顶对齐（不滚到底部留大空白）
+    @State private var listContentHeight: CGFloat = 0
+    @State private var listViewportHeight: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -348,11 +353,27 @@ struct ChatPane: View {
                     }
                     .padding(.horizontal, 18)
                     .padding(.vertical, 14)
+                    .background(
+                        GeometryReader { inner in
+                            Color.clear.preference(key: MessageListHeightKey.self,
+                                                   value: inner.size.height)
+                        }
+                    )
                 }
+                .background(
+                    GeometryReader { outer in
+                        Color.clear.onAppear { listViewportHeight = outer.size.height }
+                            .onChange(of: outer.size.height) { _, h in listViewportHeight = h }
+                    }
+                )
                 .background(Color.white)
+                .onPreferenceChange(MessageListHeightKey.self) { listContentHeight = $0 }
                 .onChange(of: model.messages(peer).count) { _, _ in
-                    if let last = model.messages(peer).last {
-                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    scrollToLatest(proxy, messages: model.messages(peer))
+                }
+                .onAppear {
+                    DispatchQueue.main.async {
+                        scrollToLatest(proxy, messages: model.messages(peer))
                     }
                 }
             }
@@ -368,6 +389,13 @@ struct ChatPane: View {
             model.markRead(peer)
         }
     }
+
+    /// 内容超过一屏才滚到底部；不满一屏保持顶对齐，避免顶部一大片空白
+    private func scrollToLatest(_ proxy: ScrollViewProxy, messages: [ChatMessage]) {
+        guard let last = messages.last else { return }
+        guard listContentHeight > listViewportHeight + 1 else { return }
+        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+    }
 }
 
 // MARK: - 群聊面板
@@ -375,6 +403,8 @@ struct ChatPane: View {
 struct GroupChatPane: View {
     let groupID: String
     @EnvironmentObject var model: LANChatModel
+    @State private var listContentHeight: CGFloat = 0
+    @State private var listViewportHeight: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -387,11 +417,27 @@ struct GroupChatPane: View {
                     }
                     .padding(.horizontal, 18)
                     .padding(.vertical, 14)
+                    .background(
+                        GeometryReader { inner in
+                            Color.clear.preference(key: MessageListHeightKey.self,
+                                                   value: inner.size.height)
+                        }
+                    )
                 }
+                .background(
+                    GeometryReader { outer in
+                        Color.clear.onAppear { listViewportHeight = outer.size.height }
+                            .onChange(of: outer.size.height) { _, h in listViewportHeight = h }
+                    }
+                )
                 .background(Color.white)
+                .onPreferenceChange(MessageListHeightKey.self) { listContentHeight = $0 }
                 .onChange(of: model.groupMessages(groupID).count) { _, _ in
-                    if let last = model.groupMessages(groupID).last {
-                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    scrollToLatest(proxy, messages: model.groupMessages(groupID))
+                }
+                .onAppear {
+                    DispatchQueue.main.async {
+                        scrollToLatest(proxy, messages: model.groupMessages(groupID))
                     }
                 }
             }
@@ -404,6 +450,20 @@ struct GroupChatPane: View {
         .onDisappear {
             if model.visibleGroup == groupID { model.visibleGroup = nil }
         }
+    }
+
+    private func scrollToLatest(_ proxy: ScrollViewProxy, messages: [ChatMessage]) {
+        guard let last = messages.last else { return }
+        guard listContentHeight > listViewportHeight + 1 else { return }
+        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+    }
+}
+
+/// 消息列表内容高度（PreferenceKey）
+private struct MessageListHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 

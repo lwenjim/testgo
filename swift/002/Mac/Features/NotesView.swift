@@ -150,9 +150,11 @@ struct NotesView: View {
     @State private var draft = ""
     @State private var isNew = false
     @State private var flashSaved = false
-    @State private var previewMode = false
+    @State private var previewMode = true   // 默认预览模式，点「编辑」进入编辑
     /// 预览缩放倍率（1 = 原始排版）
     @State private var previewScale: CGFloat = 1
+    /// 捏合缩放的起点倍率（手势开始时记录）
+    @State private var pinchStartScale: CGFloat?
     /// 列模式（Option 拖动纵向框选）
     @State private var columnMode = false
     @StateObject private var editor = MarkdownEditorController()
@@ -428,14 +430,18 @@ struct NotesView: View {
                     Button { editor.undo(); saveDraft(flash: false) } label: {
                         Image(systemName: "arrow.uturn.backward")
                             .font(.system(size: 12, weight: .medium))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.plain)
                     .help("撤销（⌘Z）")
                     Button { editor.redo(); saveDraft(flash: false) } label: {
                         Image(systemName: "arrow.uturn.forward")
                             .font(.system(size: 12, weight: .medium))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.plain)
                     .help("重做（⌘⇧Z）")
                     Button {
                         if showFind { closeFind() } else { openFind() }
@@ -443,8 +449,10 @@ struct NotesView: View {
                         Image(systemName: showFind ? "magnifyingglass.circle.fill"
                                                    : "magnifyingglass")
                             .font(.system(size: 12, weight: .medium))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.plain)
                     .help("在本文中查找 / 替换（⌘F）")
                     settingsMenu
                     Button {
@@ -454,8 +462,10 @@ struct NotesView: View {
                               ? "sidebar.left"
                               : "arrow.up.left.and.arrow.down.right")
                             .font(.system(size: 12, weight: .medium))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.plain)
                     .help(listCollapsed ? "显示笔记列表" : "编辑区铺满窗口")
                     Button {
                         save()
@@ -490,12 +500,12 @@ struct NotesView: View {
                                 .keyboardShortcut("k", modifiers: [.command, .shift])
                             Button("") { editor.applyLinePrefix("- ") }
                                 .keyboardShortcut("l", modifiers: [.command, .shift])
-                            // 预览缩放（仅预览态生效）
-                            Button("") { if previewMode { zoomPreview(+1) } }
+                            // 缩放（编辑 / 预览都生效）
+                            Button("") { zoomPreview(+1) }
                                 .keyboardShortcut("=", modifiers: .command)
-                            Button("") { if previewMode { zoomPreview(-1) } }
+                            Button("") { zoomPreview(-1) }
                                 .keyboardShortcut("-", modifiers: .command)
-                            Button("") { if previewMode { previewScale = 1 } }
+                            Button("") { previewScale = 1 }
                                 .keyboardShortcut("0", modifiers: .command)
                             // 查找 / 替换（esc 关闭）
                             Button("") { openFind() }
@@ -520,13 +530,24 @@ struct NotesView: View {
 
                 if previewMode {
                     MarkdownPreview(text: draft, scale: previewScale)
+                        // 触控板捏合缩放（也可用工具条 ± 或 ⌘=/⌘-/⌘0）
+                        .gesture(
+                            MagnificationGesture()
+                                .onChanged { value in
+                                    if pinchStartScale == nil { pinchStartScale = previewScale }
+                                    let target = (pinchStartScale ?? 1) * value
+                                    previewScale = min(max((target * 10).rounded() / 10, 0.6), 3.0)
+                                }
+                                .onEnded { _ in pinchStartScale = nil }
+                        )
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ZStack(alignment: .topLeading) {
-                        MarkdownTextView(text: $draft, controller: editor,
-                                         columnMode: columnMode,
-                                         noteKey: noteKey, panMode: panMode,
-                                         showScrollers: showScrollers)
+                    MarkdownTextView(text: $draft, controller: editor,
+                                     columnMode: columnMode,
+                                     noteKey: noteKey, panMode: panMode,
+                                     showScrollers: showScrollers,
+                                     zoomScale: previewScale)
                         if draft.isEmpty {
                             Text("写点什么… 支持 Markdown：**粗体**、- 列表、- [ ] 待办、> 引用")
                                 .font(.system(size: 15))
@@ -860,7 +881,7 @@ struct NotesView: View {
         isNew = false
         draft = note.text
         baseline = note.text
-        previewMode = false
+        previewMode = true   // 打开已有笔记默认预览
         previewScale = 1
         resetFind()
         // 打开/新建笔记后把横向滚动条钉回最左：点当前已选中那篇时

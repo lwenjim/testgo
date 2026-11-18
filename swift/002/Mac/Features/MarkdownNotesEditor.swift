@@ -310,6 +310,8 @@ struct MarkdownTextView: NSViewRepresentable {
     var panMode: Bool = true
     /// 滚动条开关：默认隐藏（overlay 自动隐藏），打开后常显可拖
     var showScrollers: Bool = false
+    /// 编辑态缩放：字号 = fontSize * zoomScale（0.6–3.0）
+    var zoomScale: CGFloat = 1
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -386,6 +388,14 @@ struct MarkdownTextView: NSViewRepresentable {
             scroll.needsLayout = true
         }
 
+        // 编辑态缩放：字号变化时重新套样式 + 重排行号
+        if context.coordinator.lastZoom != zoomScale {
+            context.coordinator.lastZoom = zoomScale
+            applyTextStyle(to: tv)
+            tv.syncLineNumberMetrics()
+            forceSyncLayout(tv)
+        }
+
         // 换笔记（含新建、保存新笔记后拿到 UUID）：无论文本是否相同都重置视图状态。
         // 之前只在 tv.string != text 时归零，切到两篇内容相同的笔记就会保留横向位置。
         let switched = context.coordinator.lastNoteKey != noteKey
@@ -454,7 +464,8 @@ struct MarkdownTextView: NSViewRepresentable {
     private func applyTextStyle(to tv: ColumnTextView) {
         let para = NSMutableParagraphStyle()
         para.lineSpacing = 3
-        let font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let scaled = min(max(fontSize * zoomScale, 8), 48)
+        let font = NSFont.monospacedSystemFont(ofSize: scaled, weight: .regular)
         tv.defaultParagraphStyle = para
         tv.font = font
         tv.typingAttributes = [.font: font,
@@ -473,6 +484,8 @@ struct MarkdownTextView: NSViewRepresentable {
         var lastNoteKey = ""
         /// 上一次的滚动条开关，避免 updateNSView 反复重设
         var lastShowScrollers: Bool?
+        /// 上一次的编辑态缩放，变化时才重排
+        var lastZoom: CGFloat?
 
         init(_ parent: MarkdownTextView) { self.parent = parent }
 
@@ -1072,47 +1085,45 @@ struct NoteFormatBar: View {
                 .help("列模式：按住 Option 拖动可纵向框选文本，输入会同时插入每一行（Esc 退出）")
             }
 
-            // 预览态的缩放控件（⌘= 放大 / ⌘- 缩小 / ⌘0 还原）
-            if preview {
-                HStack(spacing: 4) {
-                    Button { nudgeZoom(-1) } label: {
-                        Image(systemName: "minus.magnifyingglass")
-                            .font(.system(size: 12, weight: .medium))
-                            .frame(width: 24, height: 24)
-                            .background(RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.primary.opacity(0.06)))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(zoomScale <= 0.6)
-                    .help("缩小（⌘-）")
-
-                    Text(percentText)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44)
-
-                    Button { nudgeZoom(+1) } label: {
-                        Image(systemName: "plus.magnifyingglass")
-                            .font(.system(size: 12, weight: .medium))
-                            .frame(width: 24, height: 24)
-                            .background(RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.primary.opacity(0.06)))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(zoomScale >= 3.0)
-                    .help("放大（⌘=）")
-
-                    if zoomScale != 1 {
-                        Button("还原") { withAnimation(.easeInOut(duration: 0.12)) { zoomScale = 1 } }
-                            .buttonStyle(.borderless)
-                            .font(.system(size: 11))
-                            .help("还原（⌘0）")
-                    }
+            // 缩放控件（编辑 / 预览都生效；⌘= 放大 / ⌘- 缩小 / ⌘0 还原）
+            HStack(spacing: 4) {
+                Button { nudgeZoom(-1) } label: {
+                    Image(systemName: "minus.magnifyingglass")
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(width: 24, height: 24)
+                        .background(RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.primary.opacity(0.06)))
+                        .contentShape(Rectangle())
                 }
-                .padding(.trailing, 6)
+                .buttonStyle(.plain)
+                .disabled(zoomScale <= 0.6)
+                .help("缩小（⌘-）")
+
+                Text(percentText)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44)
+
+                Button { nudgeZoom(+1) } label: {
+                    Image(systemName: "plus.magnifyingglass")
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(width: 24, height: 24)
+                        .background(RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.primary.opacity(0.06)))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(zoomScale >= 3.0)
+                .help("放大（⌘=）")
+
+                if zoomScale != 1 {
+                    Button("还原") { withAnimation(.easeInOut(duration: 0.12)) { zoomScale = 1 } }
+                        .buttonStyle(.borderless)
+                        .font(.system(size: 11))
+                        .help("还原（⌘0）")
+                }
             }
+            .padding(.trailing, 6)
 
             // 预览开关：编辑状态下也要一直可点，否则进了预览就退不回来
             Button {
