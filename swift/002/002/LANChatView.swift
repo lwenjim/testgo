@@ -186,6 +186,9 @@ struct LANChatView: View {
 
     var body: some View {
         NavStackCompat {
+            // sharedBackgroundVisibility 是 iOS 26 / Swift 6.2+ API，
+            // 低版本 SDK 无此符号，#available 无法阻止编译报错，需编译器版本条件排除。
+            #if compiler(>=6.2)
             if #available(iOS 26.0, *) {
                 chatContent.toolbar {
                     ToolbarItem(placement: .navigationBarTrailing) {
@@ -204,6 +207,15 @@ struct LANChatView: View {
                     }
                 }
             }
+            #else
+            chatContent.toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    plusMenu
+                        .opacity(tab == .mine ? 0 : 1)
+                        .allowsHitTesting(tab != .mine)
+                }
+            }
+            #endif
         }
         .sheet(isPresented: $showNewGroup) {
             GroupEditor(model: model, group: nil)
@@ -525,7 +537,7 @@ struct LANChatView: View {
 
                     if !model.online.isEmpty {
                         Divider().padding(.leading, 54)
-                        ForEach(Array(model.online.sorted()).enumerated(), id: \.element) { idx, name in
+                        ForEach(Array(model.online.sorted().enumerated()), id: \.element) { idx, name in
                             HStack(spacing: 10) {
                                 ChatAvatar(name: name, size: 30, dot: .green)
                                 Text(name)

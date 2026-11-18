@@ -76,8 +76,8 @@ struct MacRootView: View {
 
     /// 顶部标签栏是否显示（自动隐藏模式下滑出/收起）
     @State private var headerShown = true
-    /// 一直显示（别住），适合不想让它收起来的用户
-    @AppStorage("macHeaderPinned") private var headerPinned = false
+    /// 默认常显：应用启动后顶部标签栏就一直显示，鼠标不碰顶部也不收起
+    @AppStorage("macHeaderPinned") private var headerPinned = true
     @State private var hideWork: DispatchWorkItem?
 
     private func select(_ item: MacSection) {

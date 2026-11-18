@@ -163,9 +163,30 @@ struct NotesView: View {
     @State private var multiSelection = Set<UUID>()
     /// 编辑区铺满窗口（收起左侧列表）
     @State private var listCollapsed = false
+    /// 编辑区内查找（⌘F）：当前匹配序号、总数、跳转
+    @State private var showFind = false
+    @State private var findQuery = ""
+    @State private var findIndex = 0
+    @FocusState private var findFocused: Bool
+    /// 查找选项
+    @AppStorage("macNotesFindRegex") private var findRegex = false
+    @AppStorage("macNotesFindCase") private var findCaseSensitive = false
+    @AppStorage("macNotesFindWholeWord") private var findWholeWord = false
+    @AppStorage("macNotesFindReplaceShown") private var showReplace = false
+    @State private var replaceText = ""
+    /// 状态栏开关（默认隐藏）、抓手平移开关
+    @AppStorage("macNotesStatusBar") private var showStatusBar = false
+    @AppStorage("macNotesPanMode") private var panMode = true
+    /// 外部文件双向同步
+    @StateObject private var fileSync = NoteFileSync()
+    /// 上次载入 / 保存的正文：用来判断是否有未保存改动、接收外部文件更新
+    @State private var baseline = ""
 
     private var list: [Note] { model.filtered(query) }
     private var selected: Note? { model.notes.first { $0.id == selectedID } }
+    private var hasUnsavedChanges: Bool { draft != baseline }
+    /// 换笔记时传给编辑器，用于重置滚动 / 撤销栈 / 高亮
+    private var noteKey: String { isNew ? "new" : (selectedID?.uuidString ?? "none") }
 
     var body: some View {
         HSplitView {
@@ -178,9 +199,24 @@ struct NotesView: View {
         }
         .animation(.easeInOut(duration: 0.18), value: listCollapsed)
         .onAppear {
+            fileSync.bind(model)
+            fileSync.start()
             if selectedID == nil, let first = list.first { select(first) }
             // 进笔记页就主动向已连接设备拉一遍，避免漏掉后台期间推来的改动
             model.refreshFromPeers()
+        }
+        .onDisappear {
+            // 切到别的板块 / 关窗口前把草稿落库，并写回映射文件
+            saveDraft(flash: false)
+            fileSync.syncNow()
+            fileSync.stop()
+        }
+        // 局域网同步或外部文件导入改了当前笔记：没有本地未保存改动时跟上
+        .onChange(of: model.notes) { _ in
+            guard !isNew, let note = selected, !hasUnsavedChanges,
+                  note.text != baseline else { return }
+            draft = note.text
+            baseline = note.text
         }
     }
 
@@ -216,9 +252,11 @@ struct NotesView: View {
                     .buttonStyle(.bordered)
                     .font(.system(size: 12))
                 } else {
+                    settingsMenu
                     Button {
                         model.reload()
                         model.refreshFromPeers()
+                        fileSync.syncNow()
                     } label: {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(.system(size: 13))
@@ -283,7 +321,7 @@ struct NotesView: View {
                 .padding(12)
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color.white)
     }
 
     private func noteCard(_ note: Note) -> some View {
@@ -375,7 +413,35 @@ struct NotesView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    Spacer()
+                    Spacer(minLength: 4)
+                    if flashSaved {
+                        Label("已保存", systemImage: "checkmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.green)
+                    }
+                    // 撤销 / 重做（⌘Z 由 NSTextView 原生处理，这里给可点按钮）
+                    Button { editor.undo(); saveDraft(flash: false) } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .buttonStyle(.borderless)
+                    .help("撤销（⌘Z）")
+                    Button { editor.redo(); saveDraft(flash: false) } label: {
+                        Image(systemName: "arrow.uturn.forward")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .buttonStyle(.borderless)
+                    .help("重做（⌘⇧Z）")
+                    Button {
+                        if showFind { closeFind() } else { openFind() }
+                    } label: {
+                        Image(systemName: showFind ? "magnifyingglass.circle.fill"
+                                                   : "magnifyingglass")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .buttonStyle(.borderless)
+                    .help("在本文中查找 / 替换（⌘F）")
+                    settingsMenu
                     Button {
                         withAnimation { listCollapsed.toggle() }
                     } label: {
@@ -386,11 +452,15 @@ struct NotesView: View {
                     }
                     .buttonStyle(.borderless)
                     .help(listCollapsed ? "显示笔记列表" : "编辑区铺满窗口")
-                    if flashSaved {
-                        Label("已保存", systemImage: "checkmark.circle.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.green)
+                    Button {
+                        save()
+                    } label: {
+                        Label("保存", systemImage: "square.and.arrow.down")
+                            .font(.system(size: 12, weight: .semibold))
                     }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut("s", modifiers: .command)
+                    .help("保存（⌘S），切换笔记时也会自动保存")
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 14)
@@ -421,10 +491,24 @@ struct NotesView: View {
                                 .keyboardShortcut("-", modifiers: .command)
                             Button("") { if previewMode { previewScale = 1 } }
                                 .keyboardShortcut("0", modifiers: .command)
+                            // 查找 / 替换（esc 关闭）
+                            Button("") { openFind() }
+                                .keyboardShortcut("f", modifiers: .command)
+                            Button("") { openReplace() }
+                                .keyboardShortcut("f", modifiers: [.command, .option])
+                            Button("") { closeFind() }
+                                .keyboardShortcut(.escape, modifiers: [])
+                            // ⌘G 下一个 / ⌘⇧G 上一个匹配
+                            Button("") { jumpToMatch(1) }
+                                .keyboardShortcut("g", modifiers: .command)
+                            Button("") { jumpToMatch(-1) }
+                                .keyboardShortcut("g", modifiers: [.command, .shift])
                         }
                         .opacity(0)
                         .frame(width: 0, height: 0)
                     )
+
+                if showFind { findBar }
 
                 Divider()
 
@@ -433,7 +517,9 @@ struct NotesView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ZStack(alignment: .topLeading) {
-                        MarkdownTextView(text: $draft, controller: editor, columnMode: columnMode)
+                        MarkdownTextView(text: $draft, controller: editor,
+                                         columnMode: columnMode,
+                                         noteKey: noteKey, panMode: panMode)
                         if draft.isEmpty {
                             Text("写点什么… 支持 Markdown：**粗体**、- 列表、- [ ] 待办、> 引用")
                                 .font(.system(size: 15))
@@ -446,43 +532,36 @@ struct NotesView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
 
-                Divider()
+                if showStatusBar {
+                    Divider()
+                    HStack(spacing: 10) {
+                        Text("\(countWords(draft)) 字 · \(draft.components(separatedBy: "\n").count) 行")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
 
-                HStack(spacing: 10) {
-                    Text("\(countWords(draft)) 字 · \(draft.components(separatedBy: "\n").count) 行")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-
-                    // 剪贴板状态：编辑 / 预览里选中文本即自动复制
-                    if let clip = clipboardStatus.content {
-                        HStack(spacing: 4) {
-                            Image(systemName: "doc.on.doc.fill")
-                                .font(.system(size: 10))
-                            Text("已复制：\(clip)")
-                                .font(.system(size: 11))
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .frame(maxWidth: 300, alignment: .leading)
+                        // 剪贴板状态：编辑 / 预览里选中文本即自动复制
+                        if let clip = clipboardStatus.content {
+                            HStack(spacing: 4) {
+                                Image(systemName: "doc.on.doc.fill")
+                                    .font(.system(size: 10))
+                                Text("已复制：\(clip)")
+                                    .font(.system(size: 11))
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .frame(maxWidth: 300, alignment: .leading)
+                            }
+                            .foregroundStyle(Color.accentColor)
+                            .transition(.opacity)
                         }
-                        .foregroundStyle(Color.accentColor)
-                        .transition(.opacity)
-                    }
 
-                    Spacer()
-                    Text("保存后自动同步到已连接的设备")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                    Button {
-                        save()
-                    } label: {
-                        Label("保存", systemImage: "square.and.arrow.down")
-                            .font(.system(size: 13, weight: .semibold))
+                        Spacer()
+                        Text(fileSync.enabled ? fileSync.statusText : "保存后自动同步到已连接的设备")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut("s", modifiers: .command)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 12)
             } else {
                 VStack(spacing: 10) {
                     Image(systemName: "note.text")
@@ -495,17 +574,288 @@ struct NotesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color.white)
     }
 
-    // MARK: 动作
+    // MARK: 设置菜单
+
+    private var settingsMenu: some View {
+        Menu {
+            Toggle("显示状态栏", isOn: $showStatusBar)
+            Toggle("左键拖动平移（抓手）", isOn: $panMode)
+            Divider()
+            Toggle("笔记映射为外部文件", isOn: Binding(
+                get: { fileSync.enabled },
+                set: { fileSync.setEnabled($0) }
+            ))
+            Button("选择笔记文件夹…") { fileSync.chooseFolder() }
+            Button("在 Finder 中打开文件夹") { fileSync.revealFolder() }
+            Button("立即同步") { fileSync.syncNow() }
+            Divider()
+            Text(fileSync.enabled ? fileSync.statusText : "未启用文件映射")
+                .font(.system(size: 11))
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.system(size: 13))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .frame(width: 26)
+        .help("笔记设置")
+    }
+
+    // MARK: 查找 / 替换栏
+
+    private var findBar: some View {
+        let matches = findMatches
+        let shown = matches.isEmpty ? 0 : min(findIndex, matches.count - 1) + 1
+        return VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                TextField(findRegex ? "正则表达式" : "在本文中查找", text: $findQuery)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .focused($findFocused)
+                    .onSubmit {
+                        // ⇧↩ 上一个，↩ 下一个
+                        jumpToMatch(NSEvent.modifierFlags.contains(.shift) ? -1 : 1)
+                    }
+                    .frame(minWidth: 130)
+
+                findOption(".*", "正则表达式", $findRegex)
+                findOption("Aa", "区分大小写", $findCaseSensitive)
+                findOption("W", "全词匹配", $findWholeWord)
+
+                if findRegex, !findQuery.isEmpty,
+                   !FindMatcher.isValid(query: findQuery, caseSensitive: findCaseSensitive) {
+                    Text("表达式无效")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.red)
+                }
+
+                Spacer(minLength: 4)
+                if !findQuery.isEmpty {
+                    Text(matches.isEmpty ? "0/0" : "\(shown)/\(matches.count)")
+                        .font(.system(size: 11))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    Button { jumpToMatch(-1) } label: {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(matches.isEmpty)
+                    .help("上一个（⇧↩ 或 ⌘⇧G）")
+                    Button { jumpToMatch(1) } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(matches.isEmpty)
+                    .help("下一个（↩ 或 ⌘G）")
+                }
+                Button {
+                    withAnimation(.easeInOut(duration: 0.12)) { showReplace.toggle() }
+                } label: {
+                    Image(systemName: showReplace ? "arrow.left.arrow.right.circle.fill"
+                                                  : "arrow.left.arrow.right")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.borderless)
+                .help("查找替换（⌘⌥F）")
+                Button { closeFind() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .buttonStyle(.borderless)
+                .help("关闭（esc）")
+            }
+            if showReplace {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.left.arrow.right")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    TextField(findRegex ? "替换为（支持 $1 捕获组）" : "替换为", text: $replaceText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .frame(minWidth: 130)
+                    Spacer(minLength: 4)
+                    Button("替换") { replaceCurrent() }
+                        .buttonStyle(.borderless)
+                        .font(.system(size: 11))
+                        .disabled(matches.isEmpty)
+                        .help("替换当前匹配")
+                    Button("全部替换") { replaceAll() }
+                        .buttonStyle(.borderless)
+                        .font(.system(size: 11))
+                        .disabled(matches.isEmpty)
+                        .help("替换全部匹配（一次 ⌘Z 可整体撤销）")
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .onChange(of: findQuery) { _ in refreshFind(reset: true) }
+        .onChange(of: findRegex) { _ in refreshFind(reset: true) }
+        .onChange(of: findCaseSensitive) { _ in refreshFind(reset: true) }
+        .onChange(of: findWholeWord) { _ in refreshFind(reset: true) }
+        .onChange(of: draft) { _ in refreshFind(reset: false) }
+        .onAppear { refreshFind(reset: true) }
+        .onDisappear { editor.clearFindHighlights() }
+    }
+
+    private func findOption(_ label: String, _ tip: String, _ flag: Binding<Bool>) -> some View {
+        Button { flag.wrappedValue.toggle() } label: {
+            Text(label)
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .frame(width: 24, height: 20)
+                .background(RoundedRectangle(cornerRadius: 5)
+                    .fill(flag.wrappedValue ? Color.accentColor.opacity(0.22)
+                                            : Color.primary.opacity(0.06)))
+                .foregroundStyle(flag.wrappedValue ? Color.accentColor : Color.secondary)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(tip)
+    }
+
+    // MARK: 查找引擎
+
+    /// 以编辑器里的实际文本为准（替换后 draft 可能还没回写完成）
+    private var searchableText: String { editor.textView?.string ?? draft }
+
+    private var findMatches: [NSRange] {
+        FindMatcher.ranges(in: searchableText, query: findQuery,
+                           regex: findRegex,
+                           caseSensitive: findCaseSensitive,
+                           wholeWord: findWholeWord)
+    }
+
+    /// 三层高亮：当前行浅底 → 全部匹配黄底 → 当前匹配橙底
+    private func refreshFind(reset: Bool) {
+        guard showFind else { return }
+        let matches = findMatches
+        if reset { findIndex = 0 }
+        guard !matches.isEmpty else {
+            editor.clearFindHighlights()
+            return
+        }
+        let idx = min(max(findIndex, 0), matches.count - 1)
+        findIndex = idx
+        let current = matches[idx]
+        let ns = searchableText as NSString
+        let line = ns.lineRange(for: NSRange(location: current.location, length: 0))
+        editor.updateFindHighlights(all: matches, current: current, line: line)
+        editor.reveal(current)
+    }
+
+    private func openFind() {
+        if previewMode { previewMode = false }
+        showFind = true
+        findFocused = true
+        refreshFind(reset: true)
+    }
+
+    private func openReplace() {
+        openFind()
+        showReplace = true
+    }
+
+    private func closeFind() {
+        guard showFind else { return }
+        showFind = false
+        findQuery = ""
+        findIndex = 0
+        editor.clearFindHighlights()
+        editor.focus()
+    }
+
+    /// 换笔记时彻底重置查找状态，避免旧笔记的匹配残留
+    private func resetFind() {
+        showFind = false
+        findQuery = ""
+        findIndex = 0
+        editor.clearFindHighlights()
+    }
+
+    private func jumpToMatch(_ delta: Int) {
+        let matches = findMatches
+        guard !matches.isEmpty else { return }
+        let count = matches.count
+        let current = min(max(findIndex, 0), count - 1)
+        findIndex = ((current + delta) % count + count) % count
+        let r = matches[findIndex]
+        let ns = searchableText as NSString
+        let line = ns.lineRange(for: NSRange(location: r.location, length: 0))
+        editor.updateFindHighlights(all: matches, current: r, line: line)
+        editor.reveal(r)
+    }
+
+    // MARK: 替换（走 NSTextView insertText，天然可撤销）
+
+    private func replacement(for range: NSRange, in source: String) -> String {
+        guard findRegex else { return replaceText }
+        guard let re = FindMatcher.expression(query: findQuery, regex: true,
+                                              caseSensitive: findCaseSensitive,
+                                              wholeWord: false),
+              let result = re.matches(in: source,
+                                      range: NSRange(location: 0,
+                                                     length: (source as NSString).length))
+                .first(where: { $0.range.location == range.location
+                                && $0.range.length == range.length })
+        else { return replaceText }
+        return re.replacementString(for: result, in: source, offset: 0, template: replaceText)
+    }
+
+    private func replaceCurrent() {
+        guard let tv = editor.textView else { return }
+        let matches = findMatches
+        guard !matches.isEmpty else { return }
+        let idx = min(max(findIndex, 0), matches.count - 1)
+        let r = matches[idx]
+        guard NSMaxRange(r) <= (tv.string as NSString).length else { return }
+        tv.insertText(replacement(for: r, in: searchableText), replacementRange: r)
+        editor.notifyChange()
+        findIndex = min(idx, max(0, matches.count - 1))
+        refreshFind(reset: false)
+    }
+
+    private func replaceAll() {
+        guard let tv = editor.textView else { return }
+        let matches = findMatches
+        guard !matches.isEmpty else { return }
+        let source = searchableText
+        let undo = tv.undoManager
+        undo?.beginUndoGrouping()
+        // 从后往前替换，前面的位置不受影响
+        for r in matches.reversed() {
+            guard NSMaxRange(r) <= (tv.string as NSString).length else { continue }
+            tv.insertText(replacement(for: r, in: source), replacementRange: r)
+        }
+        undo?.endUndoGrouping()
+        editor.notifyChange()
+        findIndex = 0
+        refreshFind(reset: true)
+    }
 
     private func select(_ note: Note) {
+        // 切换笔记前先自动保存当前草稿
+        saveDraft(flash: false)
         selectedID = note.id
         isNew = false
         draft = note.text
+        baseline = note.text
         previewMode = false
         previewScale = 1
+        resetFind()
     }
 
     /// 预览缩放：每档 ±20%，范围 0.6–3.0
@@ -532,8 +882,10 @@ struct NotesView: View {
         let targets = model.notes.filter { ids.contains($0.id) }
         for note in targets { model.delete(note) }
         if let id = selectedID, ids.contains(id), !isNew {
+            // 当前笔记被删了，草稿直接丢弃（不要回写成一条新笔记）
             selectedID = nil
             draft = ""
+            baseline = ""
             previewMode = false
             resetSelection()
         }
@@ -541,25 +893,36 @@ struct NotesView: View {
     }
 
     private func createNew() {
+        saveDraft(flash: false)
         selectedID = nil
         isNew = true
         draft = ""
+        baseline = ""
         previewMode = false
+        previewScale = 1
+        resetFind()
     }
 
     private func resetSelection() {
         selectedID = list.first?.id
         isNew = false
         draft = selected?.text ?? ""
+        baseline = draft
+        resetFind()
     }
 
-    private func save() {
+    private func save() { saveDraft(flash: true) }
+
+    /// 自动保存 / 手动保存共用：只写有改动且非空的草稿，空内容按「放弃编辑」处理
+    private func saveDraft(flash: Bool) {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             // 留空不删除，直接放弃本次编辑，避免误碰清空内容导致笔记丢失
-            resetSelection()
+            draft = baseline
+            if isNew { resetSelection() }
             return
         }
+        guard draft != baseline else { return }
 
         if isNew {
             var note = Note(text: draft)
@@ -572,10 +935,16 @@ struct NotesView: View {
             note.text = draft
             note.updatedAt = Date()
             model.update(note)
+        } else {
+            return
         }
-        flashSaved = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-            flashSaved = false
+        baseline = draft
+        fileSync.syncNow()   // 应用内改动立即写回映射文件
+        if flash {
+            flashSaved = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                flashSaved = false
+            }
         }
     }
 
@@ -610,4 +979,40 @@ struct NotesView: View {
         f.locale = Locale(identifier: "zh_CN")
         return f
     }()
+}
+
+// MARK: - 查找匹配：正则 / 大小写 / 全词
+
+private enum FindMatcher {
+    static func pattern(query: String, regex: Bool, wholeWord: Bool) -> String? {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return nil }
+        var p = regex ? q : NSRegularExpression.escapedPattern(for: q)
+        if wholeWord { p = #"\b(?:"# + p + #")\b"# }
+        return p
+    }
+
+    static func expression(query: String, regex: Bool,
+                           caseSensitive: Bool, wholeWord: Bool) -> NSRegularExpression? {
+        guard let p = pattern(query: query, regex: regex, wholeWord: wholeWord) else { return nil }
+        return try? NSRegularExpression(pattern: p,
+                                        options: caseSensitive ? [] : .caseInsensitive)
+    }
+
+    static func isValid(query: String, caseSensitive: Bool) -> Bool {
+        guard !query.isEmpty else { return true }
+        return (try? NSRegularExpression(pattern: query,
+                                         options: caseSensitive ? [] : .caseInsensitive)) != nil
+    }
+
+    static func ranges(in text: String, query: String, regex: Bool,
+                       caseSensitive: Bool, wholeWord: Bool) -> [NSRange] {
+        guard let re = expression(query: query, regex: regex,
+                                  caseSensitive: caseSensitive, wholeWord: wholeWord) else {
+            return []
+        }
+        return re.matches(in: text,
+                          range: NSRange(location: 0, length: (text as NSString).length))
+            .map(\.range)
+    }
 }

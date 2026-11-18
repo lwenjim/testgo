@@ -25,6 +25,7 @@
 		BF0000000000000000000009 /* WeatherView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000009 /* WeatherView.swift */; };
 		BF000000000000000000000A /* NotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000000A /* NotesView.swift */; };
 		BF0000000000000000000042 /* MarkdownNotesEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000042 /* MarkdownNotesEditor.swift */; };
+		BF0000000000000000000044 /* NoteFileSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000044 /* NoteFileSync.swift */; };
 		BF0000000000000000000043 /* MarkdownEditorKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000043 /* MarkdownEditorKit.swift */; };
 		BF000000000000000000000B /* LedgerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000000B /* LedgerView.swift */; };
 		BF000000000000000000000C /* AppRankingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000000C /* AppRankingView.swift */; };
@@ -50,6 +51,7 @@
 		CC0000000000000000000009 /* WeatherView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/WeatherView.swift"; sourceTree = SOURCE_ROOT; };
 		CC000000000000000000000A /* NotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/NotesView.swift"; sourceTree = SOURCE_ROOT; };
 		CC0000000000000000000042 /* MarkdownNotesEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/MarkdownNotesEditor.swift"; sourceTree = SOURCE_ROOT; };
+		CC0000000000000000000044 /* NoteFileSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/NoteFileSync.swift"; sourceTree = SOURCE_ROOT; };
 		CC0000000000000000000043 /* MarkdownEditorKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../002/MarkdownEditorKit.swift"; sourceTree = SOURCE_ROOT; };
 		CC000000000000000000000B /* LedgerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/LedgerView.swift"; sourceTree = SOURCE_ROOT; };
 		CC000000000000000000000C /* AppRankingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Features/AppRankingView.swift"; sourceTree = SOURCE_ROOT; };
@@ -105,6 +107,7 @@
 				CC0000000000000000000009 /* WeatherView.swift */,
 				CC000000000000000000000A /* NotesView.swift */,
 				CC0000000000000000000042 /* MarkdownNotesEditor.swift */,
+				CC0000000000000000000044 /* NoteFileSync.swift */,
 				CC0000000000000000000043 /* MarkdownEditorKit.swift */,
 				CC000000000000000000000B /* LedgerView.swift */,
 				CC000000000000000000000C /* AppRankingView.swift */,
@@ -201,6 +204,7 @@
 				BF0000000000000000000009 /* WeatherView.swift in Sources */,
 				BF000000000000000000000A /* NotesView.swift in Sources */,
 				BF0000000000000000000042 /* MarkdownNotesEditor.swift in Sources */,
+				BF0000000000000000000044 /* NoteFileSync.swift in Sources */,
 				BF0000000000000000000043 /* MarkdownEditorKit.swift in Sources */,
 				BF000000000000000000000B /* LedgerView.swift in Sources */,
 				BF000000000000000000000C /* AppRankingView.swift in Sources */,

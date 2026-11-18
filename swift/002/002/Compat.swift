@@ -52,11 +52,18 @@ struct PlainToolbar<Base: View, Items: ToolbarContent>: View {
     @ToolbarContentBuilder let items: () -> Items
 
     var body: some View {
+        // sharedBackgroundVisibility 是 iOS 26 / Swift 6.2+ 才有的 API。
+        // 低版本 SDK 里根本没有这个符号，#available 运行时判断也救不了编译，
+        // 必须用编译器版本条件把这段代码排除掉。
+        #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             base.toolbar { items().sharedBackgroundVisibility(.hidden) }
         } else {
             base.toolbar { items() }
         }
+        #else
+        base.toolbar { items() }
+        #endif
     }
 }
 
