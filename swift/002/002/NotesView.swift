@@ -258,8 +258,7 @@ struct NotesView: View {
             } label: {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(.system(size: 16, weight: .medium))
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(Color(.secondarySystemBackground)))
+                    .frame(width: 30, height: 30)
                     .foregroundStyle(Color.primary)
             }
             .buttonStyle(.plain)
@@ -286,8 +285,7 @@ struct NotesView: View {
             } label: {
                 Image(systemName: "checklist")
                     .font(.system(size: 16, weight: .medium))
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(Color(.secondarySystemBackground)))
+                    .frame(width: 30, height: 30)
                     .foregroundStyle(Color.primary)
             }
             .buttonStyle(.plain)
@@ -468,12 +466,17 @@ struct NoteEditor: View {
     /// 预览缩放（双指捏合调整，双击还原）
     @State private var previewScale: CGFloat = 1
     @GestureState private var pinchScale: CGFloat = 1
+    /// 编辑态缩放（双指捏合调整字号）
+    @State private var editorScale: CGFloat = 1
+    @State private var editorPinchStart: CGFloat?
     @StateObject private var editor = NoteEditorController()
 
     init(model: NotesModel, target: NoteTarget) {
         self.model = model
         self.target = target
         _text = State(initialValue: target.note.text)
+        // 已有笔记默认预览，新建直接进编辑
+        _previewMode = State(initialValue: !target.isNew)
     }
 
     var body: some View {
@@ -538,7 +541,9 @@ struct NoteEditor: View {
 
     private var editorArea: some View {
         ZStack(alignment: .topLeading) {
-            NoteMarkdownTextView(text: $text, controller: editor, autoFocus: target.isNew)
+            NoteMarkdownTextView(text: $text, controller: editor,
+                                 zoomScale: editorScale,
+                                 autoFocus: target.isNew)
             if text.isEmpty {
                 Text("写点什么…\n支持 **粗体**、- 列表、- [ ] 待办、> 引用、``` 代码块")
                     .font(.system(size: 17))
@@ -549,6 +554,16 @@ struct NoteEditor: View {
                     .allowsHitTesting(false)
             }
         }
+        // 编辑态双指捏合缩放字号（预览态另有捏合缩放排版）
+        .simultaneousGesture(
+            MagnificationGesture()
+                .onChanged { value in
+                    if editorPinchStart == nil { editorPinchStart = editorScale }
+                    let target = (editorPinchStart ?? 1) * value
+                    editorScale = min(max((target * 10).rounded() / 10, 0.6), 3.0)
+                }
+                .onEnded { _ in editorPinchStart = nil }
+        )
     }
 
     // MARK: 底部：工具栏 / 预览时给一个「回到编辑」

@@ -53,6 +53,8 @@ struct ContentView: View {
     /// 正在拖动的板块
     @State private var dragSection: AppSection?
     @State private var dragTranslation: CGSize = .zero
+    /// 拖动开始时被拖格子的位置（换位后用它算视觉偏移，避免跳变）
+    @State private var dragStartFrame: CGRect?
     /// 各格子在下拉面板坐标系里的位置，用来判断拖到了谁头上
     @State private var tileFrames: [AppSection: CGRect] = [:]
 
@@ -289,15 +291,29 @@ struct ContentView: View {
         case .first(let pressed):
             if pressed {
                 dragSection = s
+                dragStartFrame = tileFrames[s]
                 UISelectionFeedbackGenerator().selectionChanged()
             }
         case .second(_, let drag):
             guard let drag else { break }
             dragSection = s
-            dragTranslation = drag.translation
-            // 拖到别的格子上：实时换位
-            if let target = tileFrames.first(where: { $0.value.contains(drag.location) })?.key,
-               target != s {
+
+            // 视觉偏移 = 起始位置 + 手指位移 − 当前所在位置。
+            // 换位后格子基础位置会变，直接用 translation 会跳走（"乱跑"的根源）
+            let base = dragStartFrame ?? tileFrames[s] ?? .zero
+            let current = tileFrames[s] ?? base
+            dragTranslation = CGSize(
+                width: base.minX + drag.translation.width - current.minX,
+                height: base.minY + drag.translation.height - current.minY
+            )
+
+            // 用被拖格子的中心去找目标格子，带一点外扩迟滞，
+            // 避免手指在两个相邻格子边界上来回触发换位横跳
+            let center = CGPoint(x: base.midX + drag.translation.width,
+                                 y: base.midY + drag.translation.height)
+            if let target = tileFrames.first(where: {
+                $0.key != s && $0.value.insetBy(dx: -6, dy: -6).contains(center)
+            })?.key {
                 moveSection(s, before: target)
             }
         }
@@ -308,6 +324,7 @@ struct ContentView: View {
         UISelectionFeedbackGenerator().selectionChanged()
         dragSection = nil
         dragTranslation = .zero
+        dragStartFrame = nil
     }
 
     private func togglePanel(_ open: Bool) {

@@ -184,8 +184,15 @@ struct NoteMarkdownTextView: UIViewRepresentable {
     @Binding var text: String
     let controller: NoteEditorController
     var fontSize: CGFloat = 17
+    /// 编辑态缩放：字号 = fontSize * zoomScale（0.6–3.0）
+    var zoomScale: CGFloat = 1
     /// 新建笔记时自动弹出键盘
     var autoFocus: Bool = false
+
+    /// 缩放后的实际字号（钳制范围）
+    private var effectiveFontSize: CGFloat {
+        min(max(fontSize * zoomScale, 9), 40)
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -205,9 +212,10 @@ struct NoteMarkdownTextView: UIViewRepresentable {
 
         let para = NSMutableParagraphStyle()
         para.lineSpacing = 5
-        tv.typingAttributes = [.font: UIFont.systemFont(ofSize: fontSize),
+        tv.typingAttributes = [.font: UIFont.systemFont(ofSize: effectiveFontSize),
                                .foregroundColor: UIColor.label,
                                .paragraphStyle: para]
+        tv.font = UIFont.systemFont(ofSize: effectiveFontSize)
         controller.textView = tv
         if autoFocus {
             DispatchQueue.main.async { tv.becomeFirstResponder() }
@@ -225,10 +233,28 @@ struct NoteMarkdownTextView: UIViewRepresentable {
             tv.text = text
             tv.selectedRange = NSRange(location: loc, length: 0)
         }
+        // 缩放变化：整体重设字号（保留光标）
+        if context.coordinator.lastZoom != zoomScale {
+            context.coordinator.lastZoom = zoomScale
+            let para = NSMutableParagraphStyle()
+            para.lineSpacing = 5
+            let font = UIFont.systemFont(ofSize: effectiveFontSize)
+            tv.typingAttributes = [.font: font, .foregroundColor: UIColor.label,
+                                   .paragraphStyle: para]
+            tv.font = font
+            let storage = tv.textStorage
+            if storage.length > 0 {
+                storage.addAttributes([.font: font, .paragraphStyle: para],
+                                      range: NSRange(location: 0, length: storage.length))
+            }
+            tv.setNeedsDisplay()
+        }
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: NoteMarkdownTextView
+        /// 上一次的编辑态缩放，变化时才重设字号
+        var lastZoom: CGFloat?
 
         init(_ parent: NoteMarkdownTextView) { self.parent = parent }
 

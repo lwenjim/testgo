@@ -31,13 +31,18 @@ enum AvatarPalette {
     }
 }
 
-/// 用户头像：有自定义头像（头像同步落盘）就显示图片，否则显示默认的首字母圆头像。
-/// 收到对端头像后通过 chatAvatarDidChange 通知自动刷新。
+/// 用户头像：方形圆角。有自定义头像（头像同步落盘）就显示图片，
+/// 否则显示默认的首字母头像。收到对端头像后通过 chatAvatarDidChange 通知自动刷新。
 struct ChatAvatar: View {
     let name: String
     var size: CGFloat = 40
     var dot: Color? = nil
     @State private var refresh = UUID()
+
+    /// 方形圆角形状：所有位置统一
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
+    }
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -50,6 +55,7 @@ struct ChatAvatar: View {
             }
         }
         .frame(width: size, height: size)
+        .clipShape(shape)
         .id(refresh)
         .onReceive(NotificationCenter.default.publisher(for: .chatAvatarDidChange)) { _ in
             refresh = UUID()
@@ -63,10 +69,9 @@ struct ChatAvatar: View {
                 .resizable()
                 .scaledToFill()
                 .frame(width: size, height: size)
-                .clipShape(Circle())
         } else {
             ZStack {
-                Circle()
+                shape
                     .fill(AvatarPalette.color(for: name).opacity(0.16))
                     .frame(width: size, height: size)
                 Text(AvatarPalette.initial(name))
@@ -74,6 +79,14 @@ struct ChatAvatar: View {
                     .foregroundStyle(AvatarPalette.color(for: name))
             }
         }
+    }
+}
+
+/// 收集消息列表内容高度（判断是否超过一屏，决定要不要滚到底部）
+private struct MessageListHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
@@ -1307,16 +1320,27 @@ struct ChatDetailView: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
+                    .background(
+                        GeometryReader { inner in
+                            Color.clear.preference(key: MessageListHeightKey.self,
+                                                   value: inner.size.height)
+                        }
+                    )
                 }
                 .dismissKeyboardOnScroll()
-                .onAppear { scroll(proxy, animated: false) }
-                .onChange(of: messages.count) { _ in scroll(proxy, animated: true) }
+                .onPreferenceChange(MessageListHeightKey.self) { listContentHeight = $0 }
+                .onAppear { scroll(proxy, viewport: geo.size.height, animated: false) }
+                .onChange(of: messages.count) { _ in scroll(proxy, viewport: geo.size.height, animated: true) }
             }
         }
     }
 
-    private func scroll(_ proxy: ScrollViewProxy, animated: Bool) {
+    /// 消息列表内容高度：不满一屏时不滚到底部，避免顶部一大片空白
+    @State private var listContentHeight: CGFloat = 0
+
+    private func scroll(_ proxy: ScrollViewProxy, viewport: CGFloat, animated: Bool) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            guard listContentHeight > viewport + 1 else { return }
             if animated {
                 withAnimation(.easeOut(duration: 0.2)) {
                     proxy.scrollTo("bottom", anchor: .bottom)
@@ -1698,16 +1722,27 @@ struct GroupChatView: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
+                    .background(
+                        GeometryReader { inner in
+                            Color.clear.preference(key: MessageListHeightKey.self,
+                                                   value: inner.size.height)
+                        }
+                    )
                 }
                 .dismissKeyboardOnScroll()
-                .onAppear { scroll(proxy, animated: false) }
-                .onChange(of: messages.count) { _ in scroll(proxy, animated: true) }
+                .onPreferenceChange(MessageListHeightKey.self) { listContentHeight = $0 }
+                .onAppear { scroll(proxy, viewport: geo.size.height, animated: false) }
+                .onChange(of: messages.count) { _ in scroll(proxy, viewport: geo.size.height, animated: true) }
             }
         }
     }
 
-    private func scroll(_ proxy: ScrollViewProxy, animated: Bool) {
+    /// 消息列表内容高度：不满一屏时不滚到底部，避免顶部一大片空白
+    @State private var listContentHeight: CGFloat = 0
+
+    private func scroll(_ proxy: ScrollViewProxy, viewport: CGFloat, animated: Bool) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            guard listContentHeight > viewport + 1 else { return }
             if animated {
                 withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
             } else {
