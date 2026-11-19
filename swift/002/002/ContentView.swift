@@ -101,7 +101,7 @@ struct ContentView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
             }
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(Color.white.ignoresSafeArea())
         // 连接从启动就建立：笔记等数据同步不再依赖先进入聊天板块
         .onAppear { chat.start() }
         .onChange(of: scenePhase) { phase in
@@ -216,7 +216,7 @@ struct ContentView: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(.systemBackground))
+                .fill(Color.white)
                 .shadow(color: Color.black.opacity(0.15), radius: 20, x: 0, y: 8)
         )
         .coordinateSpace(name: "panelSpace")
@@ -262,13 +262,15 @@ struct ContentView: View {
     private func tileBackground(_ s: AppSection) -> some View {
         let selected = s == section
         return RoundedRectangle(cornerRadius: 15, style: .continuous)
-            .fill(selected ? Color.orange.opacity(0.14) : Color(.systemGray6))
+            .fill(selected ? Color.orange.opacity(0.14) : Color.white)
     }
 
     private func tileOverlay(_ s: AppSection) -> some View {
         let selected = s == section
+        // 白底主题：未选中格子用极淡描边和白色页面区分开
         return RoundedRectangle(cornerRadius: 15, style: .continuous)
-            .stroke(selected ? Color.orange : Color.clear, lineWidth: 1.5)
+            .stroke(selected ? Color.orange : Color.black.opacity(0.09),
+                    lineWidth: selected ? 1.5 : 0.6)
     }
 
     private func tileDragGesture(_ s: AppSection) -> some Gesture {
@@ -645,6 +647,13 @@ struct KeyButton: View {
                 .background(background)
                 .foregroundStyle(foreground)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                // 白底主题：白键补一圈极淡描边，避免和白色页面糊在一起
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(role == .digit || role == .function
+                                ? Color.black.opacity(0.09) : Color.clear,
+                                lineWidth: 0.6)
+                )
         }
         .buttonStyle(.plain)
         .disabled(disabled)
@@ -653,8 +662,8 @@ struct KeyButton: View {
 
     private var background: Color {
         switch role {
-        case .digit: return Color(.systemGray4)
-        case .function: return Color(.systemGray5)
+        case .digit: return Color.white
+        case .function: return Color.white
         case .op: return .orange
         case .clear: return Color(.systemRed).opacity(0.9)
         }
@@ -884,7 +893,8 @@ struct ProgrammerKeypad: View {
                 .font(.system(size: 13, weight: .bold))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 7)
-                .background(Capsule().fill(active ? Color.orange : Color(.systemGray5)))
+                .background(Capsule().fill(active ? Color.orange : Color.white))
+                .hairlineCapsule(opacity: active ? 0 : 0.09)
                 .foregroundStyle(active ? Color.white : Color.primary)
         }
         .buttonStyle(.plain)

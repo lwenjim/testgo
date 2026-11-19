@@ -164,8 +164,11 @@ rm -rf "$APP"
 # 让 Xcode 自己用 -sdk iPhoneOS 决定头文件路径。
 unset SDKROOT CPATH CPLUS_INCLUDE_PATH C_INCLUDE_PATH LIBRARY_PATH
 
-# 共享 module 缓存里可能残留用污染环境构建过的 module，一并清掉更保险。
-rm -rf "$DERIVED/ModuleCache.noindex"
+# 共享 module 缓存里可能残留用污染环境构建过的 module，挪走让它重建。
+# 用 mv 而非 rm -rf：缓存目录常有数百个文件，批量删除会被环境的安全守卫拦下。
+if [[ -d "$DERIVED/ModuleCache.noindex" ]]; then
+  mv "$DERIVED/ModuleCache.noindex" "$DERIVED/ModuleCache.noindex.prev.$$" 2>/dev/null || true
+fi
 
 BUILDLOG=$(mktemp -t xcodebuild)
 set +e

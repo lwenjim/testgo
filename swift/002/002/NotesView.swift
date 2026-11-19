@@ -188,8 +188,8 @@ struct NotesView: View {
         .padding(.bottom, 8)
         .background(
             LinearGradient(
-                colors: [Color(.systemGroupedBackground).opacity(0),
-                         Color(.systemGroupedBackground)],
+                colors: [Color.white.opacity(0),
+                         Color.white],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -250,7 +250,8 @@ struct NotesView: View {
             }
             .padding(.horizontal, 12)
             .frame(height: 38)
-            .background(Capsule().fill(Color(.secondarySystemBackground)))
+            .background(Capsule().fill(Color.white))
+            .hairlineCapsule(opacity: 0.09)
 
             Button {
                 model.reload()
@@ -341,8 +342,9 @@ struct NotesView: View {
         .padding(13)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
+                .fill(Color.white)
         )
+        .hairlineCard(radius: 16, opacity: 0.09)
         .contentShape(Rectangle())
         .onTapGesture {
             if selectMode {
@@ -468,6 +470,8 @@ struct NoteEditor: View {
     /// 编辑态缩放（双指捏合调整字号）
     @State private var editorScale: CGFloat = 1
     @State private var editorPinchStart: CGFloat?
+    /// 换行开关：默认不换行（长行保持单行、可横向滚动查看）；用户切换后跨笔记 / 重启记忆
+    @AppStorage("notes.wrapLines") private var wrapText = false
     @StateObject private var editor = NoteEditorController()
 
     init(model: NotesModel, target: NoteTarget) {
@@ -481,11 +485,27 @@ struct NoteEditor: View {
     var body: some View {
         VStack(spacing: 0) {
             // 自定义顶栏：不套系统导航栏（iOS 26 会给工具栏按钮加玻璃圆底）
-            HStack(spacing: 20) {
+            HStack(spacing: 14) {
                 Button("取消") { dismiss() }
                     .font(.system(size: 16))
                     .buttonStyle(.plain)
                 Spacer(minLength: 0)
+                // 换行开关：默认「不换行」，点按切换；预览 / 编辑同一份状态
+                Button {
+                    wrapText.toggle()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "text.justify")
+                            .font(.system(size: 14, weight: .medium))
+                        Text(wrapText ? "换行" : "不换行")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundStyle(wrapText ? Color.orange : Color.secondary)
+                    .frame(height: 32)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(wrapText ? "自动换行已开启，点按关闭" : "自动换行已关闭，点按开启")
                 Button {
                     togglePreview()
                 } label: {
@@ -518,8 +538,10 @@ struct NoteEditor: View {
                                         if previewScale != 1 {
                                             withAnimation(.easeInOut(duration: 0.15)) { previewScale = 1 }
                                         }
-                                    })
-                        .background(Color(.systemBackground))
+                                    },
+                                    wrapText: wrapText)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.white)
                         .transition(.opacity)
                         .simultaneousGesture(
                             MagnificationGesture()
@@ -536,7 +558,7 @@ struct NoteEditor: View {
                 }
             }
         }
-        .background(Color(.systemBackground))
+        .background(Color.white)
     }
 
     // MARK: 编辑区
@@ -545,7 +567,9 @@ struct NoteEditor: View {
         ZStack(alignment: .topLeading) {
             NoteMarkdownTextView(text: $text, controller: editor,
                                  zoomScale: editorScale,
-                                 autoFocus: target.isNew)
+                                 autoFocus: target.isNew,
+                                 wrapText: wrapText)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             if text.isEmpty {
                 Text("写点什么…\n支持 **粗体**、- 列表、- [ ] 待办、> 引用、``` 代码块")
                     .font(.system(size: 17))

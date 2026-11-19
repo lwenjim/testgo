@@ -1014,8 +1014,8 @@ struct AppRankingView: View {
             .padding(.bottom, 8)
             .background(
                 LinearGradient(
-                    colors: [Color(.systemGroupedBackground).opacity(0),
-                             Color(.systemGroupedBackground)],
+                    colors: [Color.white.opacity(0),
+                             Color.white],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -1064,7 +1064,7 @@ struct AppRankingView: View {
         .frame(height: 42)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(.systemBackground))
+                .fill(Color.white)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -1306,188 +1306,18 @@ enum Pinyin {
     }
 }
 
-// MARK: - 批量首次确认（系统一次只批一个，这里负责自动串联）
-
-struct BatchConfirmSheet: View {
-    @ObservedObject var model: RankingModel
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.scenePhase) private var scenePhase
-
-    /// 自动继续：确认完一个、切回来，自动准备下一个
-    @State private var running = false
-    /// 已经切出去过（说明上一个是真打开了，而不是被取消）
-    @State private var leftApp = false
-    @State private var note: String?
-    @State private var advanceTask: Task<Void, Never>?
-
-    private var pending: [RankedApp] {
-        model.sorted.filter { $0.count == 0 && $0.installed != false }
-    }
-    private var doneCount: Int {
-        model.apps.filter { $0.count > 0 }.count
-    }
-    private var total: Int { doneCount + pending.count }
-
-    var body: some View {
-        NavStackCompat {
-            List {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if total > 0 {
-                            ProgressView(value: Double(doneCount), total: Double(total))
-                                .tint(.orange)
-                            Text("已确认 \(doneCount) / \(total)")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.orange)
-                        }
-                        Text("系统一次只允许确认一个 App，那个「打开」只能由你点。这里做的是自动串联：确认完一个、切回来自动准备下一个，你只需连点几次「打开」。")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 2)
-                }
-
-                if let app = pending.first {
-                    Section("下一个") {
-                        HStack(spacing: 14) {
-                            AppIconView(app: app, size: 52)
-
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(app.name)
-                                    .font(.system(size: 17, weight: .semibold))
-                                Text(app.scheme)
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer(minLength: 6)
-
-                            Button {
-                                start(app)
-                            } label: {
-                                Text(running ? "打开" : "开始")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 8)
-                                    .background(Capsule().fill(Color.orange))
-                                    .foregroundStyle(.white)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.vertical, 4)
-
-                        if running {
-                            Button("暂停自动继续") {
-                                running = false
-                                advanceTask?.cancel()
-                                note = "已暂停，点上面的按钮可继续"
-                            }
-                            .foregroundStyle(.orange)
-                        }
-
-                        if let note {
-                            Text(note)
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                } else {
-                    Section {
-                        VStack(spacing: 10) {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 36))
-                                .foregroundStyle(.green)
-                            Text("全部确认完成")
-                                .font(.system(size: 15, weight: .medium))
-                            Text("以后从常用页点这些 App 都不会再弹确认框")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 24)
-                    }
-                }
-
-                if pending.count > 1 {
-                    Section("队列（\(pending.count - 1) 个待确认）") {
-                        ForEach(pending.dropFirst().prefix(10)) { app in
-                            HStack(spacing: 10) {
-                                AppIconView(app: app, size: 26)
-                                Text(app.name)
-                                    .font(.system(size: 14))
-                                Spacer()
-                                Text("待确认")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle("批量确认")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("完成") { dismiss() }
-                }
-            }
-        }
-        .onChange(of: scenePhase) { phase in
-            // 打开成功后我们会切到后台，用户切回来就自动准备下一个
-            if phase == .background { leftApp = true }
-            if phase == .active, leftApp {
-                leftApp = false
-                if running { scheduleAdvance() }
-            }
-        }
-        .onDisappear { advanceTask?.cancel() }
-    }
-
-    private func start(_ app: RankedApp) {
-        running = true
-        note = nil
-        open(app)
-    }
-
-    private func open(_ app: RankedApp) {
-        advanceTask?.cancel()
-        model.launch(app) { ok in
-            if !ok {
-                running = false
-                note = "「\(app.name)」没打开：在系统弹窗里点「打开」才能继续"
-            }
-        }
-    }
-
-    private func scheduleAdvance() {
-        advanceTask?.cancel()
-        advanceTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 700_000_000)
-            guard !Task.isCancelled, running, let next = pending.first else { return }
-            open(next)
-        }
-    }
-}
-
-// MARK: - App 目录（添加面板）
+// MARK: - App 目录：下拉窗口一键批量加入未添加的软件
 
 struct AppCatalogSheet: View {
     @ObservedObject var model: RankingModel
     @Environment(\.dismiss) private var dismiss
 
-    @State private var query = ""
-    @State private var showManual = false
-    @State private var showBatch = false
-    @State private var newName = ""
-    @State private var newScheme = ""
+    /// 本次批量加入的数量（点了才显示）
+    @State private var addedCount: Int?
 
-    private var filtered: [RankedApp] {
-        let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return RankingModel.catalog }
-        return RankingModel.catalog.filter {
-            $0.name.localizedCaseInsensitiveContains(q)
-            || $0.scheme.localizedCaseInsensitiveContains(q)
-        }
+    /// 目录里还没进「常用」列表的软件
+    private var missing: [RankedApp] {
+        RankingModel.catalog.filter { !model.contains(scheme: $0.scheme) }
     }
 
     var body: some View {
@@ -1495,77 +1325,69 @@ struct AppCatalogSheet: View {
             List {
                 Section {
                     Button {
-                        showManual = true
+                        let count = missing.count
+                        for app in missing { model.add(app) }
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        addedCount = count
                     } label: {
-                        Label("手动输入名称和链接", systemImage: "square.and.pencil")
+                        HStack(spacing: 12) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 22, weight: .medium))
+                                .foregroundStyle(Color.orange)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(missing.isEmpty ? "已全部加入" : "批量加入未添加的软件")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                                Text(missing.isEmpty
+                                     ? "目录里的软件都已在列表中"
+                                     : "把下拉窗口里还没加入列表的 \(missing.count) 个软件一次全部加入")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
                     }
-                    Button {
-                        model.scanInstalled()
-                        dismiss()
-                    } label: {
-                        Label("重新扫描已安装的 App", systemImage: "antenna.radiowaves.left.and.right")
+                    .buttonStyle(.plain)
+                    .disabled(missing.isEmpty)
+
+                    if let n = addedCount {
+                        Label("本次已加入 \(n) 个软件", systemImage: "checkmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.green)
                     }
-                    Button {
-                        showBatch = true
-                    } label: {
-                        Label("批量确认首次打开", systemImage: "checklist")
-                    }
-                } footer: {
-                    Text("扫描只能识别内置清单里的 App（iOS 限制 50 个），其余可在这里手动加入。")
                 }
 
+                // 只读目录：只展示加入状态，不再提供逐个添加 / 搜索 / 手动输入等功能
                 Section("App 目录（\(RankingModel.catalog.count) 个）") {
-                    ForEach(filtered) { app in
+                    ForEach(RankingModel.catalog) { app in
                         let added = model.contains(scheme: app.scheme)
-                        Button {
-                            model.add(app)
-                        } label: {
-                            HStack(spacing: 12) {
-                                AppIconView(app: app, size: 32)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(app.name)
-                                        .font(.system(size: 15, weight: .medium))
-                                        .foregroundStyle(.primary)
-                                    Text(app.scheme)
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: added ? "checkmark.circle.fill" : "plus.circle")
-                                    .foregroundStyle(added ? Color.green : Color.orange)
+                        HStack(spacing: 12) {
+                            AppIconView(app: app, size: 32)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(app.name)
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(.primary)
+                                Text(app.scheme)
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
                             }
-                            .contentShape(Rectangle())
+                            Spacer()
+                            Image(systemName: added ? "checkmark.circle.fill" : "plus.circle")
+                                .foregroundStyle(added ? Color.green : Color.orange.opacity(0.45))
                         }
-                        .buttonStyle(.plain)
-                        .disabled(added)
+                        .contentShape(Rectangle())
                     }
                 }
             }
-            .searchable(text: $query, prompt: "搜索 App")
-            .navigationTitle("添加 App")
+            .navigationTitle("批量添加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("完成") { dismiss() }
                 }
             }
-            .alert("手动添加", isPresented: $showManual) {
-                TextField("名称，如 微信", text: $newName)
-                TextField("URL Scheme，如 weixin://", text: $newScheme)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                Button("取消", role: .cancel) { newName = ""; newScheme = "" }
-                Button("添加") {
-                    if model.add(name: newName, scheme: newScheme) {
-                        newName = ""; newScheme = ""
-                    }
-                }
-            } message: {
-                Text("填入该 App 的 URL Scheme（网上可查，如 weixin://、alipay://）")
-            }
-        }
-        .sheet(isPresented: $showBatch) {
-            BatchConfirmSheet(model: model)
         }
     }
 }

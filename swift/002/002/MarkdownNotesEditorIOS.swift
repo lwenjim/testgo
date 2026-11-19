@@ -188,6 +188,8 @@ struct NoteMarkdownTextView: UIViewRepresentable {
     var zoomScale: CGFloat = 1
     /// 新建笔记时自动弹出键盘
     var autoFocus: Bool = false
+    /// false = 不换行（默认），true = 自动换行；与预览共用同一个开关
+    var wrapText: Bool = false
 
     /// 缩放后的实际字号（钳制范围）
     private var effectiveFontSize: CGFloat {
@@ -197,18 +199,21 @@ struct NoteMarkdownTextView: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIView(context: Context) -> UITextView {
-        let tv = UITextView()
+        let tv = EditorTextView()
         tv.delegate = context.coordinator
         tv.backgroundColor = .clear
         tv.textColor = .label
         tv.textContainerInset = UIEdgeInsets(top: 14, left: 14, bottom: 18, right: 14)
         tv.alwaysBounceVertical = true
+        tv.wrapText = wrapText
+        tv.showLineNumbers = true
         tv.keyboardDismissMode = .interactive
         tv.spellCheckingType = .no
         tv.smartQuotesType = .no
         tv.smartDashesType = .no
         tv.smartInsertDeleteType = .no
         tv.text = text
+        tv.invalidateMetrics()
 
         let para = NSMutableParagraphStyle()
         para.lineSpacing = 5
@@ -226,12 +231,16 @@ struct NoteMarkdownTextView: UIViewRepresentable {
     func updateUIView(_ tv: UITextView, context: Context) {
         context.coordinator.parent = self
         controller.textView = tv
+        if let et = tv as? EditorTextView, et.wrapText != wrapText {
+            et.wrapText = wrapText
+        }
         // 外部换笔记时同步内容（保留光标位置，避免打字时被回写打断）
         if tv.text != text {
             let max = (text as NSString).length
             let loc = min(tv.selectedRange.location, max)
             tv.text = text
             tv.selectedRange = NSRange(location: loc, length: 0)
+            (tv as? EditorTextView)?.invalidateMetrics()
         }
         // 缩放变化：整体重设字号（保留光标）
         if context.coordinator.lastZoom != zoomScale {
@@ -248,6 +257,7 @@ struct NoteMarkdownTextView: UIViewRepresentable {
                                       range: NSRange(location: 0, length: storage.length))
             }
             tv.setNeedsDisplay()
+            (tv as? EditorTextView)?.invalidateMetrics()
         }
     }
 
@@ -365,7 +375,7 @@ struct NoteFormatBar: View {
             .padding(.horizontal, 10)
         }
         .frame(height: 44)
-        .background(Color(.secondarySystemBackground))
+        .background(Color.white)
     }
 
     private var divider: some View {
@@ -392,5 +402,195 @@ struct NoteFormatBar: View {
         .buttonStyle(.plain)
         .foregroundStyle(Color.primary.opacity(0.78))
         .accessibilityLabel(tip)
+    }
+}
+
+
+// MARK: - 编辑器 UITextView：左侧行号 + 默认不换行横向滚动
+//
+// 前几版踩坑结论（务必遵守）：
+// 1. 绝不手动写 contentSize——写入会扰动 contentOffset（删字符后滚动条跳到最右的元凶）。
+// 2. 容器高度用「按行数估算的有限值」：greatestFiniteMagnitude 会让 UIKit 计算
+//    contentSize 溢出（完全滚不动）；固定 1_000_000 则是百万级空白 + 大文本卡死。
+// 3. 不换行宽度按 64pt 量化、只增不减：打字删字几乎不触发容器重排，不闪。
+// 4. 行号必须画在「文本层之上」的独立覆盖视图：draw(_:) 在文本子视图之下，
+//    横向滚动时长行会滑进行号区把行号盖住。
+
+/// 行号列：覆盖在文本之上的独立视图，frame 钉在可视左缘
+private final class EditorGutterView: UIView {
+    weak var editor: EditorTextView?
+    override func draw(_ rect: CGRect) { editor?.drawLineNumbers(in: rect) }
+}
+
+final class EditorTextView: UITextView {
+    /// 默认不换行（长行保持单行，横向滚动查看）
+    var wrapText: Bool = false {
+        didSet {
+            guard oldValue != wrapText else { return }
+            widest = 0
+            setNeedsLayout()
+        }
+    }
+    var showLineNumbers = true {
+        didSet {
+            gutter.isHidden = !showLineNumbers
+            setNeedsLayout()
+        }
+    }
+
+    private let gutter = EditorGutterView()
+    private var widest: CGFloat = 0
+    private var lastLen = -1
+    private var longestCache: CGFloat = 0
+    private var startsCache: [Int] = []
+    private var startsLen = -1
+
+    private static let numberFont = UIFont.monospacedDigitSystemFont(ofSize: 10.5, weight: .regular)
+
+    override init(frame: CGRect, textContainer: NSTextContainer?) {
+        super.init(frame: frame, textContainer: textContainer)
+        gutter.backgroundColor = .white
+        gutter.editor = self
+        addSubview(gutter)
+        showsVerticalScrollIndicator = true
+        showsHorizontalScrollIndicator = true
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    /// 文本 / 字号变化后调用，重算行号与最长行
+    func invalidateMetrics() {
+        lastLen = -1
+        startsLen = -1
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        applyMetrics()
+        // 行号列钉在可视左缘：横滚时随 contentOffset 平移（视觉固定），
+        // 并以不透明背景盖住滑入 gutter 区域的长行文本
+        let gw = showLineNumbers ? gutterWidth() : 0
+        gutter.frame = CGRect(x: contentOffset.x, y: 0,
+                              width: gw,
+                              height: max(bounds.height, contentSize.height))
+        if showLineNumbers { gutter.setNeedsDisplay() }
+    }
+
+    /// 逻辑行起始的 UTF16 偏移（含缓存，滚动重绘不重复扫描）
+    private func lineStarts() -> [Int] {
+        if startsLen == textStorage.length, !startsCache.isEmpty { return startsCache }
+        var st: [Int] = [0]
+        for (i, c) in textStorage.string.utf16.enumerated() where c == 10 {
+            st.append(i + 1)
+        }
+        startsCache = st
+        startsLen = textStorage.length
+        return st
+    }
+
+    private func lineCount() -> Int { lineStarts().count }
+
+    private func gutterWidth() -> CGFloat {
+        let digits = max(2, String(lineCount()).count)
+        let cw = ("8" as NSString).size(withAttributes: [.font: Self.numberFont]).width
+        return CGFloat(digits) * cw + 16
+    }
+
+    private func measureLongestLine() -> CGFloat {
+        guard textStorage.length > 0 else { return 0 }
+        let f = font ?? UIFont.systemFont(ofSize: 17)
+        let rect = (textStorage.string as NSString).boundingRect(
+            with: CGSize(width: 1_000_000, height: 1_000_000),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: f], context: nil)
+        return min(ceil(rect.width), 100_000)
+    }
+
+    private func applyMetrics() {
+        guard bounds.width > 10 else { return }
+        let len = textStorage.length
+        let textChanged = (len != lastLen)
+        lastLen = len
+
+        // 行号宽度：位数变化才改 inset，避免正文左右抖动
+        var inset = textContainerInset
+        let desiredLeft: CGFloat = showLineNumbers ? gutterWidth() + 10 : 14
+        if abs(inset.left - desiredLeft) > 0.5 {
+            inset.left = desiredLeft
+            textContainerInset = inset
+        }
+        let inset2 = textContainerInset
+        let visibleW = max(bounds.width - inset2.left - inset2.right, 1)
+
+        let width: CGFloat
+        if wrapText {
+            if textContainer.lineBreakMode != .byWordWrapping {
+                textContainer.lineBreakMode = .byWordWrapping
+            }
+            alwaysBounceHorizontal = false
+            width = visibleW
+        } else {
+            if textContainer.lineBreakMode != .byClipping {
+                textContainer.lineBreakMode = .byClipping
+            }
+            alwaysBounceHorizontal = true
+            if textChanged { longestCache = measureLongestLine() }
+            let want = ceil(max(visibleW, longestCache) / 64) * 64
+            if want > widest { widest = want }
+            width = widest
+        }
+
+        // 有限估算高度：必须 ≥ 实际排版高度（否则底部截断成「空白」），又不能过大。
+        // 换行模式按「总字符数 / 每行字符数」估折行量，避免超长行截断。
+        let f = font ?? UIFont.systemFont(ofSize: 17)
+        let lineHeight = max(f.lineHeight, 12)
+        let charW = max(("M" as NSString).size(withAttributes: [.font: f]).width, 1)
+        let perLine = max(Int(visibleW / charW), 4)
+        let lines = lineCount()
+        let estLines = wrapText
+            ? textStorage.length / perLine + lines + 50
+            : lines + 20
+        let height = min(max(CGFloat(estLines) * lineHeight * 1.3 + 300,
+                             bounds.height, 600), 500_000)
+        let target = CGSize(width: width, height: height)
+        if abs(textContainer.size.width - target.width) > 0.5
+            || abs(textContainer.size.height - target.height) > 0.5 {
+            textContainer.size = target
+        }
+    }
+
+    /// 在 gutter 覆盖层上画行号（gutter 坐标系 y = 文档内容坐标，随行滚动）
+    func drawLineNumbers(in rect: CGRect) {
+        let lm = layoutManager
+        let tc = textContainer
+        let inset = textContainerInset
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: Self.numberFont,
+            .foregroundColor: UIColor.tertiaryLabel
+        ]
+        let starts = lineStarts()
+        // 只画与脏区（可视区域）相交的行；y 转回 container 坐标
+        let visible = CGRect(x: 0, y: rect.minY - inset.top,
+                             width: tc.size.width, height: rect.height)
+        let glyphRange = lm.glyphRange(forBoundingRect: visible, in: tc)
+        var lastLine = -1
+        lm.enumerateLineFragments(forGlyphRange: glyphRange) { fragRect, _, _, gr, _ in
+            let loc = lm.characterRange(forGlyphRange: gr, actualGlyphRange: nil).location
+            var lo = 0, hi = starts.count - 1
+            while lo < hi {
+                let mid = (lo + hi + 1) / 2
+                if starts[mid] <= loc { lo = mid } else { hi = mid - 1 }
+            }
+            let n = lo + 1
+            if n != lastLine {   // 同一逻辑行折成多个 fragment，只画一次
+                lastLine = n
+                let s = String(n)
+                let sz = (s as NSString).size(withAttributes: attrs)
+                let y = fragRect.minY + inset.top + (fragRect.height - sz.height) / 2
+                (s as NSString).draw(at: CGPoint(x: self.gutter.bounds.width - sz.width - 6,
+                                                 y: y),
+                                     withAttributes: attrs)
+            }
+        }
     }
 }

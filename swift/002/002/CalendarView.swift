@@ -74,7 +74,7 @@ struct CalendarView: View {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .semibold))
                     .frame(width: 34, height: 34)
-                    .background(Circle().fill(Color(.systemGray5)))
+                    .background(Circle().fill(Color.white))
             }
             .buttonStyle(.plain)
 
@@ -89,7 +89,7 @@ struct CalendarView: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 16, weight: .semibold))
                     .frame(width: 34, height: 34)
-                    .background(Circle().fill(Color(.systemGray5)))
+                    .background(Circle().fill(Color.white))
             }
             .buttonStyle(.plain)
 
@@ -163,7 +163,8 @@ struct CalendarView: View {
         .frame(maxWidth: .infinity)
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(Color(.secondarySystemBackground)))
+            .fill(Color.white))
+        .hairlineCard(radius: 16, opacity: 0.09)
     }
 }
 

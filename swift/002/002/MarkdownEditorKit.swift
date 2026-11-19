@@ -751,15 +751,17 @@ enum CodeHighlighter {
 
 enum MarkdownRender {
 
-    static func attributed(_ text: String, size: CGFloat) -> NSAttributedString {
+    static func attributed(_ text: String, size: CGFloat,
+                           showCodeLanguage: Bool = true) -> NSAttributedString {
         let out = NSMutableAttributedString()
         for block in MarkdownBlock.parse(text) {
-            out.append(line(for: block, size: size))
+            out.append(line(for: block, size: size, showCodeLanguage: showCodeLanguage))
         }
         return out
     }
 
-    private static func line(for block: MarkdownBlock, size: CGFloat) -> NSAttributedString {
+    private static func line(for block: MarkdownBlock, size: CGFloat,
+                             showCodeLanguage: Bool = true) -> NSAttributedString {
         switch block {
         case let .heading(level, text):
             let s = headingSize(level, size)
@@ -830,7 +832,8 @@ enum MarkdownRender {
             return attr
 
         case let .code(language, code):
-            return codeBlock(language: language, code: code, size: size)
+            return codeBlock(language: language, code: code, size: size,
+                             showCodeLanguage: showCodeLanguage)
 
         case .divider:
             let attr = NSMutableAttributedString(string: String(repeating: "─", count: 34),
@@ -849,18 +852,22 @@ enum MarkdownRender {
     // MARK: 代码块（带语言标签 + 语法着色 + 卡片底）
     // macOS 用 NSTextBlock 画真正的卡片；iOS 的 TextKit 不支持，退化为逐行底色
 
-    private static func codeBlock(language: String, code: String, size: CGFloat) -> NSAttributedString {
+    private static func codeBlock(language: String, code: String, size: CGFloat,
+                                  showCodeLanguage: Bool = true) -> NSAttributedString {
         let resolved = language.isEmpty ? CodeLanguageDetector.detect(code) : language
         #if os(macOS)
-        return cardCodeBlock(language: resolved, code: code, size: size, auto: language.isEmpty)
+        return cardCodeBlock(language: resolved, code: code, size: size,
+                             auto: language.isEmpty, showCodeLanguage: showCodeLanguage)
         #else
-        return simpleCodeBlock(language: resolved, code: code, size: size, auto: language.isEmpty)
+        return simpleCodeBlock(language: resolved, code: code, size: size,
+                               auto: language.isEmpty, showCodeLanguage: showCodeLanguage)
         #endif
     }
 
     #if os(macOS)
     private static func cardCodeBlock(language: String, code: String, size: CGFloat,
-                                      auto: Bool = false) -> NSAttributedString {
+                                      auto: Bool = false,
+                                      showCodeLanguage: Bool = true) -> NSAttributedString {
         let block = NSTextBlock()
         block.backgroundColor = CodeTheme.background
         block.setBorderColor(CodeTheme.border)
@@ -870,16 +877,18 @@ enum MarkdownRender {
 
         let out = NSMutableAttributedString()
 
-        // 顶部语言标签（像 GitHub 那样）
-        let base = language.isEmpty ? "code" : language.lowercased()
-        let label = auto && !language.isEmpty ? base + " · auto" : base
-        let caption = NSMutableAttributedString(string: label, attributes: [
-            .font: MarkdownStyle.font(max(9.5, size - 5), bold: true),
-            .foregroundColor: MarkdownStyle.secondary,
-            .kern: 1.1
-        ])
-        caption.addParagraph(cardParagraph(block, lineSpacing: 0, after: 6))
-        out.append(caption)
+        // 顶部语言标签（像 GitHub 那样）；预览里可选择不显示
+        if showCodeLanguage {
+            let base = language.isEmpty ? "code" : language.lowercased()
+            let label = auto && !language.isEmpty ? base + " · auto" : base
+            let caption = NSMutableAttributedString(string: label, attributes: [
+                .font: MarkdownStyle.font(max(9.5, size - 5), bold: true),
+                .foregroundColor: MarkdownStyle.secondary,
+                .kern: 1.1
+            ])
+            caption.addParagraph(cardParagraph(block, lineSpacing: 0, after: 6))
+            out.append(caption)
+        }
 
         // 代码正文：逐行套段落样式，背景由文本块统一铺满
         let highlighted = CodeHighlighter.attributed(code, language: language, size: size)
@@ -909,7 +918,8 @@ enum MarkdownRender {
     }
     #else
     private static func simpleCodeBlock(language: String, code: String, size: CGFloat,
-                                        auto: Bool = false) -> NSAttributedString {
+                                        auto: Bool = false,
+                                        showCodeLanguage: Bool = true) -> NSAttributedString {
         let out = NSMutableAttributedString()
 
         func style(_ attrs: [NSAttributedString.Key: Any], lineSpacing: CGFloat,
@@ -924,18 +934,20 @@ enum MarkdownRender {
             return a
         }
 
-        // 语言标签
-        let base = language.isEmpty ? "code" : language.lowercased()
-        let label = auto && !language.isEmpty ? base + " · auto" : base
-        out.append(style([.font: MarkdownStyle.font(max(9.5, size - 5), bold: true),
-                          .foregroundColor: MarkdownStyle.secondary,
-                          .backgroundColor: CodeTheme.background,
-                          .kern: 1.1],
-                         lineSpacing: 0, after: 0))
-        out.append(NSAttributedString(string: " " + label + "\n",
-                                      attributes: [.font: MarkdownStyle.font(max(9.5, size - 5), bold: true),
-                                                   .foregroundColor: MarkdownStyle.secondary,
-                                                   .backgroundColor: CodeTheme.background]))
+        // 语言标签（预览里可选择不显示）
+        if showCodeLanguage {
+            let base = language.isEmpty ? "code" : language.lowercased()
+            let label = auto && !language.isEmpty ? base + " · auto" : base
+            out.append(style([.font: MarkdownStyle.font(max(9.5, size - 5), bold: true),
+                              .foregroundColor: MarkdownStyle.secondary,
+                              .backgroundColor: CodeTheme.background,
+                              .kern: 1.1],
+                             lineSpacing: 0, after: 0))
+            out.append(NSAttributedString(string: " " + label + "\n",
+                                          attributes: [.font: MarkdownStyle.font(max(9.5, size - 5), bold: true),
+                                                       .foregroundColor: MarkdownStyle.secondary,
+                                                       .backgroundColor: CodeTheme.background]))
+        }
 
         // 代码正文：逐行铺底色
         let highlighted = CodeHighlighter.attributed(code, language: language, size: size)
@@ -1133,18 +1145,59 @@ struct MarkdownPreview: View {
     var baseSize: CGFloat = 14
     /// 缩放倍率（1 = 原始排版）
     var scale: CGFloat = 1
+    /// 代码块顶部是否显示编程语言标签（Mac 笔记预览默认不显示）
+    var showCodeLanguage: Bool = true
+    /// 预览内查找：匹配范围基于「渲染后的纯文本」，当前匹配单独高亮并滚到可见
+    var findRanges: [NSRange] = []
+    var currentFindRange: NSRange? = nil
+    /// 打开笔记时恢复到上次位置（0 = 顶部；nil = 不干预）
+    var initialFraction: CGFloat? = nil
+    /// 编辑→预览 / 再次打开时带过来的「可见区锚点文字」：在渲染后的文本里搜到并滚到该处。
+    /// 编辑器（纯文本、不换行）与预览（富文本、自动换行、代码卡片）文档高度差别极大，
+    /// 只按滚动比例定位必然错位，锚点才是两种排版之间可靠的对应关系。
+    var initialAnchor: String? = nil
+    /// 每次切回预览 / 打开笔记都 +1：即使锚点与比例都没变，也强制重新定位一次
+    var restoreKey: Int = 0
     /// 单击回调（例如进入编辑）。在文本视图内部挂手势，保证能收到点按
     var onSingleTap: (() -> Void)? = nil
     /// 双击回调（例如还原缩放）
     var onDoubleTap: (() -> Void)? = nil
+    /// 滚动比例 / 渲染后纯文本 / 可见区锚点（Mac 端用于位置记忆与预览→编辑定位）
+    var onScrollFraction: ((CGFloat) -> Void)? = nil
+    var onRenderedText: ((String) -> Void)? = nil
+    var onVisibleAnchor: ((String) -> Void)? = nil
+    /// iOS 笔记详情：内容是否自动换行。默认 false = 不换行、可横向滚动查看长行。
+    /// 由笔记顶栏开关控制；Mac 端有自己的排版，忽略此值。
+    var wrapText: Bool = false
+
+    private var attributed: NSAttributedString {
+        MarkdownRender.attributed(text, size: baseSize * scale,
+                                  showCodeLanguage: showCodeLanguage)
+    }
+    private var version: Int { Int((baseSize * scale * 10).rounded()) }
 
     var body: some View {
+        #if os(macOS)
         MarkdownReadOnlyText(
-            attributed: MarkdownRender.attributed(text, size: baseSize * scale),
-            version: Int((baseSize * scale * 10).rounded()),
-            onSingleTap: onSingleTap,
-            onDoubleTap: onDoubleTap
+            attributed: attributed, version: version,
+            findRanges: findRanges, currentFindRange: currentFindRange,
+            initialFraction: initialFraction,
+            initialAnchor: initialAnchor, restoreKey: restoreKey,
+            onScrollFraction: onScrollFraction,
+            onRenderedText: onRenderedText,
+            onVisibleAnchor: onVisibleAnchor,
+            onSingleTap: onSingleTap, onDoubleTap: onDoubleTap
         )
+        #else
+        MarkdownReadOnlyText(
+            attributed: attributed, version: version,
+            wrapText: wrapText,
+            onSingleTap: onSingleTap, onDoubleTap: onDoubleTap
+        )
+        // 必须填满父容器：UIViewRepresentable 默认按 intrinsicContentSize 布局，
+        // 否则 UITextView 会被撑成内容高度，外层裁剪后表现为「无法滚动」
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        #endif
     }
 }
 
@@ -1178,14 +1231,30 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
     let attributed: NSAttributedString
     /// 排版指纹：字号变化（缩放）时字符串可能相同，靠它触发重排
     let version: Int
+    /// 预览内查找（范围基于渲染后的纯文本）
+    var findRanges: [NSRange] = []
+    var currentFindRange: NSRange? = nil
+    /// 打开笔记时恢复到上次位置（0 = 顶部）
+    var initialFraction: CGFloat? = nil
+    /// 可见区锚点文字（优先于比例定位）
+    var initialAnchor: String? = nil
+    var restoreKey: Int = 0
+    var onScrollFraction: ((CGFloat) -> Void)? = nil
+    var onRenderedText: ((String) -> Void)? = nil
+    var onVisibleAnchor: ((String) -> Void)? = nil
     var onSingleTap: (() -> Void)? = nil
     var onDoubleTap: (() -> Void)? = nil
 
     final class Coordinator {
         var lastVersion = -1
         var selectionObserver: NSObjectProtocol?
+        var scrollObserver: NSObjectProtocol?
+        var lastFindSignature = ""
+        /// 位置恢复的签名：key 变化才重新定位，避免 body 重算 / 滚动回调反复把视图拽回原处
+        var lastRestoreKey = ""
         deinit {
             if let selectionObserver { NotificationCenter.default.removeObserver(selectionObserver) }
+            if let scrollObserver { NotificationCenter.default.removeObserver(scrollObserver) }
         }
     }
 
@@ -1228,6 +1297,39 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
             guard sel.location != NSNotFound, NSMaxRange(sel) <= ns.length else { return }
             ClipboardStatus.shared.report(ns.substring(with: sel))
         }
+
+        // 渲染后的纯文本回传：预览搜索用同一份文本算匹配，索引才对得上
+        let rendered = attributed.string
+        let onText = onRenderedText
+        DispatchQueue.main.async { onText?(rendered) }
+
+        // 滚动比例 / 可见区锚点上报：预览→编辑定位、再次打开停在原位置都靠它
+        let onScroll = onScrollFraction
+        let onAnchor = onVisibleAnchor
+        let clip = scroll.contentView
+        clip.postsBoundsChangedNotifications = true
+        context.coordinator.scrollObserver = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification, object: clip, queue: .main
+        ) { [weak tv, weak scroll] _ in
+            guard let tv, let scroll else { return }
+            let c = scroll.contentView
+            let f = Self.fraction(scroll)
+            let ns = tv.string as NSString
+            var anchor = ""
+            if ns.length > 0 {
+                let point = NSPoint(x: c.bounds.minX + 24, y: c.bounds.minY + 6)
+                let idx = min(max(tv.characterIndexForInsertion(at: point), 0), ns.length)
+                let len = min(80, ns.length - idx)
+                if len > 0 {
+                    anchor = Self.visibleAnchor(in: ns.substring(
+                        with: NSRange(location: idx, length: len)))
+                }
+            }
+            DispatchQueue.main.async {
+                onScroll?(f)
+                if !anchor.isEmpty { onAnchor?(anchor) }
+            }
+        }
         return scroll
     }
 
@@ -1237,32 +1339,243 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
         tv.onDoubleTap = onDoubleTap
         if tv.textStorage?.string != attributed.string || context.coordinator.lastVersion != version {
             // 记住缩放前的滚动位置比例，缩放后恢复，避免跳回顶部
-            let scrollRatio = scrollVerticalRatio(scroll)
+            let ratio = Self.fraction(scroll)
             tv.textStorage?.setAttributedString(attributed)
             context.coordinator.lastVersion = version
-            if scrollRatio > 0 { DispatchQueue.main.async { restoreScroll(scroll, ratio: scrollRatio) } }
+            context.coordinator.lastFindSignature = ""
+            let rendered = attributed.string
+            let onText = onRenderedText
+            DispatchQueue.main.async { onText?(rendered) }
+            if ratio > 0 { DispatchQueue.main.async { Self.apply(scroll, fraction: ratio) } }
+        }
+
+        // 打开笔记 / 编辑⇄预览切换时恢复位置：优先用锚点在渲染文本里定位，
+        // 比例只作兜底。restoreKey 保证「同一位置来回切换」也会重新执行一次。
+        let fracText = initialFraction.map { String(Double($0)) } ?? "-"
+        let key = "\(restoreKey)|\(fracText)|\(initialAnchor ?? "")"
+        if context.coordinator.lastRestoreKey != key {
+            context.coordinator.lastRestoreKey = key
+            Self.restore(scroll, fraction: initialFraction ?? 0,
+                         anchor: initialAnchor, repeats: true)
+        }
+
+        // 预览内查找：高亮 + 当前匹配滚动（签名变化才做，避免 body 重算反复跳动）
+        let sig = findRanges.map { "\($0.location):\($0.length)" }.joined(separator: ",")
+            + "|" + (currentFindRange.map { "\($0.location):\($0.length)" } ?? "-")
+        if context.coordinator.lastFindSignature != sig {
+            context.coordinator.lastFindSignature = sig
+            Self.applyFind(tv, ranges: findRanges, current: currentFindRange)
         }
     }
 
-    private func scrollVerticalRatio(_ scroll: NSScrollView) -> CGFloat {
-        let docHeight = scroll.documentView?.bounds.height ?? 0
-        guard docHeight > 0 else { return 0 }
-        return (scroll.contentView.bounds.origin.y + scroll.contentView.bounds.height) / docHeight
+    /// 垂直滚动比例：0 = 顶部，1 = 底部（与编辑器侧同一套定义）
+    private static func fraction(_ scroll: NSScrollView) -> CGFloat {
+        let docH = scroll.documentView?.bounds.height ?? 0
+        let maxY = max(1, docH - scroll.contentView.bounds.height)
+        return min(max(0, scroll.contentView.bounds.origin.y / maxY), 1)
     }
 
-    private func restoreScroll(_ scroll: NSScrollView, ratio: CGFloat) {
-        let docHeight = scroll.documentView?.bounds.height ?? 0
-        guard docHeight > 0 else { return }
-        let y = max(0, min(1, ratio)) * docHeight - scroll.contentView.bounds.height
-        scroll.documentView?.scroll(NSPoint(x: 0, y: max(0, y)))
+    /// 按「锚点文字」恢复到编辑模式正在看的内容。
+    /// 编辑器与预览是两套完全不同的排版（纯文本不换行 vs 富文本自动换行 + 代码卡片），
+    /// 按文档高度比例定位会严重错位；锚点是可见区第一行的有效文字，
+    /// 在渲染后的文本里搜到它、把那一行滚到可见区顶部，才是跨模式可靠的对应。
+    private static func restore(_ scroll: NSScrollView, fraction: CGFloat,
+                                anchor: String?, repeats: Bool) {
+        let once = {
+            scroll.layoutSubtreeIfNeeded()
+            guard let tv = scroll.documentView as? NSTextView,
+                  let lm = tv.layoutManager, let tc = tv.textContainer else { return }
+            let clip = scroll.contentView
+            let maxY = max(0, tv.bounds.height - clip.bounds.height)
+            var targetY: CGFloat? = nil
+            if let anchor, !anchor.isEmpty {
+                let ns = tv.string as NSString
+                let r = ns.range(of: anchor)
+                if r.location != NSNotFound {
+                    lm.ensureLayout(for: tc)
+                    let glyphs = lm.glyphRange(forCharacterRange: r, actualCharacterRange: nil)
+                    if glyphs.location < lm.numberOfGlyphs {
+                        // lineFragmentRect 是 textContainer 坐标系，转到 documentView 坐标
+                        // 要加上 textContainerOrigin，才是 clip.bounds.origin.y 该取的值
+                        let lineRect = lm.lineFragmentRect(forGlyphAt: glyphs.location,
+                                                           effectiveRange: nil)
+                        targetY = lineRect.minY + tv.textContainerOrigin.y - 6
+                    }
+                }
+            }
+            let y = min(max(0, targetY ?? fraction * maxY), maxY)
+            var o = clip.bounds.origin
+            o.y = y
+            clip.scroll(to: o)
+            scroll.reflectScrolledClipView(clip)
+        }
+        once()
+        if repeats {
+            DispatchQueue.main.async(execute: once)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: once)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: once)
+        }
+    }
+
+    private static func apply(_ scroll: NSScrollView, fraction: CGFloat,
+                              repeats: Bool = false) {
+        let once = {
+            scroll.layoutSubtreeIfNeeded()
+            let docH = scroll.documentView?.bounds.height ?? 0
+            let clip = scroll.contentView
+            let maxY = max(0, docH - clip.bounds.height)
+            var o = clip.bounds.origin
+            o.y = min(max(0, fraction * maxY), maxY)
+            clip.scroll(to: o)
+            scroll.reflectScrolledClipView(clip)
+        }
+        once()
+        if repeats {
+            DispatchQueue.main.async(execute: once)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: once)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: once)
+        }
+    }
+
+    /// 预览内查找高亮：全部匹配黄底、当前匹配橙底并滚到可见
+    private static func applyFind(_ tv: NSTextView, ranges: [NSRange], current: NSRange?) {
+        guard let lm = tv.layoutManager else { return }
+        let full = NSRange(location: 0, length: (tv.string as NSString).length)
+        lm.removeTemporaryAttribute(.backgroundColor, forCharacterRange: full)
+        let yellow = NSColor.systemYellow.withAlphaComponent(0.38)
+        let orange = NSColor.systemOrange.withAlphaComponent(0.75)
+        for r in ranges where r.location >= 0 && NSMaxRange(r) <= full.length {
+            lm.addTemporaryAttribute(.backgroundColor, value: yellow, forCharacterRange: r)
+        }
+        if let c = current, c.location >= 0, NSMaxRange(c) <= full.length {
+            lm.addTemporaryAttribute(.backgroundColor, value: orange, forCharacterRange: c)
+            tv.scrollRangeToVisible(c)
+        }
+        tv.needsDisplay = true
+    }
+
+    /// 从可见区顶部取一小段「有效文字」当锚点：预览→编辑时在原文里搜它定位。
+    /// 跳过项目符号 / 缩进 / Markdown 装饰，只从第一个字母数字（含中文）起取 16 字。
+    private static func visibleAnchor(in raw: String) -> String {
+        for line in raw.components(separatedBy: .newlines) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.isEmpty { continue }
+            let chars = Array(t)
+            guard let start = chars.firstIndex(where: { $0.isLetter || $0.isNumber }) else { continue }
+            let s = String(chars[start...].prefix(16)).trimmingCharacters(in: .whitespaces)
+            if s.count >= 2 { return s }
+        }
+        return ""
     }
 }
 
 #else
 
+/// 可切换「自动换行 / 不换行横向滚动」的 UITextView。
+///
+/// 两个坑（都踩过）：
+/// 1. textContainer.size.height 不能用 greatestFiniteMagnitude / 1_000_000：
+///    前者让 UIKit 计算 contentSize 时溢出 → 完全滚不动；后者 contentSize 百万级
+///    + 大文本一次性排版 → 卡死闪退。必须用「按内容估算的有限高度」。
+/// 2. 不能在每次 layoutSubviews 无条件重设 textContainer.size：写它会再次触发布局，
+///    形成循环，contentOffset 每帧被拉回 → 表现为滚不动。只在尺寸 / 内容变化时应用一次。
+final class WrapModeTextView: UITextView {
+    var wrapText: Bool = true {
+        didSet {
+            guard oldValue != wrapText else { return }
+            invalidateWrapMetrics()
+        }
+    }
+
+    private var cachedLength: Int = -1
+    private var cachedWidth: CGFloat = 0
+    private var cachedLines: Int = 1
+    private var needsApply = true
+    private var lastBoundsSize: CGSize = .zero
+
+    /// 换文本 / 换字体 / 切模式后调用，触发一次重新布局
+    func invalidateWrapMetrics() {
+        cachedLength = -1
+        needsApply = true
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let s = bounds.size
+        let boundsChanged = abs(s.width - lastBoundsSize.width) > 0.5
+                         || abs(s.height - lastBoundsSize.height) > 0.5
+        if boundsChanged { lastBoundsSize = s }
+        guard boundsChanged || needsApply else { return }
+        needsApply = false
+        applyWrapMode()
+    }
+
+    private func applyWrapMode() {
+        let inset = textContainerInset
+        let visibleW = max(bounds.width - inset.left - inset.right, 1)
+        let m = measure()
+        let width: CGFloat
+        let mode: NSLineBreakMode
+        if wrapText {
+            width = visibleW
+            mode = .byWordWrapping
+        } else {
+            width = max(visibleW, m.width)
+            mode = .byClipping
+        }
+        // 有限高度：按行数估算并留足余量，保证 NSLayoutManager 不会截断排版。
+        let lineHeight = max(font?.lineHeight ?? 16, 12)
+        let factor: CGFloat = wrapText ? 3.0 : 1.15
+        let est = CGFloat(m.lines) * lineHeight * factor
+                + inset.top + inset.bottom + 200
+        let height = min(max(est, bounds.height, 600), 500_000)
+        let target = CGSize(width: width, height: height)
+
+        if textContainer.lineBreakMode != mode { textContainer.lineBreakMode = mode }
+        if textContainer.size != target { textContainer.size = target }
+        isScrollEnabled = true
+        alwaysBounceHorizontal = !wrapText
+        alwaysBounceVertical = true
+        showsHorizontalScrollIndicator = !wrapText
+        showsVerticalScrollIndicator = true
+
+        // 显式 contentSize，不依赖 UIKit 对容器高度的推算，保证可滚动
+        let cs = CGSize(width: width + inset.left + inset.right,
+                        height: max(height, bounds.height))
+        if contentSize != cs { contentSize = cs }
+    }
+
+    /// 一次扫描得到最长行宽度与行数，按 textStorage.length 缓存
+    private func measure() -> (width: CGFloat, lines: Int) {
+        let len = textStorage.length
+        if cachedLength == len, cachedWidth > 0 { return (cachedWidth, cachedLines) }
+        let f = font ?? UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        let charW = max(("M" as NSString).size(withAttributes: [.font: f]).width, 1)
+        var maxChars = 0, cur = 0, lines = 1
+        for scalar in textStorage.string.unicodeScalars {
+            if scalar.value == 10 || scalar.value == 13 {
+                if cur > maxChars { maxChars = cur }
+                cur = 0
+                lines += 1
+            } else {
+                cur += 1
+            }
+        }
+        if cur > maxChars { maxChars = cur }
+        let w = min(CGFloat(maxChars) * charW + 28, 120_000)
+        cachedLength = len
+        cachedWidth = w
+        cachedLines = lines
+        return (w, lines)
+    }
+}
+
 private struct MarkdownReadOnlyText: UIViewRepresentable {
     let attributed: NSAttributedString
     let version: Int
+    /// false = 不换行（默认），true = 自动换行
+    var wrapText: Bool = false
     var onSingleTap: (() -> Void)? = nil
     var onDoubleTap: (() -> Void)? = nil
 
@@ -1283,13 +1596,15 @@ private struct MarkdownReadOnlyText: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> UITextView {
-        let tv = UITextView()
+        let tv = WrapModeTextView()
         tv.isEditable = false
         tv.isSelectable = true
         tv.backgroundColor = .clear
         tv.textContainerInset = UIEdgeInsets(top: 14, left: 14, bottom: 20, right: 14)
         tv.alwaysBounceVertical = true
+        tv.wrapText = wrapText
         tv.attributedText = attributed
+        tv.invalidateWrapMetrics()
         context.coordinator.lastVersion = version
 
         // 内置点按手势：UITextView 会吞掉 SwiftUI 层的 onTapGesture，必须挂在它自己身上
@@ -1312,9 +1627,13 @@ private struct MarkdownReadOnlyText: UIViewRepresentable {
     func updateUIView(_ tv: UITextView, context: Context) {
         context.coordinator.onSingleTap = onSingleTap
         context.coordinator.onDoubleTap = onDoubleTap
+        if let wrapView = tv as? WrapModeTextView, wrapView.wrapText != wrapText {
+            wrapView.wrapText = wrapText
+        }
         if tv.attributedText?.string != attributed.string || context.coordinator.lastVersion != version {
             let offset = tv.contentOffset
             tv.attributedText = attributed
+            (tv as? WrapModeTextView)?.invalidateWrapMetrics()
             context.coordinator.lastVersion = version
             if offset.y > 0 {
                 DispatchQueue.main.async {

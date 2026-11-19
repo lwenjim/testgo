@@ -141,6 +141,12 @@ final class NotesModel: ObservableObject {
 
 // MARK: - 界面
 
+/// 每篇笔记上次打开时停留的位置（比例 + 可见区锚点）
+private struct NotePosition {
+    var fraction: CGFloat
+    var anchor: String
+}
+
 struct NotesView: View {
     @ObservedObject var model: NotesModel
 
@@ -185,6 +191,25 @@ struct NotesView: View {
     @StateObject private var fileSync = NoteFileSync()
     /// 上次载入 / 保存的正文：用来判断是否有未保存改动、接收外部文件更新
     @State private var baseline = ""
+    /// 侧栏选择笔记后自动隐藏（默认开启，可在设置里关掉）
+    @AppStorage("macNotesAutoHideSidebar") private var autoHideSidebar = true
+    /// 预览渲染后的纯文本：预览模式搜索基于它，索引才和预览里的范围对得上
+    @State private var previewText = ""
+    /// 预览当前滚动比例 / 可见区锚点（位置记忆、预览→编辑定位）
+    @State private var previewFraction: CGFloat = 0
+    @State private var previewAnchor = ""
+    /// 每篇笔记上次打开停留的位置（需求 11）
+    @State private var positions: [UUID: NotePosition] = [:]
+    /// 本轮要恢复的位置：传给编辑器 / 预览
+    @State private var restoreFraction: CGFloat = 0
+    @State private var restoreAnchor: String? = nil
+    /// 位置恢复的版本号：每次切回预览 / 打开笔记都 +1，
+    /// 保证「锚点和比例都没变」时也重新定位一次（预览侧据此判断）
+    @State private var restoreKey = 0
+    /// 当前笔记映射到的外部文件完整路径
+    @State private var mappedPath: String?
+    /// 切换笔记 / 新建时抑制一次「模式切换位置同步」，避免旧笔记位置覆盖新笔记
+    @State private var skipModeSync = false
 
     private var list: [Note] { model.filtered(query) }
     private var selected: Note? { model.notes.first { $0.id == selectedID } }
@@ -205,21 +230,54 @@ struct NotesView: View {
         .onAppear {
             fileSync.bind(model)
             fileSync.start()
-            if selectedID == nil, let first = list.first { select(first) }
-            // 从别的板块切回笔记页时 noteKey 不变，updateNSView 不会触发归零，
-            // 这里兜底把横向滚动条钉回最左侧（延后一拍等编辑器挂到窗口上）。
-            DispatchQueue.main.async { editor.scrollToTopLeft() }
+            if selectedID == nil, let first = list.first { select(first, fromList: false) }
+            // 从别的板块切回笔记页时 noteKey 不变，updateNSView 不会触发位置恢复，
+            // 这里按当前记录兜底恢复一次（延后一拍等编辑器挂到窗口上）。
+            DispatchQueue.main.async {
+                editor.restorePosition(fraction: restoreFraction, anchor: restoreAnchor)
+            }
+            refreshMappedPath()
             // 进笔记页就主动向已连接设备拉一遍，避免漏掉后台期间推来的改动
             model.refreshFromPeers()
         }
         .onDisappear {
-            // 切到别的板块 / 关窗口前把草稿落库，并写回映射文件
+            // 切到别的板块 / 关窗口前：记住位置、草稿落库，并写回映射文件
+            rememberPosition()
             saveDraft(flash: false)
             fileSync.syncNow()
             fileSync.stop()
         }
+        // 预览 ⇄ 编辑：把当前可见内容的位置带过去（需求 9）
+        .onChange(of: previewMode) { isPreview in
+            // 换笔记 / 新建时只是顺带改了模式，别把旧笔记的位置带到新笔记
+            if skipModeSync { skipModeSync = false; return }
+            if !isPreview {
+                // 预览 → 编辑：用预览的滚动比例 / 锚点定位原文，不用手动找
+                restoreFraction = previewFraction
+                restoreAnchor = previewAnchor.isEmpty ? nil : previewAnchor
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    editor.focus()
+                    editor.restorePosition(fraction: restoreFraction, anchor: restoreAnchor)
+                }
+            } else {
+                // 编辑 → 预览：回到编辑模式正在看的内容（需求 1）。
+                // 两种排版文档高度差极大，光传比例不够，把编辑器可见区锚点一起带过去，
+                // 预览在渲染文本里搜到该文字并滚到那一行；比例作兜底。
+                let p = editor.currentPosition()
+                restoreFraction = p.fraction
+                restoreAnchor = p.anchor.isEmpty ? nil : p.anchor
+                previewFraction = p.fraction
+                previewAnchor = p.anchor
+                restoreKey += 1
+            }
+        }
+        // 预览渲染文本回传后，正在预览搜索时重算匹配
+        .onChange(of: previewText) { _ in
+            if showFind, previewMode { refreshFind(reset: false) }
+        }
         // 局域网同步或外部文件导入改了当前笔记：没有本地未保存改动时跟上
         .onChange(of: model.notes) { _ in
+            refreshMappedPath()
             guard !isNew, let note = selected, !hasUnsavedChanges,
                   note.text != baseline else { return }
             draft = note.text
@@ -263,13 +321,14 @@ struct NotesView: View {
                     Button {
                         model.reload()
                         model.refreshFromPeers()
-                        fileSync.syncNow()
+                        fileSync.refreshFolder()   // 强制重读映射文件、清理已删除的文件
+                        refreshMappedPath()
                     } label: {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(.system(size: 13))
                     }
                     .buttonStyle(.borderless)
-                    .help("从已连接设备同步笔记")
+                    .help("刷新：重新读取映射文件夹最新内容、清理已删除的文件，并同步已连接设备")
 
                     Button {
                         selectMode = true
@@ -394,8 +453,13 @@ struct NotesView: View {
                     multiSelection.insert(note.id)
                 }
                 Divider()
+                Button("刷新映射文件") { refreshMappedFile(note) }
+                Button("在 Finder 中显示文件") { fileSync.revealFile(for: note) }
+                Divider()
                 Button(role: .destructive) {
                     if selectedID == note.id { isNew = false }
+                    // 笔记里删除 → 映射文件同步移到废纸篓（需求 5）
+                    fileSync.deleteFile(for: note)
                     model.delete(note)
                     if selectedID == note.id { resetSelection() }
                 } label: {
@@ -412,12 +476,38 @@ struct NotesView: View {
             if isNew || selected != nil {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(isNew ? "新建笔记" : "编辑笔记")
+                        Text(isNew ? "新建笔记" : (previewMode ? "预览笔记" : "编辑笔记"))
                             .font(.system(size: 16, weight: .bold))
                         if let note = selected, !isNew {
                             Text("更新于 \(Self.dateLabel(note.updatedAt))")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
+                            // 映射模式显示完整文件路径，才知道打开的是哪个文件（需求 1）
+                            if let path = mappedPath {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "doc.plaintext")
+                                        .font(.system(size: 9))
+                                    Text(path)
+                                        .font(.system(size: 10, design: .monospaced))
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                        .help(path)
+                                    Button { refreshCurrentFile() } label: {
+                                        Image(systemName: "arrow.clockwise")
+                                            .font(.system(size: 9))
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help("刷新此文件：读取外部修改；文件已删除则清理笔记")
+                                    Button { fileSync.revealFile(for: note) } label: {
+                                        Image(systemName: "folder")
+                                            .font(.system(size: 9))
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .help("在 Finder 中显示该文件")
+                                }
+                                .foregroundStyle(.tertiary)
+                                .frame(maxWidth: 380, alignment: .leading)
+                            }
                         }
                     }
                     Spacer(minLength: 4)
@@ -426,6 +516,26 @@ struct NotesView: View {
                             .font(.system(size: 11))
                             .foregroundStyle(.green)
                     }
+                    // 一键把「当前代码部分」都加上 ``` 代码块标记（自动识别语言标签）
+                    Button {
+                        if previewMode {
+                            // 预览里没有编辑器：先切到编辑，等编辑器挂载且
+                            // 位置恢复的多拍收敛（0.43s）跑完后再执行
+                            setPreviewMode(false)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                _ = editor.markAllCode()
+                            }
+                        } else {
+                            _ = editor.markAllCode()
+                        }
+                    } label: {
+                        Image(systemName: "curlybraces")
+                            .font(.system(size: 12, weight: .medium))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("一键给笔记里未标记的代码段加上 ``` 代码块标记，已有代码块自动补语言标签（可 ⌘Z 撤销）")
                     // 撤销 / 重做（⌘Z 由 NSTextView 原生处理，这里给可点按钮）
                     Button { editor.undo(); saveDraft(flash: false) } label: {
                         Image(systemName: "arrow.uturn.backward")
@@ -530,12 +640,28 @@ struct NotesView: View {
 
                 if previewMode {
                     MarkdownPreview(text: draft, scale: previewScale,
-                                    // 点按内容直接回到编辑；双击还原缩放
-                                    onSingleTap: {
-                                        previewMode = false
-                                        editor.focus()
+                                    // 预览里不显示代码块的编程语言标签（需求 8）
+                                    showCodeLanguage: false,
+                                    // 预览模式的搜索就在预览里高亮 / 定位（需求 6）
+                                    findRanges: previewFindRanges,
+                                    currentFindRange: previewCurrentFind,
+                                    // 打开 / 再次打开笔记时恢复到上次位置（需求 11）；
+                                    // 编辑→预览时按锚点回到编辑里正在看的内容（需求 1）
+                                    initialFraction: restoreFraction,
+                                    initialAnchor: restoreAnchor,
+                                    restoreKey: restoreKey,
+                                    // 点按内容直接回到编辑（位置由 onChange 带过去）；双击还原缩放
+                                    onSingleTap: { previewMode = false },
+                                    onDoubleTap: { previewScale = 1 },
+                                    onScrollFraction: { f in
+                                        if abs(previewFraction - f) > 0.002 { previewFraction = f }
                                     },
-                                    onDoubleTap: { previewScale = 1 })
+                                    onRenderedText: { t in
+                                        if previewText != t { previewText = t }
+                                    },
+                                    onVisibleAnchor: { a in
+                                        if previewAnchor != a { previewAnchor = a }
+                                    })
                         // 触控板捏合缩放（也可用工具条 ± 或 ⌘=/⌘-/⌘0）
                         .gesture(
                             MagnificationGesture()
@@ -553,7 +679,9 @@ struct NotesView: View {
                                      columnMode: columnMode,
                                      noteKey: noteKey, panMode: panMode,
                                      showScrollers: showScrollers,
-                                     zoomScale: previewScale)
+                                     zoomScale: previewScale,
+                                     initialFraction: restoreFraction,
+                                     initialAnchor: restoreAnchor)
                         if draft.isEmpty {
                             Text("写点什么… 支持 Markdown：**粗体**、- 列表、- [ ] 待办、> 引用")
                                 .font(.system(size: 15))
@@ -617,15 +745,26 @@ struct NotesView: View {
         Menu {
             Toggle("显示状态栏", isOn: $showStatusBar)
             Toggle("右键拖动平移（抓手）", isOn: $panMode)
+            Toggle("选择笔记后自动隐藏侧栏", isOn: $autoHideSidebar)
             Divider()
             Toggle("笔记映射为外部文件", isOn: Binding(
                 get: { fileSync.enabled },
                 set: { fileSync.setEnabled($0) }
             ))
-            Button("选择笔记文件夹…") { fileSync.chooseFolder() }
+            Button("选择笔记文件夹…") { fileSync.chooseFolder(); refreshMappedPath() }
+            Button("选择具体文件…") { fileSync.chooseFiles(); refreshMappedPath() }
             Button("在 Finder 中打开文件夹") { fileSync.revealFolder() }
-            Button("立即同步") { fileSync.syncNow() }
+            Button("刷新映射文件夹") { fileSync.refreshFolder(); refreshMappedPath() }
+            Button("立即同步") { fileSync.syncNow(); refreshMappedPath() }
             Divider()
+            Text("文件夹：\(fileSync.folderPath)")
+                .font(.system(size: 10, design: .monospaced))
+                .lineLimit(2)
+                .help(fileSync.folderPath)
+            if !fileSync.linkedFiles.isEmpty {
+                Text("已选 \(fileSync.linkedFiles.count) 个具体文件")
+                    .font(.system(size: 10))
+            }
             Text(fileSync.enabled ? fileSync.statusText : "未启用文件映射")
                 .font(.system(size: 11))
         } label: {
@@ -648,7 +787,8 @@ struct NotesView: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
-                TextField(findRegex ? "正则表达式" : "在本文中查找", text: $findQuery)
+                TextField(findRegex ? "正则表达式"
+                          : (previewMode ? "在预览中查找" : "在本文中查找"), text: $findQuery)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
                     .focused($findFocused)
@@ -698,7 +838,8 @@ struct NotesView: View {
                         .font(.system(size: 11, weight: .medium))
                 }
                 .buttonStyle(.borderless)
-                .help("查找替换（⌘⌥F）")
+                .disabled(previewMode)
+                .help(previewMode ? "替换仅在编辑模式可用（⌘⌥F 会切到编辑）" : "查找替换（⌘⌥F）")
                 Button { closeFind() } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 11, weight: .semibold))
@@ -706,7 +847,7 @@ struct NotesView: View {
                 .buttonStyle(.borderless)
                 .help("关闭（esc）")
             }
-            if showReplace {
+            if showReplace && !previewMode {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.left.arrow.right")
                         .font(.system(size: 11))
@@ -763,8 +904,11 @@ struct NotesView: View {
 
     // MARK: 查找引擎
 
-    /// 以编辑器里的实际文本为准（替换后 draft 可能还没回写完成）
-    private var searchableText: String { editor.textView?.string ?? draft }
+    /// 预览模式搜索基于「渲染后的纯文本」（索引与预览高亮一致），编辑模式基于编辑器实际文本
+    private var searchableText: String {
+        if previewMode { return previewText.isEmpty ? draft : previewText }
+        return editor.textView?.string ?? draft
+    }
 
     private var findMatches: [NSRange] {
         FindMatcher.ranges(in: searchableText, query: findQuery,
@@ -773,7 +917,20 @@ struct NotesView: View {
                            wholeWord: findWholeWord)
     }
 
-    /// 三层高亮：当前行浅底 → 全部匹配黄底 → 当前匹配橙底
+    /// 传给预览的高亮范围：只在预览模式且查找栏打开时生效
+    private var previewFindRanges: [NSRange] {
+        guard showFind, previewMode, !findQuery.isEmpty else { return [] }
+        return findMatches
+    }
+
+    private var previewCurrentFind: NSRange? {
+        guard showFind, previewMode else { return nil }
+        let m = findMatches
+        guard !m.isEmpty else { return nil }
+        return m[min(max(findIndex, 0), m.count - 1)]
+    }
+
+    /// 编辑模式三层高亮；预览模式的高亮 / 定位交给 MarkdownPreview（不切模式）
     private func refreshFind(reset: Bool) {
         guard showFind else { return }
         let matches = findMatches
@@ -784,6 +941,10 @@ struct NotesView: View {
         }
         let idx = min(max(findIndex, 0), matches.count - 1)
         findIndex = idx
+        guard !previewMode else {
+            editor.clearFindHighlights()
+            return
+        }
         let current = matches[idx]
         let ns = searchableText as NSString
         let line = ns.lineRange(for: NSRange(location: current.location, length: 0))
@@ -792,13 +953,15 @@ struct NotesView: View {
     }
 
     private func openFind() {
-        if previewMode { previewMode = false }
+        // 预览模式搜索留在预览，编辑模式搜索留在编辑器（需求 6，不再强制切模式）
         showFind = true
         findFocused = true
+        if previewMode { showReplace = false }
         refreshFind(reset: true)
     }
 
     private func openReplace() {
+        if previewMode { previewMode = false }   // 替换需要可编辑文本
         openFind()
         showReplace = true
     }
@@ -809,7 +972,7 @@ struct NotesView: View {
         findQuery = ""
         findIndex = 0
         editor.clearFindHighlights()
-        editor.focus()
+        if !previewMode { editor.focus() }
     }
 
     /// 换笔记时彻底重置查找状态，避免旧笔记的匹配残留
@@ -826,6 +989,8 @@ struct NotesView: View {
         let count = matches.count
         let current = min(max(findIndex, 0), count - 1)
         findIndex = ((current + delta) % count + count) % count
+        // 预览模式：currentFindRange 变化会驱动预览重新高亮并滚到当前匹配
+        guard !previewMode else { return }
         let r = matches[findIndex]
         let ns = searchableText as NSString
         let line = ns.lineRange(for: NSRange(location: r.location, length: 0))
@@ -833,7 +998,7 @@ struct NotesView: View {
         editor.reveal(r)
     }
 
-    // MARK: 替换（走 NSTextView insertText，天然可撤销）
+    // MARK: 替换（走 NSTextView insertText，天然可撤销；预览只读不可替换）
 
     private func replacement(for range: NSRange, in source: String) -> String {
         guard findRegex else { return replaceText }
@@ -850,7 +1015,7 @@ struct NotesView: View {
     }
 
     private func replaceCurrent() {
-        guard let tv = editor.textView else { return }
+        guard !previewMode, let tv = editor.textView else { return }
         let matches = findMatches
         guard !matches.isEmpty else { return }
         let idx = min(max(findIndex, 0), matches.count - 1)
@@ -863,7 +1028,7 @@ struct NotesView: View {
     }
 
     private func replaceAll() {
-        guard let tv = editor.textView else { return }
+        guard !previewMode, let tv = editor.textView else { return }
         let matches = findMatches
         guard !matches.isEmpty else { return }
         let source = searchableText
@@ -880,19 +1045,95 @@ struct NotesView: View {
         refreshFind(reset: true)
     }
 
-    private func select(_ note: Note) {
-        // 切换笔记前先自动保存当前草稿
+    private func select(_ note: Note, fromList: Bool = true) {
+        // 需求 11：再次点已经打开的那篇，保持当前位置，什么都不重置
+        if !isNew, selectedID == note.id {
+            if fromList, autoHideSidebar { withAnimation { listCollapsed = true } }
+            return
+        }
+        // 需求 12：切换笔记前先自动保存当前草稿
+        rememberPosition()
         saveDraft(flash: false)
         selectedID = note.id
         isNew = false
         draft = note.text
         baseline = note.text
-        previewMode = true   // 打开已有笔记默认预览
+        setPreviewMode(true, skipSync: true)   // 打开已有笔记默认预览
         previewScale = 1
         resetFind()
-        // 打开/新建笔记后把横向滚动条钉回最左：点当前已选中那篇时
-        // noteKey 不变，updateNSView 的换笔记分支不会触发，这里显式补一次
-        DispatchQueue.main.async { editor.scrollToTopLeft() }
+        applyPosition(for: note)               // 恢复到上次打开的位置
+        refreshMappedPath()
+        if fromList, autoHideSidebar { withAnimation { listCollapsed = true } }
+        // noteKey 不变（例如点当前笔记 / 从预览切过来）时补一次位置恢复
+        DispatchQueue.main.async {
+            editor.restorePosition(fraction: restoreFraction, anchor: restoreAnchor)
+        }
+    }
+
+    /// 模式切换的统一入口：skipSync 用于「换笔记顺带改模式」，不传递旧笔记位置
+    private func setPreviewMode(_ value: Bool, skipSync: Bool = false) {
+        guard previewMode != value else { return }
+        if skipSync { skipModeSync = true }
+        previewMode = value
+    }
+
+    /// 记住当前笔记的可见位置（预览用上报值，编辑态读编辑器）
+    private func rememberPosition() {
+        guard let id = selectedID, !isNew else { return }
+        if previewMode {
+            positions[id] = NotePosition(fraction: previewFraction, anchor: previewAnchor)
+        } else {
+            let p = editor.currentPosition()
+            positions[id] = NotePosition(fraction: p.fraction, anchor: p.anchor)
+        }
+    }
+
+    /// 把某篇笔记的上次位置设为「本轮要恢复的位置」
+    private func applyPosition(for note: Note?) {
+        let p = note.flatMap { positions[$0.id] }
+        restoreFraction = p?.fraction ?? 0
+        restoreAnchor = p?.anchor
+        previewFraction = restoreFraction
+        previewAnchor = restoreAnchor ?? ""
+        restoreKey += 1   // 换笔记：即使位置数值相同也要重新定位一次
+    }
+
+    /// 当前笔记的映射文件路径（读 manifest，只在关键节点调用）
+    private func refreshMappedPath() {
+        mappedPath = selected.flatMap { fileSync.filePath(for: $0) }
+    }
+
+    /// 刷新某条笔记的映射文件；文件被外部删除时清理笔记并切到其它笔记（需求 4）
+    private func refreshMappedFile(_ note: Note) {
+        if selectedID == note.id, !isNew { saveDraft(flash: false) }
+        let alive = fileSync.refreshFile(for: note)
+        if !alive {
+            if selectedID == note.id, !isNew {
+                if let first = list.first {
+                    select(first, fromList: false)
+                } else {
+                    selectedID = nil
+                    isNew = false
+                    draft = ""
+                    baseline = ""
+                    setPreviewMode(false, skipSync: true)
+                }
+            }
+            refreshMappedPath()
+            return
+        }
+        if selectedID == note.id, !isNew,
+           let updated = model.notes.first(where: { $0.id == note.id }) {
+            draft = updated.text
+            baseline = updated.text
+        }
+        refreshMappedPath()
+    }
+
+    /// 标题栏的刷新按钮：刷新当前笔记对应的文件
+    private func refreshCurrentFile() {
+        guard let note = selected, !isNew else { return }
+        refreshMappedFile(note)
     }
 
     /// 预览缩放：每档 ±20%，范围 0.6–3.0
@@ -917,30 +1158,37 @@ struct NotesView: View {
     private func deleteSelected() {
         let ids = multiSelection
         let targets = model.notes.filter { ids.contains($0.id) }
-        for note in targets { model.delete(note) }
+        for note in targets {
+            fileSync.deleteFile(for: note)   // 需求 5：映射文件同步删除
+            model.delete(note)
+        }
         if let id = selectedID, ids.contains(id), !isNew {
             // 当前笔记被删了，草稿直接丢弃（不要回写成一条新笔记）
             selectedID = nil
             draft = ""
             baseline = ""
-            previewMode = false
+            setPreviewMode(false, skipSync: true)
             resetSelection()
         }
         exitSelectMode()
     }
 
     private func createNew() {
+        rememberPosition()
         saveDraft(flash: false)
         selectedID = nil
         isNew = true
         draft = ""
         baseline = ""
-        previewMode = false
+        setPreviewMode(false, skipSync: true)
         previewScale = 1
         resetFind()
-        // 打开/新建笔记后把横向滚动条钉回最左：点当前已选中那篇时
-        // noteKey 不变，updateNSView 的换笔记分支不会触发，这里显式补一次
-        DispatchQueue.main.async { editor.scrollToTopLeft() }
+        restoreFraction = 0
+        restoreAnchor = nil
+        previewFraction = 0
+        previewAnchor = ""
+        mappedPath = nil
+        DispatchQueue.main.async { editor.restorePosition(fraction: 0, anchor: nil) }
     }
 
     private func resetSelection() {
@@ -949,12 +1197,18 @@ struct NotesView: View {
         draft = selected?.text ?? ""
         baseline = draft
         resetFind()
+        applyPosition(for: selected)
+        refreshMappedPath()
     }
 
     private func save() { saveDraft(flash: true) }
 
     /// 自动保存 / 手动保存共用：只写有改动且非空的草稿，空内容按「放弃编辑」处理
     private func saveDraft(flash: Bool) {
+        // 编辑态先把 NSTextView 里的最新文本抓回来，保证切换笔记前真正落库（需求 12）
+        if !previewMode, let tv = editor.textView, tv.string != draft {
+            draft = tv.string
+        }
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             // 留空不删除，直接放弃本次编辑，避免误碰清空内容导致笔记丢失
@@ -980,6 +1234,7 @@ struct NotesView: View {
         }
         baseline = draft
         fileSync.syncNow()   // 应用内改动立即写回映射文件
+        refreshMappedPath()  // 新建笔记首次保存后才会生成映射文件
         if flash {
             flashSaved = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {

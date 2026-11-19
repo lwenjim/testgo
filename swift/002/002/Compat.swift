@@ -32,6 +32,32 @@ extension View {
         }
     }
 
+    /// 白色主题：给「白底控件」补一圈极淡描边，避免和白色页面糊在一起。
+    /// 全局底色统一为白色后，卡片 / 按键 / 输入框靠这圈描边保持层次。
+    @ViewBuilder
+    func hairlineCard(radius: CGFloat = 12, opacity: Double = 0.10) -> some View {
+        self.overlay(
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .stroke(Color.black.opacity(opacity), lineWidth: 0.6)
+        )
+    }
+
+    /// 白色主题：胶囊形控件的极淡描边
+    @ViewBuilder
+    func hairlineCapsule(opacity: Double = 0.10) -> some View {
+        self.overlay(
+            Capsule().stroke(Color.black.opacity(opacity), lineWidth: 0.6)
+        )
+    }
+
+    /// 白色主题：圆形控件的极淡描边
+    @ViewBuilder
+    func hairlineCircle(opacity: Double = 0.10) -> some View {
+        self.overlay(
+            Circle().stroke(Color.black.opacity(opacity), lineWidth: 0.6)
+        )
+    }
+
     /// presentationDetents 是 iOS 16+ API
     @ViewBuilder
     func mediumDetents() -> some View {

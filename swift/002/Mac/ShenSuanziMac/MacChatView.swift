@@ -1708,14 +1708,17 @@ struct MacVideoPlayerView: NSViewRepresentable {
     func updateNSView(_ nsView: AVPlayerView, context: Context) {}
 }
 
-/// 文本文件全文预览窗口：独立窗口 + NSTextView（可滚动、可选中复制、等宽字体）
+/// 文本文件全文预览窗口：内容不换行，按最长行撑开一块大区域，横竖滑动查看全文。
+/// 与 iPhone 端「查看全文 · 不换行可滚动」行为一致。
 final class MacTextPreviewWindow: NSObject, NSWindowDelegate {
     static let shared = MacTextPreviewWindow()
-    /// 持有窗口引用，避免被ARC释放；关闭时从数组移除
+    /// 持有窗口引用，避免被 ARC 释放；关闭时从数组移除
     private var windows: [NSWindow] = []
+    /// 单次载入上限：超大文本一次性排版会卡住，后台读取并提示截断
+    private static let limit = 512 * 1024
 
     func show(title: String, fileName: String) {
-        // 先瞬间建窗口并显示「加载中」，读盘/解码放后台，避免点击后卡住
+        // 先瞬间建窗口并显示「加载中」，读盘/测量放后台，避免点击后卡住
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 760, height: 540),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -1732,16 +1735,34 @@ final class MacTextPreviewWindow: NSObject, NSWindowDelegate {
         scroll.hasHorizontalScroller = true
         scroll.autoresizingMask = [.width, .height]
         scroll.borderType = .noBorder
+        let minSize = scroll.bounds.size
 
-        let textView = NSTextView(frame: scroll.bounds)
+        let font = NSFont.monospacedSystemFont(ofSize: 12.5, weight: .regular)
+
+        // 完整搭建 text system：container 尺寸按内容撑开，不跟随 textView / 窗口宽度。
+        // widthTracksTextView = false + autoresizingMask = [] 是能横向滚动的关键，
+        // 否则 NSScrollView 会把 documentView 宽度压回可视区域、自动折行。
+        let storage = NSTextStorage()
+        let layout = NSLayoutManager()
+        storage.addLayoutManager(layout)
+        let container = NSTextContainer(size: minSize)
+        container.widthTracksTextView = false
+        container.heightTracksTextView = false
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container)
+
+        let textView = NSTextView(frame: NSRect(origin: .zero, size: minSize),
+                                  textContainer: container)
         textView.isEditable = false
         textView.isSelectable = true
-        textView.font = NSFont.monospacedSystemFont(ofSize: 12.5, weight: .regular)
+        textView.isHorizontallyResizable = true
+        textView.isVerticallyResizable = true
+        textView.autoresizingMask = []
+        textView.font = font
         textView.textColor = .textColor
         textView.backgroundColor = .textBackgroundColor
-        textView.string = "正在加载全文…"
-        textView.autoresizingMask = [.width, .height]
         textView.textContainerInset = NSSize(width: 12, height: 12)
+        textView.string = "正在加载全文…"
         scroll.documentView = textView
 
         window.contentView = scroll
@@ -1749,13 +1770,33 @@ final class MacTextPreviewWindow: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         windows.append(window)
 
-        // 后台读全文（最多 8MB），回主线程填入，窗口打开不阻塞
+        let limit = Self.limit
+        let measureFont = font
         DispatchQueue.global(qos: .userInitiated).async {
-            let text = ChatFileStore.readText(fileName, limit: 8 * 1024 * 1024) ?? "（无法读取文件内容）"
+            let raw = ChatFileStore.readText(fileName, limit: limit)
+            let text = raw ?? "（无法读取文件内容）"
+            let truncated = (raw?.utf8.count ?? 0) >= limit - 64
+            // 用「不换行的超大约束」一次测量，直接得到最长行宽 + 全文总高度
+            let rect = (text as NSString).boundingRect(
+                with: NSSize(width: 200_000, height: 1_000_000),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: [.font: measureFont],
+                context: nil
+            )
+            let contentSize = NSSize(
+                width: min(max(ceil(rect.width) + 28, minSize.width), 200_000),
+                height: max(ceil(rect.height) + 28, minSize.height)
+            )
             DispatchQueue.main.async {
-                // 窗口即使已关闭，TextView 仍安全持有，仅设置字符串
+                if truncated { window.title = title + " · 仅显示前 512 KB" }
                 textView.string = text
+                // 容器与 documentView 一起撑到内容尺寸 → 横竖滚动条按内容出现
+                container.containerSize = contentSize
+                textView.setFrameSize(contentSize)
+                layout.ensureLayout(for: container)
                 textView.scrollToBeginningOfDocument(nil)
+                scroll.horizontalScroller?.floatValue = 0
+                scroll.verticalScroller?.floatValue = 0
             }
         }
     }

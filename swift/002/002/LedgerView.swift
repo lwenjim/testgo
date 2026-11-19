@@ -261,7 +261,7 @@ struct LedgerView: View {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 12, weight: .bold))
                     .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color(.secondarySystemBackground)))
+                    .background(Circle().fill(Color.white))
                     .foregroundStyle(Color.orange)
             }
             .buttonStyle(.plain)
@@ -276,7 +276,7 @@ struct LedgerView: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .bold))
                     .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color(.secondarySystemBackground)))
+                    .background(Circle().fill(Color.white))
                     .foregroundStyle(monthOffset >= 0 ? Color(.systemGray3) : Color.orange)
             }
             .buttonStyle(.plain)
@@ -324,8 +324,9 @@ struct LedgerView: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
+                .fill(Color.white)
         )
+        .hairlineCard(radius: 16, opacity: 0.09)
     }
 
     private func stat(_ title: String, _ value: String, _ color: Color) -> some View {
@@ -384,8 +385,9 @@ struct LedgerView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
+                .fill(Color.white)
         )
+        .hairlineCard(radius: 16, opacity: 0.09)
     }
 
     private func row(_ e: LedgerEntry) -> some View {
@@ -533,8 +535,9 @@ struct LedgerEditor: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
+                .fill(Color.white)
         )
+        .hairlineCard(radius: 16, opacity: 0.09)
     }
 
     /// 只保留数字和一个小数点，最多两位小数
@@ -590,7 +593,7 @@ struct LedgerEditor: View {
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .fill(c == category
                                       ? Color.orange.opacity(0.16)
-                                      : Color(.secondarySystemBackground))
+                                      : Color.white)
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -633,8 +636,9 @@ struct LedgerEditor: View {
         .padding(.horizontal, 14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
+                .fill(Color.white)
         )
+        .hairlineCard(radius: 16, opacity: 0.09)
     }
 
     private func save() {

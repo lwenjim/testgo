@@ -55,26 +55,25 @@ final class MarkdownEditorController: ObservableObject {
     /// 切换笔记时清掉旧笔记的撤销栈，避免 ⌘Z 把上一篇的文字带进来
     func clearUndo() { textView?.undoManager?.removeAllActions() }
 
-    /// 换笔记 / 新建 / 启动进入时把编辑区收敛到左上角。
+    /// 换笔记 / 新建 / 预览→编辑时把编辑区收敛到目标位置。
+    /// fraction：0 = 顶部，0~1 = 按文档高度比例恢复上次位置；
+    /// anchor：可见区锚点文字，优先在原文里搜到并滚到该字符（预览→编辑定位更准）。
     ///
-    /// NSScrollView 的滚动条占位、clipView 尺寸、documentView.frame 是**分阶段**才定稳的：
-    /// 首帧几何还没定稳就绘制，正文会挤到底部 / 横向偏移，滚一下滚轮让滚动条
-    /// 「腾出空间」、再把滑块拖到最左才恢复正常（用户实测复现）。
-    /// 所以每一拍都先强制完成 scroll view 布局 + 文本排版 + sizeToFit，再让 AppKit
-    /// 用官方 API 把第 0 个字符滚到可见（自动处理 flipped / 文档高度 / inset，比手算 y 可靠），
-    /// 最后显式把横向归零并整体重绘。分多拍覆盖 window 显示、scroller 占位、尺寸稳定各阶段。
-    func scrollToTopLeft() {
+    /// NSScrollView 的滚动条占位、clipView 尺寸、documentView.frame 是**分阶段**才定稳的，
+    /// 所以每一拍都先强制完成布局 + 文本排版 + sizeToFit，再定位并整体重绘，
+    /// 分多拍覆盖 window 显示、scroller 占位、尺寸稳定各阶段。
+    func restorePosition(fraction: CGFloat = 0, anchor: String? = nil) {
         guard let tv = textView, let scroll = tv.enclosingScrollView else { return }
+        let targetRange: NSRange? = {
+            guard let anchor, !anchor.isEmpty else { return nil }
+            let r = (tv.string as NSString).range(of: anchor)
+            return r.location == NSNotFound ? nil : r
+        }()
         let apply = {
-            // ① 先让 scroll view 完成一次布局：滚动条占位、contentSize、clipView 尺寸
-            //    都要等这一步才准确。
             scroll.layoutSubtreeIfNeeded()
             if let lm = tv.layoutManager, let tc = tv.textContainer {
                 lm.ensureLayout(for: tc)
             }
-            // ② 用 tile 之后的 contentSize 刷新 minSize 并 sizeToFit：
-            //    documentView 至少与可视区等高（短笔记也不会被底对齐），
-            //    且不会沿用 makeNSView 时的初始尺寸。
             let visible = scroll.contentSize
             tv.minSize = visible
             tv.sizeToFit()
@@ -82,21 +81,31 @@ final class MarkdownEditorController: ObservableObject {
             frame.width = max(frame.width, visible.width)
             frame.height = max(frame.height, visible.height)
             if frame != tv.frame.size { tv.setFrameSize(frame) }
-            // ③ 官方定位：把第 0 个字符滚到可见（自动处理 flipped / 文档高度 / inset）
-            tv.scrollRangeToVisible(NSRange(location: 0, length: 0))
+
             let clip = scroll.contentView
             var origin = clip.bounds.origin
             origin.x = 0
-            // flipped 文档顶部 = 0；非 flipped 顶部 = 文档高 - 可视高
-            origin.y = tv.isFlipped ? 0
-                : max(0, tv.bounds.height - clip.bounds.height)
+            if let r = targetRange {
+                // 锚点命中：用官方 API 滚到原文对应字符，比按比例猜更准
+                tv.scrollRangeToVisible(r)
+                origin = clip.bounds.origin
+                origin.x = 0
+            } else if fraction > 0.001 {
+                let maxY = max(0, tv.bounds.height - clip.bounds.height)
+                origin.y = tv.isFlipped ? min(maxY, fraction * maxY)
+                    : max(0, maxY - fraction * maxY)
+            } else {
+                tv.scrollRangeToVisible(NSRange(location: 0, length: 0))
+                origin.y = tv.isFlipped ? 0
+                    : max(0, tv.bounds.height - clip.bounds.height)
+            }
             clip.scroll(to: origin)
             scroll.reflectScrolledClipView(clip)
-            // ④ legacy 滚动条：x 已是 0 时 scroll(to:) 是空操作，滑块 floatValue 会停在
-            //    旧值（实测 0.028），必须显式钉到 0 才「看起来」顶在最左边。
+            // legacy 滚动条：x 已是 0 时 scroll(to:) 是空操作，滑块 floatValue 会停在
+            // 旧值（实测 0.028），必须显式钉到 0 才「看起来」顶在最左边。
             scroll.horizontalScroller?.floatValue = 0
             scroll.horizontalScroller?.setNeedsDisplay()
-            scroll.verticalScroller?.floatValue = 0
+            scroll.verticalScroller?.floatValue = Float(fraction > 0.001 ? fraction : 0)
             scroll.verticalScroller?.setNeedsDisplay()
             tv.needsDisplay = true
             scroll.needsDisplay = true
@@ -105,6 +114,43 @@ final class MarkdownEditorController: ObservableObject {
         DispatchQueue.main.async(execute: apply)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: apply)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: apply)
+    }
+
+    /// 兼容旧调用：回到左上角
+    func scrollToTopLeft() { restorePosition(fraction: 0, anchor: nil) }
+
+    /// 当前滚动比例 + 可见区锚点：切换笔记 / 离开页面前记住位置，
+    /// 再次打开或预览→编辑时据此恢复。
+    func currentPosition() -> (fraction: CGFloat, anchor: String) {
+        guard let tv = textView, let scroll = tv.enclosingScrollView else { return (0, "") }
+        let clip = scroll.contentView
+        let maxY = max(1, tv.bounds.height - clip.bounds.height)
+        let raw = min(max(0, clip.bounds.origin.y / maxY), 1)
+        let ns = tv.string as NSString
+        var anchor = ""
+        if ns.length > 0 {
+            let point = NSPoint(x: clip.bounds.minX + 24, y: clip.bounds.minY + 6)
+            let idx = min(max(tv.characterIndexForInsertion(at: point), 0), ns.length)
+            let len = min(80, ns.length - idx)
+            if len > 0 {
+                anchor = Self.visibleAnchor(in: ns.substring(
+                    with: NSRange(location: idx, length: len)))
+            }
+        }
+        return (tv.isFlipped ? raw : 1 - raw, anchor)
+    }
+
+    /// 取可见区第一行有效文字的前 16 字做锚点（跳过项目符号 / 缩进 / Markdown 装饰）
+    static func visibleAnchor(in raw: String) -> String {
+        for line in raw.components(separatedBy: .newlines) {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.isEmpty { continue }
+            let chars = Array(t)
+            guard let start = chars.firstIndex(where: { $0.isLetter || $0.isNumber }) else { continue }
+            let s = String(chars[start...].prefix(16)).trimmingCharacters(in: .whitespaces)
+            if s.count >= 2 { return s }
+        }
+        return ""
     }
 
     // MARK: 查找高亮
@@ -283,6 +329,160 @@ final class MarkdownEditorController: ObservableObject {
         notifyChange()
     }
 
+    // MARK: 一键给代码部分加代码块标记
+
+    /// 把「当前代码部分」一键加上 ``` 代码块标记（自动识别语言标签）。
+    /// - 有选区：只把选中的整行包成一个代码块；
+    /// - 无选区：扫描全文按空行分段，已有围栏缺语言则补自动检测的语言，
+    ///   看起来像代码的段落包上围栏，普通说明文字原样保留。
+    /// 一次替换写入（可 ⌘Z 撤销）；返回处理的段数，没有可处理内容时不改动文本。
+    @discardableResult
+    func markAllCode() -> Int {
+        guard let tv = textView else { return 0 }
+        let ns = tv.string as NSString
+        guard ns.length > 0 else { return 0 }
+        let sel = tv.selectedRange()
+        if sel.length > 0 { return wrapSelectionAsCode(tv, ns: ns, sel: sel) }
+
+        let full = ns as String
+        let trailing = full.hasSuffix("\n")
+        var lines = full.components(separatedBy: "\n")
+        if trailing, lines.last?.isEmpty == true { lines.removeLast() }
+        guard !lines.isEmpty else { return 0 }
+
+        var out: [String] = []
+        var changed = 0
+        var i = 0
+        while i < lines.count {
+            let head = lines[i].trimmingCharacters(in: .whitespaces)
+            if head.hasPrefix("```") {
+                // 已有围栏：整块原样保留；没有语言标签时补自动检测的语言
+                var block = [lines[i]]
+                let lang = String(head.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                var j = i + 1
+                while j < lines.count {
+                    block.append(lines[j])
+                    if lines[j].trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+                        j += 1
+                        break
+                    }
+                    j += 1
+                }
+                if lang.isEmpty, block.count >= 3 {
+                    let inner = block[1...(block.count - 2)].joined(separator: "\n")
+                    let detected = CodeLanguageDetector.detect(inner)
+                    if !detected.isEmpty {
+                        block[0] = "```" + detected
+                        changed += 1
+                    }
+                }
+                out.append(contentsOf: block)
+                i = j
+                continue
+            }
+            if head.isEmpty {
+                out.append(lines[i])
+                i += 1
+                continue
+            }
+            // 一个段落：到空行 / 围栏 / 文件结尾为止
+            var para: [String] = []
+            while i < lines.count {
+                let t = lines[i].trimmingCharacters(in: .whitespaces)
+                if t.isEmpty || t.hasPrefix("```") { break }
+                para.append(lines[i])
+                i += 1
+            }
+            if Self.looksLikeCode(para) {
+                let code = para.joined(separator: "\n")
+                let lang = CodeLanguageDetector.detect(code)
+                // 与前面的文字之间留一个空行，Markdown 才不会把围栏粘在上一段里
+                if let last = out.last, !last.trimmingCharacters(in: .whitespaces).isEmpty {
+                    out.append("")
+                }
+                out.append("```" + lang)
+                out.append(contentsOf: para)
+                out.append("```")
+                changed += 1
+            } else {
+                out.append(contentsOf: para)
+            }
+        }
+        guard changed > 0 else { return 0 }
+        var replacement = out.joined(separator: "\n")
+        if trailing { replacement += "\n" }
+        tv.insertText(replacement, replacementRange: NSRange(location: 0, length: ns.length))
+        tv.setSelectedRange(NSRange(location: 0, length: 0))
+        notifyChange()
+        return changed
+    }
+
+    /// 选中部分按整行扩展，包成一个代码块（自动识别语言）
+    private func wrapSelectionAsCode(_ tv: NSTextView, ns: NSString, sel: NSRange) -> Int {
+        let lineRange = ns.lineRange(for: sel)
+        let raw = ns.substring(with: lineRange)
+        let trailing = raw.hasSuffix("\n")
+        let body = trailing ? String(raw.dropLast()) : raw
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.hasPrefix("```") else { return 0 }
+        let lang = CodeLanguageDetector.detect(body)
+        let replacement = "```" + lang + "\n" + body + "\n```" + (trailing ? "\n" : "")
+        tv.insertText(replacement, replacementRange: lineRange)
+        tv.setSelectedRange(NSRange(location: lineRange.location,
+                                    length: (replacement as NSString).length))
+        notifyChange()
+        return 1
+    }
+
+    /// 段落是否像代码：≥2/3 的行有代码特征，且不含 Markdown 结构行（列表/引用/表格等）
+    private static func looksLikeCode(_ lines: [String]) -> Bool {
+        let meaningful = lines.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard !meaningful.isEmpty else { return false }
+        var codeLines = 0
+        for line in meaningful {
+            if isStructuralLine(line) { return false }
+            if isCodeLine(line) { codeLines += 1 }
+        }
+        return codeLines * 3 >= meaningful.count * 2
+    }
+
+    private static let codeKeywords = [
+        "let ", "var ", "func ", "class ", "struct ", "enum ", "import ", "public ",
+        "private ", "static ", "const ", "return ", "if ", "for ", "while ", "switch ",
+        "case ", "def ", "from ", "print(", "echo ", "export ", "set ", "cd ", "sudo ",
+        "curl ", "git ", "npm ", "pip ", "docker ", "kubectl ", "make ", "go ",
+        "select ", "SELECT ", "insert ", "INSERT ", "create ", "CREATE ", "update ",
+        "UPDATE ", "delete ", "DELETE ", "@", "#!", "#include", "package ", "using ",
+        "namespace ", "try ", "catch ", "console.", "document.", "self.", "this.",
+        "await ", "async ", "throw ", "throws ", "guard ", "defer ", "elif ", "lambda "
+    ]
+
+    private static func isCodeLine(_ raw: String) -> Bool {
+        let t = raw.trimmingCharacters(in: .whitespaces)
+        if t.isEmpty { return false }
+        if codeKeywords.contains(where: { t.hasPrefix($0) }) { return true }
+        let symbols = t.filter { "{}()[];=<>$#/\\|`:&".contains($0) }.count
+        if symbols >= 2 { return true }
+        let indented = raw.first == " " || raw.first == "\t"
+        if indented && symbols >= 1 { return true }
+        // 纯中文说明文字（没有代码符号）不当作代码
+        if isProse(t) { return false }
+        return false
+    }
+
+    private static func isStructuralLine(_ raw: String) -> Bool {
+        let t = raw.trimmingCharacters(in: .whitespaces)
+        let prefixes = ["> ", "- ", "* ", "+ ", "- [ ] ", "- [x] ", "- [X] ",
+                        "|", "---", "***", "___", "```", "~~~",
+                        "1. ", "2. ", "3. "]
+        return prefixes.contains { t.hasPrefix($0) }
+    }
+
+    private static func isProse(_ t: String) -> Bool {
+        let chinese = t.filter { $0 >= "\u{4e00}" && $0 <= "\u{9fff}" }.count
+        return chinese * 2 >= t.count
+    }
+
     /// 插入时间戳（2026-11-17 23:51）
     func insertTimestamp() {
         let f = DateFormatter()
@@ -312,6 +512,9 @@ struct MarkdownTextView: NSViewRepresentable {
     var showScrollers: Bool = false
     /// 编辑态缩放：字号 = fontSize * zoomScale（0.6–3.0）
     var zoomScale: CGFloat = 1
+    /// 打开 / 切回编辑时恢复到上次位置（0 = 顶部）
+    var initialFraction: CGFloat = 0
+    var initialAnchor: String? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -337,6 +540,7 @@ struct MarkdownTextView: NSViewRepresentable {
 
         let tv = ColumnTextView(frame: .zero, textContainer: container)
         tv.isPanMode = panMode
+        tv.isColumnMode = columnMode
         scroll.documentView = tv
         tv.isVerticallyResizable = true
         tv.isHorizontallyResizable = true
@@ -367,6 +571,9 @@ struct MarkdownTextView: NSViewRepresentable {
         tv.installScrollObserver()
 
         controller.textView = tv
+        // 每次挂载都收敛一次布局并恢复到目标位置：预览→编辑时 noteKey 不变，
+        // updateNSView 的换笔记分支不会触发，首帧布局与位置恢复都得靠这里（内部多拍）。
+        controller.restorePosition(fraction: initialFraction, anchor: initialAnchor)
         return scroll
     }
 
@@ -422,7 +629,7 @@ struct MarkdownTextView: NSViewRepresentable {
         // 首帧就会「内容贴底 + 滚动条没占位」，要等滚一下滚轮才恢复。
         if switched {
             forceSyncLayout(tv)
-            controller.scrollToTopLeft()
+            controller.restorePosition(fraction: initialFraction, anchor: initialAnchor)
         }
     }
 
@@ -761,6 +968,8 @@ final class ColumnTextView: NSTextView {
         if isColumnMode, event.clickCount == 1, mods.contains(.option) {
             let point = convert(event.locationInWindow, from: nil)
             if let anchor = lineColumn(at: point) {
+                // 拦下 mouseDown 就没走 super，这里补上第一响应者，框选完能直接打字
+                window?.makeFirstResponder(self)
                 isColumnDragging = true
                 anchorLineStart = anchor.lineStart
                 anchorCol = anchor.col
@@ -782,7 +991,12 @@ final class ColumnTextView: NSTextView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        isColumnDragging = false
+        if isColumnDragging {
+            // 列模式没把 mouseDown 交给 super，结束时也不要交给它，
+            // 否则 super 会按普通拖选收尾，把刚建立的多行选区冲掉。
+            isColumnDragging = false
+            return
+        }
         super.mouseUp(with: event)
     }
 
@@ -897,8 +1111,12 @@ final class ColumnTextView: NSTextView {
     /// 点 → （行首位置, 行内列偏移）
     private func lineColumn(at point: NSPoint) -> (lineStart: Int, col: Int)? {
         guard let lm = layoutManager, let container = textContainer else { return nil }
+        // layoutManager 的坐标是「文本容器坐标系」，必须先扣掉 textContainerOrigin
+        // （含 textContainerInset 的行号让位），否则列位置整体偏右，框选对不上。
+        let origin = textContainerOrigin
+        let containerPoint = NSPoint(x: point.x - origin.x, y: point.y - origin.y)
         var fraction: CGFloat = 0
-        let index = lm.characterIndex(for: point, in: container,
+        let index = lm.characterIndex(for: containerPoint, in: container,
                                       fractionOfDistanceBetweenInsertionPoints: &fraction)
         guard index != NSNotFound else { return nil }
         let ns = string as NSString
@@ -909,11 +1127,14 @@ final class ColumnTextView: NSTextView {
         return (lineStart, clamped - lineStart)
     }
 
-    /// 根据锚点列与当前点列，对两行之间的每一行生成框选区间（多选区 = 多光标）
+    /// 根据锚点列与当前点列，对两行之间的每一行生成框选区间（多选区 = 多光标）。
+    /// 之前中间行的列边界被算成 0/0，只有首尾两行有内容，看起来就是「列模式没生效」。
     private func applyColumnSelection(to point: NSPoint) {
         guard let current = lineColumn(at: point) else { return }
         let ns = string as NSString
         let total = ns.length
+        let colLo = min(anchorCol, current.col)
+        let colHi = max(anchorCol, current.col)
         let firstLine = min(anchorLineStart, current.lineStart)
         let lastLine = max(anchorLineStart, current.lineStart)
 
@@ -924,22 +1145,16 @@ final class ColumnTextView: NSTextView {
             ns.getLineStart(&lineStart, end: &lineEnd, contentsEnd: &contentsEnd,
                             for: NSRange(location: idx, length: 0))
             if lineStart > lastLine { break }
-
-            var colA = 0
-            var colB = 0
-            if lineStart == anchorLineStart { colA = anchorCol }
-            if lineStart == current.lineStart { colB = current.col }
+            // 短行也要保留一个零长度选区：这样每一行都有插入点，输入会同时落到多行
             let lineLen = max(0, contentsEnd - lineStart)
-            let lo = min(min(colA, colB), lineLen)
-            let hi = min(max(colA, colB), lineLen)
-            ranges.append(NSRange(location: lineStart + lo, length: hi - lo))
-
+            let lo = min(colLo, lineLen)
+            let hi = min(colHi, lineLen)
+            ranges.append(NSRange(location: lineStart + lo, length: max(0, hi - lo)))
             if lineEnd >= total { break }
             idx = lineEnd
         }
 
         guard !ranges.isEmpty else { return }
-        ranges.sort { $0.location < $1.location }
         setSelectedRanges(ranges.map { NSValue(range: $0) },
                           affinity: .downstream, stillSelecting: false)
     }
@@ -1015,6 +1230,9 @@ struct NoteFormatBar: View {
                 Menu {
                     Button("行内代码") { controller.wrap("`", "`", sample: "代码") }
                     Button("代码块") { controller.insertCodeBlock() }
+                    Divider()
+                    // 一键把「当前代码部分」都加上代码块标记（自动识别语言标签）
+                    Button("一键标记全部代码") { controller.markAllCode() }
                 } label: {
                     Image(systemName: "chevron.left.forwardslash.chevron.right")
                         .font(.system(size: 12, weight: .medium))

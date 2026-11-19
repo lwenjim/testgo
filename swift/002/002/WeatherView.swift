@@ -605,7 +605,8 @@ struct WeatherView: View {
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 14)
-            .fill(Color(.secondarySystemBackground)))
+            .fill(Color.white))
+        .hairlineCard(radius: 14, opacity: 0.09)
     }
 
     // MARK: 城市选择
@@ -625,7 +626,7 @@ struct WeatherView: View {
                                     .font(.system(size: 13, weight: c == model.city ? .bold : .regular))
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 7)
-                                    .background(Capsule().fill(c == model.city ? Color.orange : Color(.systemGray5)))
+                                    .background(Capsule().fill(c == model.city ? Color.orange : Color.white))
                                     .foregroundStyle(c == model.city ? Color.white : Color.primary)
                             }
                             .id(c.name)
@@ -661,7 +662,7 @@ struct WeatherView: View {
                         }
                     }
                     .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color(.systemGray5)))
+                    .background(Circle().fill(Color.white))
                     .foregroundStyle(Color.orange)
                 }
                 .buttonStyle(.plain)
@@ -674,7 +675,7 @@ struct WeatherView: View {
                     Image(systemName: "arrow.up.arrow.down")
                         .font(.system(size: 12, weight: .semibold))
                         .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color(.systemGray5)))
+                        .background(Circle().fill(Color.white))
                         .foregroundStyle(Color.orange)
                 }
                 .buttonStyle(.plain)
@@ -686,7 +687,11 @@ struct WeatherView: View {
 
     private var card: some View {
         RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(Color(.secondarySystemBackground))
+            .fill(Color.white)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.black.opacity(0.09), lineWidth: 0.6)
+            )
     }
 
     // MARK: 实时天气
@@ -799,7 +804,7 @@ struct WeatherView: View {
                         .frame(width: 34, alignment: .trailing)
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(Color(.systemGray5))
+                            .fill(Color.white)
                             .frame(width: 100, height: 6)
                         Capsule()
                             .fill(LinearGradient(colors: [.cyan, .orange],

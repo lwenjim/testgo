@@ -51,7 +51,7 @@ struct ChatAvatar: View {
                 Circle()
                     .fill(dot)
                     .frame(width: size * 0.28, height: size * 0.28)
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
             }
         }
         .frame(width: size, height: size)
@@ -253,7 +253,7 @@ struct LANChatView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .background(Capsule().fill(Color(.label).opacity(0.82)))
-                    .foregroundStyle(Color(.systemBackground))
+                    .foregroundStyle(Color.white)
                     .padding(.top, 8)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -274,7 +274,7 @@ struct LANChatView: View {
             case .mine: minePage
             }
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(Color.white.ignoresSafeArea())
         .navigationTitle(tab == .mine ? "我的" : (tab == .contacts ? "通讯录" : "聊天"))
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -309,7 +309,7 @@ struct LANChatView: View {
         .padding(.top, 6)
         .padding(.bottom, 4)
         .background(
-            Color(.systemBackground)
+            Color.white
                 .overlay(Divider(), alignment: .top)
                 .ignoresSafeArea(edges: .bottom)
         )
@@ -342,8 +342,9 @@ struct LANChatView: View {
             .padding(.vertical, 7)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(.secondarySystemBackground))
+                    .fill(Color.white)
             )
+            .hairlineCard(radius: 10, opacity: 0.09)
             .padding(.horizontal, 12)
             .padding(.top, 6)
             .padding(.bottom, 4)
@@ -366,7 +367,7 @@ struct LANChatView: View {
                 }
                 .padding(.bottom, 24)
             }
-            .background(Color(.systemBackground))
+            .background(Color.white)
         }
     }
 
@@ -407,7 +408,7 @@ struct LANChatView: View {
             }
             .padding(.bottom, 24)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Color.white)
     }
 
     /// 通讯录通用分组卡片
@@ -438,7 +439,7 @@ struct LANChatView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .contentShape(Rectangle())
-            .background(Color(.systemBackground))
+            .background(Color.white)
         }
         .buttonStyle(.plain)
     }
@@ -468,136 +469,167 @@ struct LANChatView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .contentShape(Rectangle())
-            .background(Color(.systemBackground))
+            .background(Color.white)
         }
         .buttonStyle(.plain)
     }
 
     // MARK: 页签 3：我的
+    // 与「会话 / 通讯录」完全同一套排版：sectionHeader 分组标题 +
+    // 行高 / 头像尺寸 / 左右内边距 / 分隔线缩进全部一致（14 / 10~11 / 40~46 / 60），
+    // 分组之间用标题留白拉开，避免全白背景下挤成一坨。
 
     private var minePage: some View {
         ScrollView {
-            VStack(spacing: 0) {
-                // 个人卡片：与通讯录一致的通栏行样式
-                Button {
-                    showAvatarPicker = true
-                } label: {
-                    HStack(spacing: 12) {
-                        ChatAvatar(name: model.nickname, size: 44)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(model.nickname)
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(Color.primary)
-                                .lineLimit(1)
-                            Text("点头像可修改")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.tertiary)
-                        }
-                        Spacer(minLength: 6)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Color(.tertiaryLabel))
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .contentShape(Rectangle())
-                    .background(Color(.systemBackground))
+            LazyVStack(spacing: 0) {
+                // 账号：与会话行 convoRow 同样的头像尺寸与内边距
+                mineSection("账号") {
+                    mineProfileRow
                 }
-                .buttonStyle(.plain)
 
-                // 连接状态 + 设备信息（通栏分组，与通讯录同样式）
-                VStack(spacing: 0) {
-                    HStack(spacing: 10) {
-                        ZStack {
-                            Circle()
-                                .fill((model.running ? Color.green : Color.gray).opacity(0.14))
-                                .frame(width: 30, height: 30)
-                            Image(systemName: model.running ? "wifi" : "wifi.slash")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(model.running ? Color.green : Color.secondary)
-                        }
-                        Text(model.running ? statusText : "服务未启动")
-                            .font(.system(size: 14, weight: .medium))
-                            .lineLimit(1)
-                        Spacer(minLength: 0)
-                        if model.hasOfflineThreads {
-                            Button {
-                                model.resetSession()
-                            } label: {
-                                Text("重置连接")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(Capsule().fill(Color(.secondarySystemBackground)))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-
+                // 连接状态 + 在线设备：与通讯录好友分组同样式
+                mineSection("连接", trailing: model.running ? "已启动" : "未启动") {
+                    mineStatusRow
                     if !model.online.isEmpty {
-                        Divider().padding(.leading, 54)
                         ForEach(Array(model.online.sorted().enumerated()), id: \.element) { idx, name in
-                            HStack(spacing: 10) {
-                                ChatAvatar(name: name, size: 30, dot: .green)
-                                Text(name)
-                                    .font(.system(size: 13))
-                                    .lineLimit(1)
-                                Spacer(minLength: 0)
-                                if model.isFriend(name) {
-                                    NavigationLink(destination: ChatDetailView(model: model, peer: name)) {
-                                        Text("聊天")
-                                            .font(.system(size: 11, weight: .semibold))
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 4)
-                                            .background(Capsule().fill(Color.orange.opacity(0.14)))
-                                            .foregroundStyle(Color.orange)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            if idx < model.online.count - 1 {
-                                Divider().padding(.leading, 54)
-                            }
+                            Divider().padding(.leading, 60)
+                            mineOnlineRow(name)
                         }
                     }
                 }
-                .background(Color(.systemBackground))
-                .padding(.top, 8)
 
-                // 功能入口（通栏行，与通讯录同样式）
-                VStack(spacing: 0) {
+                // 功能入口：与通讯录行同样式
+                mineSection("功能") {
                     mineRow(icon: "bookmark", label: model.favoriteCount > 0 ? "收藏 (\(model.favoriteCount))" : "收藏") {
                         showFavorites = true
                     }
-                    Divider().padding(.leading, 46)
+                    Divider().padding(.leading, 60)
                     mineRow(icon: "pencil", label: "改昵称") {
                         showRename = true
                     }
                 }
-                .background(Color(.systemBackground))
-                .padding(.top, 8)
 
                 Text("点对点直连 · 不经过服务器 · 记录只存本机")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
-                    .padding(.top, 10)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 16)
             }
             .padding(.bottom, 24)
         }
+        .background(Color.white)
+    }
+
+    /// 与通讯录 contactSection 同样的分组容器：标题 + 顶部留白
+    private func mineSection<Content: View>(_ title: String, trailing: String = "",
+                                            @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(title, trailing: trailing)
+            content()
+        }
+        .padding(.top, 10)
+    }
+
+    /// 账号行：头像 46 / 标题 16 / 副标题 13，与会话行一致
+    private var mineProfileRow: some View {
+        Button {
+            showAvatarPicker = true
+        } label: {
+            HStack(spacing: 12) {
+                ChatAvatar(name: model.nickname, size: 46)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(model.nickname)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Color.primary)
+                        .lineLimit(1)
+                    Text("点头像可修改")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 6)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color(.tertiaryLabel))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 连接状态行：40 方形图标 + 15 号标题，与通讯录好友行一致
+    private var mineStatusRow: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill((model.running ? Color.green : Color.gray).opacity(0.14))
+                    .frame(width: 40, height: 40)
+                Image(systemName: model.running ? "wifi" : "wifi.slash")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(model.running ? Color.green : Color.secondary)
+            }
+            Text(model.running ? statusText : "服务未启动")
+                .font(.system(size: 15, weight: .medium))
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            if model.hasOfflineThreads {
+                Button {
+                    model.resetSession()
+                } label: {
+                    Text("重置连接")
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Color.white))
+                        .hairlineCapsule(opacity: 0.09)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+
+    /// 在线设备行：头像 40 / 15 号标题，与通讯录好友行一致
+    private func mineOnlineRow(_ name: String) -> some View {
+        HStack(spacing: 12) {
+            ChatAvatar(name: name, size: 40, dot: .green)
+            Text(name)
+                .font(.system(size: 15, weight: .medium))
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            if model.isFriend(name) {
+                NavigationLink(destination: ChatDetailView(model: model, peer: name)) {
+                    Text("聊天")
+                        .font(.system(size: 11, weight: .semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color.orange.opacity(0.14)))
+                        .foregroundStyle(Color.orange)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
     }
 
     private func mineRow(icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.orange)
-                    .frame(width: 26)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(Color.orange.opacity(0.14))
+                        .frame(width: 34, height: 34)
+                    Image(systemName: icon)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Color.orange)
+                }
                 Text(label)
                     .font(.system(size: 15))
                     .foregroundStyle(Color.primary)
@@ -687,7 +719,8 @@ struct LANChatView: View {
                     .font(.system(size: 12, weight: .medium))
                     .padding(.horizontal, 11)
                     .padding(.vertical, 6)
-                    .background(Capsule().fill(Color(.secondarySystemBackground)))
+                    .background(Capsule().fill(Color.white))
+                    .hairlineCapsule(opacity: 0.09)
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
@@ -755,7 +788,8 @@ struct LANChatView: View {
                     .font(.system(size: 12, weight: .medium))
                     .padding(.horizontal, 11)
                     .padding(.vertical, 6)
-                    .background(Capsule().fill(Color(.secondarySystemBackground)))
+                    .background(Capsule().fill(Color.white))
+                    .hairlineCapsule(opacity: 0.09)
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
@@ -873,7 +907,7 @@ struct LANChatView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
             .contentShape(Rectangle())
-            .background(Color(.systemBackground))
+            .background(Color.white)
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -946,7 +980,8 @@ struct LANChatView: View {
                     .font(.system(size: 12, weight: .medium))
                     .padding(.horizontal, 11)
                     .padding(.vertical, 6)
-                    .background(Capsule().fill(Color(.secondarySystemBackground)))
+                    .background(Capsule().fill(Color.white))
+                    .hairlineCapsule(opacity: 0.09)
                     .foregroundStyle(.secondary)
             } else {
                 Button {
@@ -1059,11 +1094,22 @@ struct ChatDetailView: View {
     @State private var showRecorder = false
     @State private var showEmoji = false
     @State private var preview: ChatImagePreview?
+    /// 会话截图：截屏后预览，可发回当前会话 / 存相册 / 分享
+    @State private var screenshotItem: ChatScreenshotItem?
     @FocusState private var focused: Bool
 
     private var messages: [ChatMessage] { model.messages(peer) }
     private var isOnline: Bool { model.online.contains(peer) }
     private var isReconnecting: Bool { !isOnline && model.reconnecting.contains(peer) }
+
+    /// 截屏：等菜单收起后再抓，避免把弹出菜单一起截进去
+    private func captureScreenshot() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+            if let image = ChatScreenshot.capture() {
+                screenshotItem = ChatScreenshotItem(image: image)
+            }
+        }
+    }
 
     private var statusText: String {
         if !model.isFriend(peer) { return "还不是好友" }
@@ -1080,6 +1126,11 @@ struct ChatDetailView: View {
 
     private var moreMenu: some View {
         Menu {
+            Button {
+                captureScreenshot()
+            } label: {
+                Label("截图会话", systemImage: "camera.viewfinder")
+            }
             Button(role: .destructive) {
                 model.clear(peer)
                 dismiss()
@@ -1115,7 +1166,7 @@ struct ChatDetailView: View {
                 lockedBar
             }
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(Color.white.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -1201,6 +1252,12 @@ struct ChatDetailView: View {
         .fullScreenCover(item: $preview) { item in
             ChatImageViewer(image: item.image)
         }
+        .sheet(item: $screenshotItem) { item in
+            ChatScreenshotSheet(image: item.image) { image in
+                guard let data = ChatImageUI.jpegData(for: image) else { return }
+                model.sendImage(data, to: peer)
+            }
+        }
     }
 
     // MARK: 重连横幅
@@ -1248,7 +1305,7 @@ struct ChatDetailView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(.regularMaterial)
+        .background(Color.white)
     }
 
     private var reconnectBanner: some View {
@@ -1368,7 +1425,13 @@ struct ChatDetailView: View {
                     .padding(.vertical, 9)
                     .background(
                         RoundedRectangle(cornerRadius: 15, style: .continuous)
-                            .fill(mine ? Color.orange : Color(.systemBackground))
+                            .fill(mine ? Color.orange : Color.white)
+                    )
+                    // 白底主题：收到的白气泡补描边，避免和白色聊天背景糊在一起
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 15, style: .continuous)
+                            .stroke(mine ? Color.clear : Color.black.opacity(0.09),
+                                    lineWidth: 0.6)
                     )
                     .textSelection(.enabled)
             }
@@ -1399,7 +1462,7 @@ struct ChatDetailView: View {
                 .buttonStyle(.plain)
             } else {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(.secondarySystemBackground))
+                    .fill(Color.white)
                     .frame(width: 160, height: 120)
                     .overlay(ProgressView())
             }
@@ -1478,8 +1541,9 @@ struct ChatDetailView: View {
                     .padding(.vertical, 9)
                     .background(
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(Color(.secondarySystemBackground))
+                            .fill(Color.white)
                     )
+                    .hairlineCard(radius: 18, opacity: 0.09)
 
                 Button {
                     send()
@@ -1487,8 +1551,9 @@ struct ChatDetailView: View {
                     Image(systemName: "arrow.up")
                         .font(.system(size: 15, weight: .bold))
                         .frame(width: 38, height: 38)
-                        .background(Circle().fill(canSend ? Color.orange : Color(.systemGray4)))
-                        .foregroundStyle(Color.white)
+                        .background(Circle().fill(canSend ? Color.orange : Color.white))
+                        .hairlineCircle(opacity: canSend ? 0 : 0.12)
+                        .foregroundStyle(canSend ? Color.white : Color(.tertiaryLabel))
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
@@ -1498,7 +1563,7 @@ struct ChatDetailView: View {
             .padding(.bottom, 8)
         }
         .background(
-            Color(.systemGroupedBackground)
+            Color.white
                 .overlay(Divider(), alignment: .top)
                 .ignoresSafeArea(edges: .bottom)
         )
@@ -1540,16 +1605,32 @@ struct GroupChatView: View {
     @State private var showEmoji = false
     @State private var preview: ChatImagePreview?
     @State private var showSettings = false
+    /// 会话截图：截屏后预览，可发回当前群聊 / 存相册 / 分享
+    @State private var screenshotItem: ChatScreenshotItem?
     @FocusState private var focused: Bool
 
     private var group: ChatGroup? { model.group(groupId) }
     private var messages: [ChatMessage] { group?.messages ?? [] }
     private var onlineCount: Int { group.map { model.onlineMembers(of: $0).count } ?? 0 }
 
+    /// 截屏：等菜单收起后再抓，避免把弹出菜单一起截进去
+    private func captureScreenshot() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+            if let image = ChatScreenshot.capture() {
+                screenshotItem = ChatScreenshotItem(image: image)
+            }
+        }
+    }
+
     // MARK: 右上角 … 菜单（收起群聊操作）
 
     private var moreMenu: some View {
         Menu {
+            Button {
+                captureScreenshot()
+            } label: {
+                Label("截图会话", systemImage: "camera.viewfinder")
+            }
             Button {
                 showSettings = true
             } label: {
@@ -1577,7 +1658,7 @@ struct GroupChatView: View {
             messageList
             inputBar
         }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .background(Color.white.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -1665,6 +1746,12 @@ struct GroupChatView: View {
         }
         .fullScreenCover(item: $preview) { item in
             ChatImageViewer(image: item.image)
+        }
+        .sheet(item: $screenshotItem) { item in
+            ChatScreenshotSheet(image: item.image) { image in
+                guard let data = ChatImageUI.jpegData(for: image) else { return }
+                model.sendGroupImage(data, to: groupId)
+            }
         }
     }
 
@@ -1774,7 +1861,13 @@ struct GroupChatView: View {
                     .padding(.vertical, 9)
                     .background(
                         RoundedRectangle(cornerRadius: 15, style: .continuous)
-                            .fill(mine ? Color.orange : Color(.systemBackground))
+                            .fill(mine ? Color.orange : Color.white)
+                    )
+                    // 白底主题：收到的白气泡补描边，避免和白色聊天背景糊在一起
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 15, style: .continuous)
+                            .stroke(mine ? Color.clear : Color.black.opacity(0.09),
+                                    lineWidth: 0.6)
                     )
             }
         }
@@ -1798,7 +1891,7 @@ struct GroupChatView: View {
                 .buttonStyle(.plain)
             } else {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(.secondarySystemBackground))
+                    .fill(Color.white)
                     .frame(width: 160, height: 120)
                     .overlay(ProgressView())
             }
@@ -1858,8 +1951,9 @@ struct GroupChatView: View {
                     .padding(.vertical, 9)
                     .background(
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(Color(.secondarySystemBackground))
+                            .fill(Color.white)
                     )
+                    .hairlineCard(radius: 18, opacity: 0.09)
 
                 Button {
                     send()
@@ -1867,8 +1961,9 @@ struct GroupChatView: View {
                     Image(systemName: "arrow.up")
                         .font(.system(size: 15, weight: .bold))
                         .frame(width: 38, height: 38)
-                        .background(Circle().fill(canSend ? Color.orange : Color(.systemGray4)))
-                        .foregroundStyle(Color.white)
+                        .background(Circle().fill(canSend ? Color.orange : Color.white))
+                        .hairlineCircle(opacity: canSend ? 0 : 0.12)
+                        .foregroundStyle(canSend ? Color.white : Color(.tertiaryLabel))
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
@@ -1878,7 +1973,7 @@ struct GroupChatView: View {
             .padding(.bottom, 8)
         }
         .background(
-            Color(.systemGroupedBackground)
+            Color.white
                 .overlay(Divider(), alignment: .top)
                 .ignoresSafeArea(edges: .bottom)
         )
@@ -1941,7 +2036,7 @@ struct GroupEditor: View {
                             .padding(.vertical, 11)
                             .background(
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color(.secondarySystemBackground))
+                                    .fill(Color.white)
                             )
                     }
 
@@ -2056,7 +2151,7 @@ struct RenameSheet: View {
                     .padding(.vertical, 11)
                     .background(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color(.secondarySystemBackground))
+                            .fill(Color.white)
                     )
 
                 Text("修改后会自动重新广播，已建立的连接会断开，需要重新连接。")
@@ -2096,7 +2191,8 @@ struct RenameSheet: View {
 struct AttachmentBubble: View {
     let att: ChatAttachment
     let mine: Bool
-    @State private var expanded = false
+    /// 文本文件全文查看（不换行、可横向 + 纵向滚动）
+    @State private var showTextViewer = false
     /// 视频消息：点按播放
     @State private var playingVideo: VideoItem?
 
@@ -2127,6 +2223,9 @@ struct AttachmentBubble: View {
                 let url = ChatFileStore.url(att.fileName)
                 if att.kind == .video {
                     playingVideo = VideoItem(url: url)
+                } else if att.isTextPreviewable {
+                    // 文本文件：打开全文查看器（默认不换行、可滚动），里面再提供分享
+                    showTextViewer = true
                 } else {
                     let vc = UIActivityViewController(activityItems: [url], applicationActivities: nil)
                     if let top = UIApplication.topViewController {
@@ -2173,21 +2272,28 @@ struct AttachmentBubble: View {
             if att.isTextPreviewable {
                 Divider().background(mine ? Color.white.opacity(0.25) : Color.black.opacity(0.06))
                 if let text = textPreview {
+                    // 气泡里只放一小段提示；真正的「查看」交给全文面板：
+                    // 默认不换行、长行保持单行，可横向 + 纵向滚动。
                     Text(text)
                         .font(.system(size: 11.5, design: .monospaced))
                         .foregroundStyle(mine ? Color.white : Color.primary)
-                        .lineLimit(expanded ? nil : 6)
-                        .textSelection(.enabled)
+                        .lineLimit(4)
                         .padding(.horizontal, 11)
                         .padding(.vertical, 8)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    if text.count > 160 {
-                        Button(expanded ? "收起" : "展开全文") { expanded.toggle() }
-                            .font(.system(size: 11))
-                            .foregroundStyle(mine ? Color.white : Color.orange)
-                            .padding(.horizontal, 11)
-                            .padding(.bottom, 8)
+                    Button {
+                        showTextViewer = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "doc.text.magnifyingglass")
+                            Text("查看全文 · 不换行可滚动")
+                        }
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(mine ? Color.white : Color.orange)
                     }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 11)
+                    .padding(.bottom, 8)
                 } else {
                     HStack(spacing: 6) {
                         ProgressView()
@@ -2202,7 +2308,7 @@ struct AttachmentBubble: View {
         .frame(width: 230)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(mine ? Color.orange : Color(.systemBackground))
+                .fill(mine ? Color.orange : Color.white)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -2210,6 +2316,9 @@ struct AttachmentBubble: View {
         )
         .sheet(item: $playingVideo) { item in
             ChatVideoViewer(url: item.url)
+        }
+        .sheet(isPresented: $showTextViewer) {
+            ChatTextFileViewer(fileName: att.fileName, displayName: att.displayName)
         }
     }
 }
@@ -2259,7 +2368,7 @@ struct LocationBubble: View {
             .frame(width: 200, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(mine ? Color.orange : Color(.systemBackground))
+                    .fill(mine ? Color.orange : Color.white)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -2347,7 +2456,7 @@ struct EmojiPanel: View {
             .padding(.vertical, 6)
         }
         .frame(height: 158)
-        .background(Color(.secondarySystemBackground))
+        .background(Color.white)
     }
 }
 
