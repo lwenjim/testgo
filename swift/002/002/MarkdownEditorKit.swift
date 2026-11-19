@@ -1126,28 +1126,60 @@ private extension NSMutableAttributedString {
     }
 }
 
-// MARK: - 预览（只读文本视图：可跨段落选中复制）
+// MARK: - 预览（只读文本视图：可跨段落选中复制；支持内置点按回调）
 
 struct MarkdownPreview: View {
     let text: String
     var baseSize: CGFloat = 14
     /// 缩放倍率（1 = 原始排版）
     var scale: CGFloat = 1
+    /// 单击回调（例如进入编辑）。在文本视图内部挂手势，保证能收到点按
+    var onSingleTap: (() -> Void)? = nil
+    /// 双击回调（例如还原缩放）
+    var onDoubleTap: (() -> Void)? = nil
 
     var body: some View {
         MarkdownReadOnlyText(
             attributed: MarkdownRender.attributed(text, size: baseSize * scale),
-            version: Int((baseSize * scale * 10).rounded())
+            version: Int((baseSize * scale * 10).rounded()),
+            onSingleTap: onSingleTap,
+            onDoubleTap: onDoubleTap
         )
     }
 }
 
 #if os(macOS)
 
+/// 支持点按回调的 NSTextView（区分单击 / 双击，拖动选区不触发）
+final class TapAwareTextView: NSTextView {
+    var onSingleTap: (() -> Void)?
+    var onDoubleTap: (() -> Void)?
+    private var downPoint: NSPoint = .zero
+
+    override func mouseDown(with event: NSEvent) {
+        downPoint = event.locationInWindow
+        super.mouseDown(with: event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        super.mouseUp(with: event)
+        let moved = abs(event.locationInWindow.x - downPoint.x)
+            + abs(event.locationInWindow.y - downPoint.y)
+        guard moved < 4 else { return }   // 拖动选区不算点按
+        if event.clickCount == 2 {
+            onDoubleTap?()
+        } else if event.clickCount == 1 {
+            onSingleTap?()
+        }
+    }
+}
+
 private struct MarkdownReadOnlyText: NSViewRepresentable {
     let attributed: NSAttributedString
     /// 排版指纹：字号变化（缩放）时字符串可能相同，靠它触发重排
     let version: Int
+    var onSingleTap: (() -> Void)? = nil
+    var onDoubleTap: (() -> Void)? = nil
 
     final class Coordinator {
         var lastVersion = -1
@@ -1160,7 +1192,7 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSTextView.scrollableTextView()
+        let scroll = NSScrollView()
         scroll.drawsBackground = true
         scroll.backgroundColor = .white
         scroll.hasVerticalScroller = true
@@ -1168,13 +1200,21 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
         scroll.borderType = .noBorder
         scroll.scrollerStyle = .overlay
 
-        guard let tv = scroll.documentView as? NSTextView else { return scroll }
+        let tv = TapAwareTextView(frame: .zero)
         tv.isEditable = false
         tv.isSelectable = true
         tv.drawsBackground = false
         tv.textContainerInset = NSSize(width: 22, height: 16)
         tv.textContainer?.widthTracksTextView = true
         tv.textStorage?.setAttributedString(attributed)
+        tv.onSingleTap = onSingleTap
+        tv.onDoubleTap = onDoubleTap
+        tv.minSize = NSSize(width: 0, height: 0)
+        tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        tv.isVerticallyResizable = true
+        tv.isHorizontallyResizable = false
+        tv.autoresizingMask = [.width]
+        scroll.documentView = tv
         context.coordinator.lastVersion = version
 
         // 预览模式：选中即自动复制（底部剪贴板状态会跟着更新）
@@ -1192,7 +1232,9 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
-        guard let tv = scroll.documentView as? NSTextView else { return }
+        guard let tv = scroll.documentView as? TapAwareTextView else { return }
+        tv.onSingleTap = onSingleTap
+        tv.onDoubleTap = onDoubleTap
         if tv.textStorage?.string != attributed.string || context.coordinator.lastVersion != version {
             // 记住缩放前的滚动位置比例，缩放后恢复，避免跳回顶部
             let scrollRatio = scrollVerticalRatio(scroll)
@@ -1221,8 +1263,22 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
 private struct MarkdownReadOnlyText: UIViewRepresentable {
     let attributed: NSAttributedString
     let version: Int
+    var onSingleTap: (() -> Void)? = nil
+    var onDoubleTap: (() -> Void)? = nil
 
-    final class Coordinator { var lastVersion = -1 }
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var lastVersion = -1
+        var onSingleTap: (() -> Void)?
+        var onDoubleTap: (() -> Void)?
+
+        @objc func handleSingleTap() { onSingleTap?() }
+        @objc func handleDoubleTap() { onDoubleTap?() }
+
+        func gestureRecognizerShouldRecognizeSimultaneouslyWith(
+            _ gestureRecognizer: UIGestureRecognizer,
+            with other: UIGestureRecognizer
+        ) -> Bool { true }
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -1235,10 +1291,27 @@ private struct MarkdownReadOnlyText: UIViewRepresentable {
         tv.alwaysBounceVertical = true
         tv.attributedText = attributed
         context.coordinator.lastVersion = version
+
+        // 内置点按手势：UITextView 会吞掉 SwiftUI 层的 onTapGesture，必须挂在它自己身上
+        let single = UITapGestureRecognizer(target: context.coordinator,
+                                            action: #selector(Coordinator.handleSingleTap))
+        single.numberOfTapsRequired = 1
+        single.cancelsTouchesInView = false
+        single.delegate = context.coordinator
+        tv.addGestureRecognizer(single)
+        let double = UITapGestureRecognizer(target: context.coordinator,
+                                            action: #selector(Coordinator.handleDoubleTap))
+        double.numberOfTapsRequired = 2
+        double.cancelsTouchesInView = false
+        double.delegate = context.coordinator
+        single.require(toFail: double)
+        tv.addGestureRecognizer(double)
         return tv
     }
 
     func updateUIView(_ tv: UITextView, context: Context) {
+        context.coordinator.onSingleTap = onSingleTap
+        context.coordinator.onDoubleTap = onDoubleTap
         if tv.attributedText?.string != attributed.string || context.coordinator.lastVersion != version {
             let offset = tv.contentOffset
             tv.attributedText = attributed

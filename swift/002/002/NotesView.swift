@@ -479,7 +479,31 @@ struct NoteEditor: View {
     }
 
     var body: some View {
-        NavStackCompat {
+        VStack(spacing: 0) {
+            // 自定义顶栏：不套系统导航栏（iOS 26 会给工具栏按钮加玻璃圆底）
+            HStack(spacing: 20) {
+                Button("取消") { dismiss() }
+                    .font(.system(size: 16))
+                    .buttonStyle(.plain)
+                Spacer(minLength: 0)
+                Button {
+                    togglePreview()
+                } label: {
+                    Image(systemName: previewMode ? "pencil" : "eye")
+                        .font(.system(size: 17, weight: .medium))
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(previewMode ? "回到编辑" : "预览排版")
+                Button("保存") { save() }
+                    .font(.system(size: 16, weight: .semibold))
+                    .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 48)
+            Divider()
+
             ZStack {
                 editorArea
                     .opacity(previewMode ? 0 : 1)
@@ -487,7 +511,14 @@ struct NoteEditor: View {
 
                 if previewMode {
                     MarkdownPreview(text: text, baseSize: 15,
-                                    scale: previewScale * pinchScale)
+                                    scale: previewScale * pinchScale,
+                                    // 点按内容直接进入编辑；双击还原缩放
+                                    onSingleTap: { togglePreview() },
+                                    onDoubleTap: {
+                                        if previewScale != 1 {
+                                            withAnimation(.easeInOut(duration: 0.15)) { previewScale = 1 }
+                                        }
+                                    })
                         .background(Color(.systemBackground))
                         .transition(.opacity)
                         .simultaneousGesture(
@@ -502,40 +533,10 @@ struct NoteEditor: View {
                                     }
                                 }
                         )
-                        .onTapGesture(count: 2) {
-                            if previewScale != 1 {
-                                withAnimation(.easeInOut(duration: 0.15)) { previewScale = 1 }
-                            }
-                        }
-                        // 点按内容直接进入编辑（双击仍优先还原缩放）
-                        .onTapGesture { togglePreview() }
-                }
-            }
-            .navigationTitle(target.isNew ? "新建笔记" : "编辑笔记")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") { dismiss() }
-                        .buttonStyle(.plain)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 14) {
-                        Button {
-                            togglePreview()
-                        } label: {
-                            Image(systemName: previewMode ? "pencil" : "eye")
-                                .font(.system(size: 16, weight: .medium))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(previewMode ? "回到编辑" : "预览排版")
-
-                        Button("保存") { save() }
-                            .font(.system(size: 16, weight: .semibold))
-                            .buttonStyle(.plain)
-                    }
                 }
             }
         }
+        .background(Color(.systemBackground))
     }
 
     // MARK: 编辑区

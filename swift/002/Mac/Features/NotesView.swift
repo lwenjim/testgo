@@ -529,7 +529,13 @@ struct NotesView: View {
                 Divider()
 
                 if previewMode {
-                    MarkdownPreview(text: draft, scale: previewScale)
+                    MarkdownPreview(text: draft, scale: previewScale,
+                                    // 点按内容直接回到编辑；双击还原缩放
+                                    onSingleTap: {
+                                        previewMode = false
+                                        editor.focus()
+                                    },
+                                    onDoubleTap: { previewScale = 1 })
                         // 触控板捏合缩放（也可用工具条 ± 或 ⌘=/⌘-/⌘0）
                         .gesture(
                             MagnificationGesture()
@@ -540,11 +546,6 @@ struct NotesView: View {
                                 }
                                 .onEnded { _ in pinchStartScale = nil }
                         )
-                        // 点按内容直接回到编辑（Mac 上预览文字仍可选中复制，单击进入编辑）
-                        .onTapGesture {
-                            previewMode = false
-                            editor.focus()
-                        }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ZStack(alignment: .topLeading) {

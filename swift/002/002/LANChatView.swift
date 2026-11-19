@@ -477,47 +477,36 @@ struct LANChatView: View {
 
     private var minePage: some View {
         ScrollView {
-            VStack(spacing: 14) {
-                // 个人卡片：头像 + 昵称
+            VStack(spacing: 0) {
+                // 个人卡片：与通讯录一致的通栏行样式
                 Button {
                     showAvatarPicker = true
                 } label: {
-                    HStack(spacing: 14) {
-                        ZStack(alignment: .bottomTrailing) {
-                            ChatAvatar(name: model.nickname, size: 64)
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 9, weight: .bold))
-                                .frame(width: 22, height: 22)
-                                .background(Circle().fill(Color.orange))
-                                .foregroundStyle(Color.white)
-                                .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
-                        }
-                        VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 12) {
+                        ChatAvatar(name: model.nickname, size: 44)
+                        VStack(alignment: .leading, spacing: 3) {
                             Text(model.nickname)
-                                .font(.system(size: 18, weight: .semibold))
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(Color.primary)
                                 .lineLimit(1)
                             Text("点头像可修改")
                                 .font(.system(size: 11))
                                 .foregroundStyle(.tertiary)
                         }
-                        Spacer(minLength: 0)
+                        Spacer(minLength: 6)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(Color(.tertiaryLabel))
                     }
-                    .padding(16)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
                     .contentShape(Rectangle())
+                    .background(Color(.systemBackground))
                 }
                 .buttonStyle(.plain)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color(.systemBackground))
-                )
-                .padding(.horizontal, 12)
 
-                // 连接状态 + 设备信息
-                VStack(alignment: .leading, spacing: 0) {
+                // 连接状态 + 设备信息（通栏分组，与通讯录同样式）
+                VStack(spacing: 0) {
                     HStack(spacing: 10) {
                         ZStack {
                             Circle()
@@ -546,7 +535,7 @@ struct LANChatView: View {
                         }
                     }
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 10)
 
                     if !model.online.isEmpty {
                         Divider().padding(.leading, 54)
@@ -577,13 +566,10 @@ struct LANChatView: View {
                         }
                     }
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color(.systemBackground))
-                )
-                .padding(.horizontal, 12)
+                .background(Color(.systemBackground))
+                .padding(.top, 8)
 
-                // 功能入口
+                // 功能入口（通栏行，与通讯录同样式）
                 VStack(spacing: 0) {
                     mineRow(icon: "bookmark", label: model.favoriteCount > 0 ? "收藏 (\(model.favoriteCount))" : "收藏") {
                         showFavorites = true
@@ -593,18 +579,14 @@ struct LANChatView: View {
                         showRename = true
                     }
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color(.systemBackground))
-                )
-                .padding(.horizontal, 12)
+                .background(Color(.systemBackground))
+                .padding(.top, 8)
 
                 Text("点对点直连 · 不经过服务器 · 记录只存本机")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
-                    .padding(.top, 4)
+                    .padding(.top, 10)
             }
-            .padding(.top, 10)
             .padding(.bottom, 24)
         }
     }
@@ -625,7 +607,7 @@ struct LANChatView: View {
                     .foregroundStyle(Color(.tertiaryLabel))
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
