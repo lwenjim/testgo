@@ -51,8 +51,13 @@ struct MacRootView: View {
     // MARK: 板块顺序（拖动调整，持久化到 UserDefaults）
 
     @AppStorage("macSectionOrder") private var orderRaw = ""
-    /// 正在拖动的板块（onDrag/onDrop 排序用）
+    /// 正在拖动的板块（手势拖拽排序）
     @State private var dragging: MacSection?
+    @State private var dragTranslation: CGSize = .zero
+    /// 拖动开始时被拖标签的位置（换位后用它算视觉偏移，避免跳变）
+    @State private var dragStartFrame: CGRect?
+    /// 各标签在标签栏坐标系里的位置，用来判断拖到了谁头上
+    @State private var tabFrames: [MacSection: CGRect] = [:]
 
     /// 用户排好的顺序（缺的板块自动补到末尾，容错旧数据）
     private var orderedSections: [MacSection] {
@@ -185,13 +190,19 @@ struct MacRootView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+        .coordinateSpace(name: "tabBarSpace")
+        .onPreferenceChange(TabFrameKey.self) { entries in
+            tabFrames = Dictionary(entries.map { ($0.section, $0.frame) },
+                                    uniquingKeysWith: { _, new in new })
+        }
         .onContinuousHover { phase in
             if phase != .ended { revealHeader() } else { scheduleHideHeader() }
         }
     }
 
     private func tabButton(_ item: MacSection) -> some View {
-        Button {
+        let isDragging = dragging == item
+        return Button {
             select(item)
         } label: {
             VStack(spacing: 3) {
@@ -208,19 +219,69 @@ struct MacRootView: View {
                     .fill(section == item ? Color.accentColor.opacity(0.14) : Color.clear)
             )
             .foregroundStyle(section == item ? Color.accentColor : Color.secondary)
-            .opacity(dragging == item ? 0.55 : 1)
+            .opacity(isDragging ? 0.85 : 1)
+            .scaleEffect(isDragging ? 1.06 : 1)
+            .shadow(color: isDragging ? Color.accentColor.opacity(0.3) : .clear,
+                    radius: 8, x: 0, y: 3)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .zIndex(isDragging ? 1 : 0)
+        .offset(isDragging ? dragTranslation : .zero)
+        // 记录每个标签的布局位置（拖动排序判定用；offset 不影响布局位置）
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: TabFrameKey.self,
+                                       value: [TabFrameKey.Entry(section: item,
+                                                                 frame: geo.frame(in: .named("tabBarSpace")))])
+            }
+        )
+        .simultaneousGesture(tabDragGesture(item))
         .help("\(item.rawValue)（⌘\(orderedSections.firstIndex(of: item)! + 1)，拖动可排序）")
-        .onDrag {
+    }
+
+    // MARK: 标签拖拽排序（手势实现，onDrag/onDrop 在 Mac 标签上不生效）
+
+    private func tabDragGesture(_ item: MacSection) -> some Gesture {
+        DragGesture(minimumDistance: 6, coordinateSpace: .named("tabBarSpace"))
+            .onChanged { value in
+                handleTabDrag(value, for: item)
+            }
+            .onEnded { _ in
+                endTabDrag()
+            }
+    }
+
+    private func handleTabDrag(_ value: DragGesture.Value, for item: MacSection) {
+        if dragging == nil {
             dragging = item
-            return NSItemProvider(object: item.rawValue as NSString)
+            dragStartFrame = tabFrames[item]
         }
-        .onDrop(of: [UTType.plainText], delegate: SectionDropDelegate(
-            item: item,
-            dragging: $dragging,
-            onMove: { dragged, target in moveSection(dragged, before: target) }
-        ))
+        guard dragging == item else { return }
+
+        // 视觉偏移 = 起始位置 + 手指位移 − 当前布局位置（换位后不跳变）
+        let base = dragStartFrame ?? tabFrames[item] ?? .zero
+        let current = tabFrames[item] ?? base
+        dragTranslation = CGSize(
+            width: base.minX + value.translation.width - current.minX,
+            height: base.minY + value.translation.height - current.minY
+        )
+
+        // 用被拖标签的中心去找目标标签（左右换位）
+        let center = CGPoint(x: base.midX + value.translation.width,
+                             y: base.midY + value.translation.height)
+        if let target = tabFrames.first(where: {
+            $0.key != item && $0.value.insetBy(dx: -4, dy: -4).contains(center)
+        })?.key {
+            moveSection(item, before: target)
+        }
+    }
+
+    private func endTabDrag() {
+        guard dragging != nil else { return }
+        dragging = nil
+        dragTranslation = .zero
+        dragStartFrame = nil
     }
 
     // MARK: 板块内容
@@ -245,23 +306,14 @@ struct MacRootView: View {
     }
 }
 
-/// 标签拖动排序：拖到某个标签上时，把被拖标签移动到它前面
-struct SectionDropDelegate: DropDelegate {
-    let item: MacSection
-    @Binding var dragging: MacSection?
-    let onMove: (MacSection, MacSection) -> Void
-
-    func dropEntered(info: DropInfo) {
-        guard let dragged = dragging, dragged != item else { return }
-        onMove(dragged, item)
+/// 收集标签栏里每个标签的位置（拖动排序用）
+struct TabFrameKey: PreferenceKey {
+    struct Entry: Equatable {
+        let section: MacSection
+        let frame: CGRect
     }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        dragging = nil
-        return true
+    static var defaultValue: [Entry] = []
+    static func reduce(value: inout [Entry], nextValue: () -> [Entry]) {
+        value.append(contentsOf: nextValue())
     }
 }

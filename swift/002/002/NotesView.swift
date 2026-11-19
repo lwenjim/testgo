@@ -272,9 +272,8 @@ struct NotesView: View {
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 17, weight: .bold))
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(Color.orange))
-                    .foregroundStyle(Color.white)
+                    .frame(width: 30, height: 30)
+                    .foregroundStyle(Color.orange)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("新建笔记")
@@ -512,14 +511,12 @@ struct NoteEditor: View {
                         .onTapGesture { togglePreview() }
                 }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                bottomBar
-            }
             .navigationTitle(target.isNew ? "新建笔记" : "编辑笔记")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("取消") { dismiss() }
+                        .buttonStyle(.plain)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 14) {
@@ -529,10 +526,12 @@ struct NoteEditor: View {
                             Image(systemName: previewMode ? "pencil" : "eye")
                                 .font(.system(size: 16, weight: .medium))
                         }
+                        .buttonStyle(.plain)
                         .accessibilityLabel(previewMode ? "回到编辑" : "预览排版")
 
                         Button("保存") { save() }
                             .font(.system(size: 16, weight: .semibold))
+                            .buttonStyle(.plain)
                     }
                 }
             }
@@ -568,32 +567,7 @@ struct NoteEditor: View {
         )
     }
 
-    // MARK: 底部：工具栏 / 预览时给一个「回到编辑」
-
-    private var bottomBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-            if previewMode {
-                Button {
-                    togglePreview()
-                } label: {
-                    Label("回到编辑", systemImage: "pencil")
-                        .font(.system(size: 15, weight: .medium))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-
-                Text("点按内容可直接编辑 · 双指捏合缩放 · 双击还原")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
-                    .padding(.bottom, 4)
-            } else {
-                NoteFormatBar(controller: editor)
-            }
-        }
-        .background(Color(.secondarySystemBackground))
-    }
+    // MARK: 底部工具栏已移除：内容区占满全屏（预览点按进入编辑，编辑态直接打字）
 
     private func togglePreview() {
         if !previewMode { editor.endEditing() }

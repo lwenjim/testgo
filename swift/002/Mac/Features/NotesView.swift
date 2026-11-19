@@ -540,6 +540,11 @@ struct NotesView: View {
                                 }
                                 .onEnded { _ in pinchStartScale = nil }
                         )
+                        // 点按内容直接回到编辑（Mac 上预览文字仍可选中复制，单击进入编辑）
+                        .onTapGesture {
+                            previewMode = false
+                            editor.focus()
+                        }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ZStack(alignment: .topLeading) {
