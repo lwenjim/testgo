@@ -508,6 +508,8 @@ struct NoteEditor: View {
                                 withAnimation(.easeInOut(duration: 0.15)) { previewScale = 1 }
                             }
                         }
+                        // 点按内容直接进入编辑（双击仍优先还原缩放）
+                        .onTapGesture { togglePreview() }
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -582,7 +584,7 @@ struct NoteEditor: View {
                 }
                 .buttonStyle(.plain)
 
-                Text("双指捏合缩放 · 双击还原")
+                Text("点按内容可直接编辑 · 双指捏合缩放 · 双击还原")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
                     .padding(.bottom, 4)
