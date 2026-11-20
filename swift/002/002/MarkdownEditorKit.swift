@@ -171,6 +171,8 @@ enum MarkdownStyle {
                           firstLineIndent: CGFloat? = nil,
                           tabAt: CGFloat? = nil) -> NSParagraphStyle {
         let p = NSMutableParagraphStyle()
+        // 段落样式的默认 lineBreakMode 是 .byWordWrapping，会盖掉 textContainer.lineBreakMode
+        p.lineBreakMode = .byClipping   // 笔记统一不换行：长行保持单行，横向滚动查看
         p.lineSpacing = lineSpacing
         p.paragraphSpacingBefore = before
         p.paragraphSpacing = after
@@ -911,6 +913,7 @@ enum MarkdownRender {
                                       lineSpacing: CGFloat,
                                       after: CGFloat) -> NSParagraphStyle {
         let p = NSMutableParagraphStyle()
+        p.lineBreakMode = .byClipping
         p.textBlocks = [block]
         p.lineSpacing = lineSpacing
         p.paragraphSpacing = after
@@ -926,6 +929,7 @@ enum MarkdownRender {
                    after: CGFloat) -> NSMutableAttributedString {
             let a = NSMutableAttributedString(string: "", attributes: attrs)
             let p = NSMutableParagraphStyle()
+            p.lineBreakMode = .byClipping
             p.lineSpacing = lineSpacing
             p.paragraphSpacing = after
             p.headIndent = 14
@@ -962,6 +966,7 @@ enum MarkdownRender {
             piece.addAttribute(.backgroundColor, value: CodeTheme.background,
                                range: NSRange(location: 0, length: piece.length))
             let p = NSMutableParagraphStyle()
+            p.lineBreakMode = .byClipping
             p.lineSpacing = 2
             p.headIndent = 14
             p.firstLineHeadIndent = 14
@@ -1153,7 +1158,7 @@ struct MarkdownPreview: View {
     /// 打开笔记时恢复到上次位置（0 = 顶部；nil = 不干预）
     var initialFraction: CGFloat? = nil
     /// 编辑→预览 / 再次打开时带过来的「可见区锚点文字」：在渲染后的文本里搜到并滚到该处。
-    /// 编辑器（纯文本、不换行）与预览（富文本、自动换行、代码卡片）文档高度差别极大，
+    /// 编辑器（纯文本）与预览（富文本、代码卡片）文档高度差别极大，
     /// 只按滚动比例定位必然错位，锚点才是两种排版之间可靠的对应关系。
     var initialAnchor: String? = nil
     /// 每次切回预览 / 打开笔记都 +1：即使锚点与比例都没变，也强制重新定位一次
@@ -1167,8 +1172,10 @@ struct MarkdownPreview: View {
     var onRenderedText: ((String) -> Void)? = nil
     var onVisibleAnchor: ((String) -> Void)? = nil
     /// iOS 笔记详情：内容是否自动换行。默认 false = 不换行、可横向滚动查看长行。
-    /// 由笔记顶栏开关控制；Mac 端有自己的排版，忽略此值。
+    /// 笔记编辑 / 预览都不换行，这里保留参数供其他场景复用；Mac 端有自己的排版，忽略此值。
     var wrapText: Bool = false
+    /// macOS 预览：右键拖动平移画布（与编辑态共用设置开关）；iOS 忽略
+    var panMode: Bool = true
 
     private var attributed: NSAttributedString {
         MarkdownRender.attributed(text, size: baseSize * scale,
@@ -1183,6 +1190,7 @@ struct MarkdownPreview: View {
             findRanges: findRanges, currentFindRange: currentFindRange,
             initialFraction: initialFraction,
             initialAnchor: initialAnchor, restoreKey: restoreKey,
+            panMode: panMode,
             onScrollFraction: onScrollFraction,
             onRenderedText: onRenderedText,
             onVisibleAnchor: onVisibleAnchor,
@@ -1203,13 +1211,81 @@ struct MarkdownPreview: View {
 
 #if os(macOS)
 
-/// 支持点按回调的 NSTextView（区分单击 / 双击，拖动选区不触发）
+/// 支持点按回调 + 右键拖动平移的 NSTextView（区分单击 / 双击，左键拖动选区不触发点按）
 final class TapAwareTextView: NSTextView {
     var onSingleTap: (() -> Void)?
     var onDoubleTap: (() -> Void)?
+    /// 右键按住拖动平移预览画布；关闭时右键恢复原生上下文菜单
+    var isPanMode = true
+
     private var downPoint: NSPoint = .zero
 
+    // 右键抓手状态
+    private var isPanning = false
+    private var panStart: NSPoint = .zero
+    private var panLast: NSPoint = .zero
+    private var panDownEvent: NSEvent?
+    private var panDidMove = false
+    private var panVelocity: NSPoint = .zero
+    private var momentumTimer: Timer?
+
+    // MARK: 预览行号（画在自身内，与编辑态同一套手感）
+    var showLineNumbers = true {
+        didSet {
+            syncLineNumberMetrics()
+            needsDisplay = true
+        }
+    }
+    private let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+    private(set) var lineNumberWidth: CGFloat = 38
+    private var lineObserver: NSObjectProtocol?
+    private var lastClipX: CGFloat = -1
+    /// 按视觉行片段编号的行号标记（文档坐标 y + 行号），富文本排版确定后重建
+    private var lineMarks: [(y: CGFloat, height: CGFloat, number: Int)] = []
+    private var marksSignature = ""
+
+    /// 排版尺寸或内容变化后重建行号：每个视觉行片段恰好一个连续行号。
+    /// y 优先用 firstRect(for:)（window 坐标，TextKit 已换算 textContainerOrigin / inset
+    /// 与 NSTextBlock 偏移）——代码卡片段落的 lineFragmentRect 是卡片内相对坐标，
+    /// 直接用会把卡片内行号挤到卡片顶部。视图尚未入窗时退回 fragment rect。
+    func rebuildLineMarks(signature: String) {
+        guard let lm = layoutManager, let tc = textContainer, lm.numberOfGlyphs > 0 else {
+            lineMarks = []
+            marksSignature = signature
+            return
+        }
+        var marks: [(y: CGFloat, height: CGFloat, number: Int)] = []
+        let maxLoc = (string as NSString).length
+        lm.enumerateLineFragments(forGlyphRange: lm.glyphRange(for: tc)) {
+            fragRect, _, _, gr, _ in
+            let charLoc = lm.characterRange(forGlyphRange: gr, actualGlyphRange: nil).location
+            let y: CGFloat
+            let h: CGFloat
+            if charLoc < maxLoc, let window = self.window {
+                let len = max(1, min(1, maxLoc - charLoc))
+                // firstRect 返回屏幕坐标（头文件注明），转回视图坐标使用
+                let screenRect = self.firstRect(forCharacterRange: NSRange(location: charLoc, length: len),
+                                                actualRange: nil)
+                let local = self.convert(window.convertFromScreen(screenRect), from: nil)
+                y = local.minY
+                h = max(local.height, 12)
+            } else {
+                y = fragRect.minY + self.textContainerInset.height
+                h = max(fragRect.height, 12)
+            }
+            marks.append((y: y, height: h, number: marks.count + 1))
+        }
+        lineMarks = marks
+        marksSignature = signature
+    }
+
+    deinit {
+        momentumTimer?.invalidate()
+        if let lineObserver { NotificationCenter.default.removeObserver(lineObserver) }
+    }
+
     override func mouseDown(with event: NSEvent) {
+        stopMomentum()
         downPoint = event.locationInWindow
         super.mouseDown(with: event)
     }
@@ -1223,6 +1299,190 @@ final class TapAwareTextView: NSTextView {
             onDoubleTap?()
         } else if event.clickCount == 1 {
             onSingleTap?()
+        }
+    }
+
+    // MARK: 右键拖动 = 平移预览画布（与编辑态同一套手感）
+
+    override func rightMouseDown(with event: NSEvent) {
+        stopMomentum()
+        guard isPanMode else {
+            super.rightMouseDown(with: event)
+            return
+        }
+        // 不调用 super：默认会立刻弹菜单并进入菜单跟踪，右键就拖不动了。
+        // 纯点击的菜单在 rightMouseUp 里补回。
+        isPanning = true
+        panStart = event.locationInWindow
+        panLast = event.locationInWindow
+        panDownEvent = event
+        panDidMove = false
+        panVelocity = .zero
+        NSCursor.closedHand.set()
+        window?.invalidateCursorRects(for: self)
+    }
+
+    override func rightMouseDragged(with event: NSEvent) {
+        guard isPanning, let scroll = enclosingScrollView else {
+            super.rightMouseDragged(with: event)
+            return
+        }
+        let now = event.locationInWindow
+        let dx = now.x - panLast.x
+        let dy = now.y - panLast.y
+        panLast = now
+        // 手抖不算拖动：超过 3pt 才真正平移，纯点击留给上下文菜单
+        if hypot(now.x - panStart.x, now.y - panStart.y) >= 3 { panDidMove = true }
+        panVelocity = NSPoint(x: dx, y: dy)
+        if panDidMove { pan(by: dx, dy: dy, in: scroll) }
+    }
+
+    override func rightMouseUp(with event: NSEvent) {
+        guard isPanning else {
+            super.rightMouseUp(with: event)
+            return
+        }
+        isPanning = false
+        NSCursor.arrow.set()
+        window?.invalidateCursorRects(for: self)
+        if panDidMove {
+            startMomentum()
+        } else if let down = panDownEvent {
+            // 右键纯点击：补回被拦下的原生上下文菜单
+            super.rightMouseDown(with: down)
+        }
+        panDownEvent = nil
+    }
+
+    /// 内容跟着鼠标走，和触摸板「自然滚动」一致；用 AppKit 的边界钳制，
+    /// 到顶/底/最左/最右后就推不动了。
+    private func pan(by dx: CGFloat, dy: CGFloat, in scroll: NSScrollView) {
+        let clip = scroll.contentView
+        let current = clip.bounds.origin
+        let proposed = NSRect(origin: NSPoint(x: current.x - dx, y: current.y + dy),
+                              size: clip.bounds.size)
+        let allowed = clip.constrainBoundsRect(proposed).origin
+        if abs(allowed.x - current.x) < 0.01, abs(allowed.y - current.y) < 0.01 { return }
+        clip.scroll(to: allowed)
+        scroll.reflectScrolledClipView(clip)
+    }
+
+    /// 松手后的惯性，与编辑态一致（0.9 衰减，最多 45 帧）
+    private func startMomentum() {
+        guard let scroll = enclosingScrollView else { return }
+        var vx = panVelocity.x
+        var vy = panVelocity.y
+        guard abs(vx) + abs(vy) > 1.2 else { return }
+        var ticks = 0
+        momentumTimer?.invalidate()
+        momentumTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            vx *= 0.90
+            vy *= 0.90
+            ticks += 1
+            if abs(vx) + abs(vy) < 0.4 || ticks > 45 {
+                timer.invalidate()
+                self.momentumTimer = nil
+                return
+            }
+            self.pan(by: vx, dy: vy, in: scroll)
+        }
+    }
+
+    private func stopMomentum() {
+        momentumTimer?.invalidate()
+        momentumTimer = nil
+    }
+
+    /// makeNSView 阶段视图还没进 window，行号重建只能走 fragment 回退（代码卡片会挤）；
+    /// 入窗后用 firstRect 重排一次
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window != nil, !lineMarks.isEmpty {
+            rebuildLineMarks(signature: marksSignature)
+            needsDisplay = true
+        }
+    }
+
+    // MARK: - 预览行号
+
+    /// 按行数位数定行号带宽，并同步正文 inset（不要在 draw 里改，会抖动）
+    func syncLineNumberMetrics() {
+        guard showLineNumbers else {
+            if abs(lineNumberWidth) > 0.5 || abs(textContainerInset.width - 14) > 0.5 {
+                lineNumberWidth = 0
+                textContainerInset = NSSize(width: 14, height: 16)
+            }
+            return
+        }
+        let lines = (string as NSString).components(separatedBy: "\n").count
+        let sample = String(repeating: "0", count: max(2, String(lines).count))
+        let width = ceil((sample as NSString).size(withAttributes: [.font: numberFont]).width) + 16
+        if abs(lineNumberWidth - width) > 0.5 || abs(textContainerInset.width - (width + 8)) > 0.5 {
+            lineNumberWidth = width
+            textContainerInset = NSSize(width: width + 8, height: 16)
+        }
+    }
+
+    /// 横向滚动时行号要钉在可视左缘：监听 clip 的 x 变化强制重绘
+    func installLineNumberSupport() {
+        syncLineNumberMetrics()
+        guard lineObserver == nil, let clip = enclosingScrollView?.contentView else { return }
+        lastClipX = clip.bounds.origin.x
+        clip.postsBoundsChangedNotifications = true
+        lineObserver = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification, object: clip, queue: .main
+        ) { [weak self] _ in
+            guard let self, let clip = self.enclosingScrollView?.contentView else { return }
+            if abs(clip.bounds.origin.x - self.lastClipX) > 0.5 {
+                self.lastClipX = clip.bounds.origin.x
+                self.needsDisplay = true
+            }
+        }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard showLineNumbers, lineNumberWidth > 0 else {
+            super.draw(dirtyRect)
+            return
+        }
+        drawPreviewLineNumbers(dirtyRect)
+        // 正文裁掉行号条带：横滚时长行从条带下方穿过也不会盖住行号
+        let visible = visibleRect
+        let textRegion = NSRect(x: visible.minX + lineNumberWidth, y: visible.minY,
+                                width: max(0, visible.width - lineNumberWidth),
+                                height: visible.height)
+        let textClip = textRegion.intersection(dirtyRect)
+        if textClip.width > 0, textClip.height > 0 {
+            NSGraphicsContext.saveGraphicsState()
+            NSBezierPath(rect: textClip).addClip()
+            super.draw(dirtyRect)
+            NSGraphicsContext.restoreGraphicsState()
+        }
+    }
+
+    private func drawPreviewLineNumbers(_ dirtyRect: NSRect) {
+        guard let lm = layoutManager, textContainer != nil else { return }
+        guard !lineMarks.isEmpty else { return }
+        let visible = visibleRect
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: numberFont, .foregroundColor: NSColor.secondaryLabelColor
+        ]
+        let bandRight = visible.minX + lineNumberWidth
+        // 条带铺不透明底色，盖住从下方穿过的正文
+        let band = NSRect(x: visible.minX, y: visible.minY,
+                          width: lineNumberWidth, height: visible.height)
+        if band.intersects(dirtyRect) {
+            (enclosingScrollView?.backgroundColor ?? .white).setFill()
+            band.intersection(dirtyRect).fill()
+        }
+        let numberX = bandRight - 6
+        for mark in lineMarks where mark.y >= visible.minY - 2 && mark.y <= visible.maxY + 2 {
+            let label = "\(mark.number)" as NSString
+            let size = label.size(withAttributes: attrs)
+            let y = mark.y + max(0, (mark.height - size.height) / 2)
+            label.draw(at: NSPoint(x: numberX - size.width, y: y),
+                       withAttributes: attrs)
         }
     }
 }
@@ -1239,6 +1499,7 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
     /// 可见区锚点文字（优先于比例定位）
     var initialAnchor: String? = nil
     var restoreKey: Int = 0
+    var panMode: Bool = true
     var onScrollFraction: ((CGFloat) -> Void)? = nil
     var onRenderedText: ((String) -> Void)? = nil
     var onVisibleAnchor: ((String) -> Void)? = nil
@@ -1265,25 +1526,36 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
         scroll.drawsBackground = true
         scroll.backgroundColor = .white
         scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = true   // 不换行后靠横向滚动看长行
         scroll.autohidesScrollers = true
         scroll.borderType = .noBorder
         scroll.scrollerStyle = .overlay
 
-        let tv = TapAwareTextView(frame: .zero)
+        // 预览也不换行：自己搭 TextKit，容器宽度固定为最长行，长行不折行改横向滚动。
+        // 不能用 NSTextView(frame:) 的默认容器（widthTracksTextView=true 会跟随视图宽度折行）。
+        let storage = NSTextStorage()
+        let layout = NSLayoutManager()
+        storage.addLayoutManager(layout)
+        let container = NSTextContainer(size: NSSize(width: 1_000_000, height: 1_000_000))
+        container.widthTracksTextView = false
+        layout.addTextContainer(container)
+
+        let tv = TapAwareTextView(frame: .zero, textContainer: container)
         tv.isEditable = false
         tv.isSelectable = true
         tv.drawsBackground = false
         tv.textContainerInset = NSSize(width: 22, height: 16)
-        tv.textContainer?.widthTracksTextView = true
-        tv.textStorage?.setAttributedString(attributed)
+        storage.setAttributedString(attributed)
         tv.onSingleTap = onSingleTap
         tv.onDoubleTap = onDoubleTap
-        tv.minSize = NSSize(width: 0, height: 0)
-        tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        tv.isPanMode = panMode
         tv.isVerticallyResizable = true
-        tv.isHorizontallyResizable = false
-        tv.autoresizingMask = [.width]
+        tv.isHorizontallyResizable = true
+        tv.autoresizingMask = []
+        tv.maxSize = NSSize(width: 100_000, height: 500_000)
         scroll.documentView = tv
+        tv.installLineNumberSupport()
+        Self.relayoutForNoWrap(scroll, tv: tv)
         context.coordinator.lastVersion = version
 
         // 预览模式：选中即自动复制（底部剪贴板状态会跟着更新）
@@ -1308,11 +1580,17 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
         let onAnchor = onVisibleAnchor
         let clip = scroll.contentView
         clip.postsBoundsChangedNotifications = true
+        var lastClipWidth = clip.bounds.width
         context.coordinator.scrollObserver = NotificationCenter.default.addObserver(
             forName: NSView.boundsDidChangeNotification, object: clip, queue: .main
         ) { [weak tv, weak scroll] _ in
             guard let tv, let scroll else { return }
             let c = scroll.contentView
+            // 窗口宽度变化后重算最长行宽度；只在这种变化时才做，滚动引起的 bounds 变化不重排
+            if abs(c.bounds.width - lastClipWidth) > 1 {
+                lastClipWidth = c.bounds.width
+                Self.relayoutForNoWrap(scroll, tv: tv)
+            }
             let f = Self.fraction(scroll)
             let ns = tv.string as NSString
             var anchor = ""
@@ -1337,10 +1615,14 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
         guard let tv = scroll.documentView as? TapAwareTextView else { return }
         tv.onSingleTap = onSingleTap
         tv.onDoubleTap = onDoubleTap
+        tv.isPanMode = panMode
         if tv.textStorage?.string != attributed.string || context.coordinator.lastVersion != version {
             // 记住缩放前的滚动位置比例，缩放后恢复，避免跳回顶部
             let ratio = Self.fraction(scroll)
             tv.textStorage?.setAttributedString(attributed)
+            tv.syncLineNumberMetrics()
+            Self.relayoutForNoWrap(scroll, tv: tv)
+            tv.needsDisplay = true
             context.coordinator.lastVersion = version
             context.coordinator.lastFindSignature = ""
             let rendered = attributed.string
@@ -1375,8 +1657,29 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
         return min(max(0, scroll.contentView.bounds.origin.y / maxY), 1)
     }
 
+    /// 预览固定不换行：先用一个超大容器量出实际排版尺寸（含代码卡片与富文本样式），
+    /// 再把容器 / documentView 宽度钉到「最长行 + 边距」，长行保持单行、靠横向滚动查看。
+    private static func relayoutForNoWrap(_ scroll: NSScrollView, tv: TapAwareTextView) {
+        guard let lm = tv.layoutManager, let tc = tv.textContainer else { return }
+        let clip = scroll.contentView
+        tc.containerSize = NSSize(width: 1_000_000, height: 1_000_000)
+        lm.ensureLayout(for: tc)
+        let used = lm.usedRect(for: tc)
+        let inset = tv.textContainerInset
+        let width = min(max(ceil(used.width) + inset.width * 2 + 8, clip.bounds.width), 100_000)
+        let height = min(max(ceil(used.height) + inset.height * 2 + 8, clip.bounds.height), 500_000)
+        // container.widthTracksTextView 必须为 false，否则 NSScrollView 会把文档宽度压回可视区
+        tc.containerSize = NSSize(width: max(width - inset.width * 2, 1), height: 1_000_000)
+        tv.frame = NSRect(x: 0, y: 0, width: width, height: height)
+        // 最终排版确定后再量行号位置（用最终容器宽度排出的行片段）
+        lm.ensureLayout(for: tc)
+        let sig = "\(tv.textStorage?.length ?? 0)|\(width)|\(tv.textContainerInset.width)"
+        tv.rebuildLineMarks(signature: sig)
+        tv.needsDisplay = true
+    }
+
     /// 按「锚点文字」恢复到编辑模式正在看的内容。
-    /// 编辑器与预览是两套完全不同的排版（纯文本不换行 vs 富文本自动换行 + 代码卡片），
+    /// 编辑器与预览是两套完全不同的排版（纯文本 vs 富文本 + 代码卡片），
     /// 按文档高度比例定位会严重错位；锚点是可见区第一行的有效文字，
     /// 在渲染后的文本里搜到它、把那一行滚到可见区顶部，才是跨模式可靠的对应。
     private static func restore(_ scroll: NSScrollView, fraction: CGFloat,
@@ -1471,7 +1774,7 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
 
 #else
 
-/// 可切换「自动换行 / 不换行横向滚动」的 UITextView。
+/// 可切换「自动换行 / 不换行横向滚动」的 UITextView（笔记固定用不换行）。
 ///
 /// 两个坑（都踩过）：
 /// 1. textContainer.size.height 不能用 greatestFiniteMagnitude / 1_000_000：
@@ -1479,25 +1782,56 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
 ///    + 大文本一次性排版 → 卡死闪退。必须用「按内容估算的有限高度」。
 /// 2. 不能在每次 layoutSubviews 无条件重设 textContainer.size：写它会再次触发布局，
 ///    形成循环，contentOffset 每帧被拉回 → 表现为滚不动。只在尺寸 / 内容变化时应用一次。
+/// 预览行号列：覆盖在富文本之上，横向滚动时钉在可视左缘
+private final class PreviewGutterView: UIView {
+    weak var owner: WrapModeTextView?
+    override func draw(_ rect: CGRect) { owner?.drawPreviewLineNumbers(in: rect) }
+}
+
 final class WrapModeTextView: UITextView {
-    var wrapText: Bool = true {
+    var wrapText: Bool = false {
         didSet {
             guard oldValue != wrapText else { return }
             invalidateWrapMetrics()
         }
     }
+    /// 预览也显示行号（与编辑态一致）
+    var showLineNumbers = true {
+        didSet {
+            gutter.isHidden = !showLineNumbers
+            invalidateWrapMetrics()
+        }
+    }
 
-    private var cachedLength: Int = -1
-    private var cachedWidth: CGFloat = 0
-    private var cachedLines: Int = 1
+    private let gutter = PreviewGutterView()
+    private static let numberFont = UIFont.monospacedDigitSystemFont(ofSize: 10.5, weight: .regular)
+    private var cachedStarts: [Int] = []
+    private var startsLen = -1
+    /// 行号按「视觉行片段」顺序编号，缓存 (文档 y, 行号)。富文本里一个逻辑行
+    /// 可能对应多个片段、多个空段落又共享一个片段，按逻辑行映射必然挤在一起。
+    private var lineMarks: [(y: CGFloat, height: CGFloat, number: Int)] = []
+    private var marksLen = -1
     private var needsApply = true
     private var lastBoundsSize: CGSize = .zero
+    private var lastGutterX: CGFloat = -1
+
+    override init(frame: CGRect, textContainer: NSTextContainer?) {
+        super.init(frame: frame, textContainer: textContainer)
+        gutter.backgroundColor = .white
+        gutter.isUserInteractionEnabled = false
+        gutter.owner = self
+        addSubview(gutter)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     /// 换文本 / 换字体 / 切模式后调用，触发一次重新布局
     func invalidateWrapMetrics() {
-        cachedLength = -1
+        startsLen = -1
+        cachedStarts = []
+        marksLen = -1
         needsApply = true
         setNeedsLayout()
+        gutter.setNeedsDisplay()
     }
 
     override func layoutSubviews() {
@@ -1506,68 +1840,133 @@ final class WrapModeTextView: UITextView {
         let boundsChanged = abs(s.width - lastBoundsSize.width) > 0.5
                          || abs(s.height - lastBoundsSize.height) > 0.5
         if boundsChanged { lastBoundsSize = s }
-        guard boundsChanged || needsApply else { return }
-        needsApply = false
-        applyWrapMode()
+        if boundsChanged || needsApply {
+            needsApply = false
+            applyWrapMode()
+        }
+        syncGutter()
+    }
+
+    /// 行号列钉在可视左缘，随横向滚动平移；仅位置真的变了才重绘
+    private func syncGutter() {
+        guard showLineNumbers else { return }
+        let gw = gutterWidth()
+        let h = max(bounds.height, contentSize.height)
+        let x = contentOffset.x
+        if abs(x - lastGutterX) > 0.5
+            || abs(gutter.frame.width - gw) > 0.5
+            || abs(gutter.frame.height - h) > 0.5 {
+            lastGutterX = x
+            gutter.frame = CGRect(x: x, y: 0, width: gw, height: h)
+            gutter.setNeedsDisplay()
+        }
+    }
+
+    private func lineStarts() -> [Int] {
+        if !cachedStarts.isEmpty, startsLen == textStorage.length { return cachedStarts }
+        var st: [Int] = [0]
+        for (i, c) in textStorage.string.utf16.enumerated() where c == 10 { st.append(i + 1) }
+        cachedStarts = st
+        startsLen = textStorage.length
+        return st
+    }
+
+    private func gutterWidth() -> CGFloat {
+        let digits = max(2, String(lineStarts().count).count)
+        let cw = ("8" as NSString).size(withAttributes: [.font: Self.numberFont]).width
+        return CGFloat(digits) * cw + 16
+    }
+
+    /// 在 gutter 覆盖层上画行号（文档坐标 y，随内容滚动）。
+    /// 行号在 rebuildLineMarks 里按视觉行片段编号，这里只画可见窗口内的。
+    func drawPreviewLineNumbers(in rect: CGRect) {
+        guard showLineNumbers else { return }
+        if marksLen != textStorage.length || lineMarks.isEmpty { rebuildLineMarks() }
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: Self.numberFont,
+            .foregroundColor: UIColor.tertiaryLabel
+        ]
+        let visibleMinY = contentOffset.y
+        let visibleMaxY = contentOffset.y + bounds.height
+        let right = gutter.bounds.width - 6
+        for mark in lineMarks where mark.y >= visibleMinY - 2 && mark.y <= visibleMaxY + 2 {
+            let s = String(mark.number)
+            let sz = (s as NSString).size(withAttributes: attrs)
+            let y = mark.y + max(0, (mark.height - sz.height) / 2)
+            (s as NSString).draw(at: CGPoint(x: right - sz.width, y: y),
+                                 withAttributes: attrs)
+        }
+    }
+
+    /// 按 layoutManager 排出的「视觉行片段」顺序编号：每个片段恰好一个号，
+    /// 从 1 连续递增。y 用 caretRect(for:) 取 UITextView 内容坐标系的真实位置——
+    /// 富文本里 NSTextBlock（代码卡片）段落的 lineFragmentRect 是卡片内相对坐标，
+    /// 直接用会把卡片内所有行号挤到卡片顶部；caretRect 由 TextKit 换算好偏移，天然正确。
+    private func rebuildLineMarks() {
+        marksLen = textStorage.length
+        lineMarks = []
+        let lm = layoutManager
+        guard lm.numberOfGlyphs > 0 else { return }
+        let full = lm.glyphRange(for: textContainer)
+        let maxLoc = textStorage.length
+        lm.enumerateLineFragments(forGlyphRange: full) { _, _, _, gr, _ in
+            let charLoc = min(lm.characterRange(forGlyphRange: gr, actualGlyphRange: nil).location,
+                              maxLoc)
+            guard let pos = self.position(from: self.beginningOfDocument, offset: charLoc) else { return }
+            let caret = self.caretRect(for: pos)
+            self.lineMarks.append((y: caret.minY, height: max(caret.height, 12),
+                                   number: self.lineMarks.count + 1))
+        }
     }
 
     private func applyWrapMode() {
-        let inset = textContainerInset
+        // 左侧给行号留出固定宽度，正文从行号列右侧开始
+        var inset = textContainerInset
+        let desiredLeft: CGFloat = showLineNumbers ? gutterWidth() + 10 : 14
+        if abs(inset.left - desiredLeft) > 0.5 {
+            inset.left = desiredLeft
+            textContainerInset = inset
+        }
+        textContainer.lineBreakMode = wrapText ? .byWordWrapping : .byClipping
+
+        let lm = layoutManager
+        let tc = textContainer
         let visibleW = max(bounds.width - inset.left - inset.right, 1)
-        let m = measure()
+        // 第一段：超宽容器排出全部内容，量最长行宽（定横向 contentSize）
+        tc.size = CGSize(width: 1_000_000, height: 1_000_000)
+        lm.ensureLayout(for: tc)
+        let wideUsed = lm.usedRect(for: tc)
+
         let width: CGFloat
-        let mode: NSLineBreakMode
         if wrapText {
             width = visibleW
-            mode = .byWordWrapping
         } else {
-            width = max(visibleW, m.width)
-            mode = .byClipping
+            // 真实最长行 + 左右 inset，保证长行完整排下、可横向滚动
+            width = max(visibleW, ceil(wideUsed.width) + inset.left + inset.right + 8)
         }
-        // 有限高度：按行数估算并留足余量，保证 NSLayoutManager 不会截断排版。
-        let lineHeight = max(font?.lineHeight ?? 16, 12)
-        let factor: CGFloat = wrapText ? 3.0 : 1.15
-        let est = CGFloat(m.lines) * lineHeight * factor
-                + inset.top + inset.bottom + 200
-        let height = min(max(est, bounds.height, 600), 500_000)
-        let target = CGSize(width: width, height: height)
+        let targetW = min(width, 100_000)
+        let contentW = max(targetW - inset.left - inset.right, 1)
 
-        if textContainer.lineBreakMode != mode { textContainer.lineBreakMode = mode }
-        if textContainer.size != target { textContainer.size = target }
+        // 第二段：用真实宽度重新排版、量真实高度。代码卡片（NSTextBlock）在真实
+        // 宽度下比超宽容器更高，直接用第一段的高度会把底部截断 → 滚不到未显示区域。
+        tc.size = CGSize(width: contentW, height: 1_000_000)
+        lm.ensureLayout(for: tc)
+        let used = lm.usedRect(for: tc)
+
+        tc.size = CGSize(width: contentW,
+                         height: min(max(ceil(used.height) + inset.top + inset.bottom + 40,
+                                         bounds.height), 500_000))
         isScrollEnabled = true
         alwaysBounceHorizontal = !wrapText
         alwaysBounceVertical = true
         showsHorizontalScrollIndicator = !wrapText
         showsVerticalScrollIndicator = true
 
-        // 显式 contentSize，不依赖 UIKit 对容器高度的推算，保证可滚动
-        let cs = CGSize(width: width + inset.left + inset.right,
-                        height: max(height, bounds.height))
-        if contentSize != cs { contentSize = cs }
-    }
-
-    /// 一次扫描得到最长行宽度与行数，按 textStorage.length 缓存
-    private func measure() -> (width: CGFloat, lines: Int) {
-        let len = textStorage.length
-        if cachedLength == len, cachedWidth > 0 { return (cachedWidth, cachedLines) }
-        let f = font ?? UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-        let charW = max(("M" as NSString).size(withAttributes: [.font: f]).width, 1)
-        var maxChars = 0, cur = 0, lines = 1
-        for scalar in textStorage.string.unicodeScalars {
-            if scalar.value == 10 || scalar.value == 13 {
-                if cur > maxChars { maxChars = cur }
-                cur = 0
-                lines += 1
-            } else {
-                cur += 1
-            }
-        }
-        if cur > maxChars { maxChars = cur }
-        let w = min(CGFloat(maxChars) * charW + 28, 120_000)
-        cachedLength = len
-        cachedWidth = w
-        cachedLines = lines
-        return (w, lines)
+        // contentSize 交给 UITextView 按最终容器算，不手工写死，避免截断
+        contentSize = CGSize(width: contentW + inset.left + inset.right,
+                             height: tc.size.height + inset.top + inset.bottom)
+        rebuildLineMarks()
+        gutter.setNeedsDisplay()
     }
 }
 

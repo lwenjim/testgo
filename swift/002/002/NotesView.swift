@@ -470,8 +470,7 @@ struct NoteEditor: View {
     /// 编辑态缩放（双指捏合调整字号）
     @State private var editorScale: CGFloat = 1
     @State private var editorPinchStart: CGFloat?
-    /// 换行开关：默认不换行（长行保持单行、可横向滚动查看）；用户切换后跨笔记 / 重启记忆
-    @AppStorage("notes.wrapLines") private var wrapText = false
+    /// 笔记编辑 / 预览统一不换行：长行保持单行，靠横向滚动查看。
     @StateObject private var editor = NoteEditorController()
 
     init(model: NotesModel, target: NoteTarget) {
@@ -490,22 +489,6 @@ struct NoteEditor: View {
                     .font(.system(size: 16))
                     .buttonStyle(.plain)
                 Spacer(minLength: 0)
-                // 换行开关：默认「不换行」，点按切换；预览 / 编辑同一份状态
-                Button {
-                    wrapText.toggle()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "text.justify")
-                            .font(.system(size: 14, weight: .medium))
-                        Text(wrapText ? "换行" : "不换行")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundStyle(wrapText ? Color.orange : Color.secondary)
-                    .frame(height: 32)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(wrapText ? "自动换行已开启，点按关闭" : "自动换行已关闭，点按开启")
                 Button {
                     togglePreview()
                 } label: {
@@ -538,8 +521,7 @@ struct NoteEditor: View {
                                         if previewScale != 1 {
                                             withAnimation(.easeInOut(duration: 0.15)) { previewScale = 1 }
                                         }
-                                    },
-                                    wrapText: wrapText)
+                                    })
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.white)
                         .transition(.opacity)
@@ -567,8 +549,7 @@ struct NoteEditor: View {
         ZStack(alignment: .topLeading) {
             NoteMarkdownTextView(text: $text, controller: editor,
                                  zoomScale: editorScale,
-                                 autoFocus: target.isNew,
-                                 wrapText: wrapText)
+                                 autoFocus: target.isNew)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             if text.isEmpty {
                 Text("写点什么…\n支持 **粗体**、- 列表、- [ ] 待办、> 引用、``` 代码块")

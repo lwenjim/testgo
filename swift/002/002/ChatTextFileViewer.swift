@@ -25,6 +25,7 @@ struct ChatTextFileView: UIViewRepresentable {
         tv.textContainerInset = UIEdgeInsets(top: 12, left: 14, bottom: 24, right: 14)
         tv.alwaysBounceVertical = true
         tv.showsVerticalScrollIndicator = true
+        tv.showLineNumbers = false   // 聊天附件查看不需要行号（与笔记预览共用此类）
         tv.wrapText = wrapText
         tv.font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         tv.text = text

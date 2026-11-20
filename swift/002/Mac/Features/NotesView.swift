@@ -661,7 +661,8 @@ struct NotesView: View {
                                     },
                                     onVisibleAnchor: { a in
                                         if previewAnchor != a { previewAnchor = a }
-                                    })
+                                    },
+                                    panMode: panMode)
                         // 触控板捏合缩放（也可用工具条 ± 或 ⌘=/⌘-/⌘0）
                         .gesture(
                             MagnificationGesture()
@@ -744,7 +745,7 @@ struct NotesView: View {
     private var settingsMenu: some View {
         Menu {
             Toggle("显示状态栏", isOn: $showStatusBar)
-            Toggle("右键拖动平移（抓手）", isOn: $panMode)
+            Toggle("右键拖动平移（编辑 / 预览）", isOn: $panMode)
             Toggle("选择笔记后自动隐藏侧栏", isOn: $autoHideSidebar)
             Divider()
             Toggle("笔记映射为外部文件", isOn: Binding(

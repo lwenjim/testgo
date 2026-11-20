@@ -188,7 +188,7 @@ struct NoteMarkdownTextView: UIViewRepresentable {
     var zoomScale: CGFloat = 1
     /// 新建笔记时自动弹出键盘
     var autoFocus: Bool = false
-    /// false = 不换行（默认），true = 自动换行；与预览共用同一个开关
+    /// false = 不换行（默认）；笔记固定不换行，这里保留参数供其他场景复用
     var wrapText: Bool = false
 
     /// 缩放后的实际字号（钳制范围）
@@ -197,6 +197,21 @@ struct NoteMarkdownTextView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    /// 笔记统一不换行：段落样式默认是 byWordWrapping，会盖掉 textContainer.lineBreakMode
+    private static func noWrapParagraph() -> NSMutableParagraphStyle {
+        let p = NSMutableParagraphStyle()
+        p.lineSpacing = 5
+        p.lineBreakMode = .byClipping
+        return p
+    }
+
+    /// 给整段纯文本套上不换行段落样式（普通 UITextView 没有段落样式时会按默认折行）
+    private static func applyNoWrapStyle(to tv: UITextView) {
+        let full = NSRange(location: 0, length: tv.textStorage.length)
+        guard full.length > 0 else { return }
+        tv.textStorage.addAttribute(.paragraphStyle, value: noWrapParagraph(), range: full)
+    }
 
     func makeUIView(context: Context) -> UITextView {
         let tv = EditorTextView()
@@ -212,15 +227,13 @@ struct NoteMarkdownTextView: UIViewRepresentable {
         tv.smartQuotesType = .no
         tv.smartDashesType = .no
         tv.smartInsertDeleteType = .no
-        tv.text = text
-        tv.invalidateMetrics()
-
-        let para = NSMutableParagraphStyle()
-        para.lineSpacing = 5
         tv.typingAttributes = [.font: UIFont.systemFont(ofSize: effectiveFontSize),
                                .foregroundColor: UIColor.label,
-                               .paragraphStyle: para]
+                               .paragraphStyle: Self.noWrapParagraph()]
         tv.font = UIFont.systemFont(ofSize: effectiveFontSize)
+        tv.text = text
+        Self.applyNoWrapStyle(to: tv)
+        tv.invalidateMetrics()
         controller.textView = tv
         if autoFocus {
             DispatchQueue.main.async { tv.becomeFirstResponder() }
@@ -239,14 +252,14 @@ struct NoteMarkdownTextView: UIViewRepresentable {
             let max = (text as NSString).length
             let loc = min(tv.selectedRange.location, max)
             tv.text = text
+            Self.applyNoWrapStyle(to: tv)
             tv.selectedRange = NSRange(location: loc, length: 0)
             (tv as? EditorTextView)?.invalidateMetrics()
         }
         // 缩放变化：整体重设字号（保留光标）
         if context.coordinator.lastZoom != zoomScale {
             context.coordinator.lastZoom = zoomScale
-            let para = NSMutableParagraphStyle()
-            para.lineSpacing = 5
+            let para = Self.noWrapParagraph()
             let font = UIFont.systemFont(ofSize: effectiveFontSize)
             tv.typingAttributes = [.font: font, .foregroundColor: UIColor.label,
                                    .paragraphStyle: para]
@@ -270,6 +283,13 @@ struct NoteMarkdownTextView: UIViewRepresentable {
 
         func textViewDidChange(_ textView: UITextView) {
             if parent.text != textView.text { parent.text = textView.text }
+            // 打字时立即标记重算行号 / 最长行，避免每帧 layout 全量扫描
+            (textView as? EditorTextView)?.invalidateMetrics()
+        }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            // 行号列钉在可视左缘：滚动时跟着 contentOffset 走并只重绘可见区
+            (scrollView as? EditorTextView)?.syncGutter()
         }
 
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange,
@@ -444,12 +464,17 @@ final class EditorTextView: UITextView {
     private var longestCache: CGFloat = 0
     private var startsCache: [Int] = []
     private var startsLen = -1
+    /// 只在内容 / bounds 变化时重排，避免每一帧 layoutSubviews 都全量算文本
+    private var lastBoundsSize: CGSize = .zero
+    private var needsMetrics = true
+    private var lastGutterX: CGFloat = 0
 
     private static let numberFont = UIFont.monospacedDigitSystemFont(ofSize: 10.5, weight: .regular)
 
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
         gutter.backgroundColor = .white
+        gutter.isUserInteractionEnabled = false   // 不拦截文本视图的滚动 / 点按手势
         gutter.editor = self
         addSubview(gutter)
         showsVerticalScrollIndicator = true
@@ -461,19 +486,39 @@ final class EditorTextView: UITextView {
     func invalidateMetrics() {
         lastLen = -1
         startsLen = -1
+        needsMetrics = true
         setNeedsLayout()
+        gutter.setNeedsDisplay()
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        applyMetrics()
-        // 行号列钉在可视左缘：横滚时随 contentOffset 平移（视觉固定），
-        // 并以不透明背景盖住滑入 gutter 区域的长行文本
-        let gw = showLineNumbers ? gutterWidth() : 0
-        gutter.frame = CGRect(x: contentOffset.x, y: 0,
-                              width: gw,
-                              height: max(bounds.height, contentSize.height))
-        if showLineNumbers { gutter.setNeedsDisplay() }
+        let b = bounds.size
+        if abs(b.width - lastBoundsSize.width) > 0.5
+            || abs(b.height - lastBoundsSize.height) > 0.5 {
+            lastBoundsSize = b
+            needsMetrics = true
+        }
+        if needsMetrics {
+            needsMetrics = false
+            applyMetrics()
+        }
+        syncGutter()
+    }
+
+    /// 行号列钉在可视左缘并跟着横向滚动；只有位置真的变了才触发重绘
+    func syncGutter() {
+        guard showLineNumbers else { return }
+        let gw = gutterWidth()
+        let h = max(bounds.height, contentSize.height)
+        let x = contentOffset.x
+        if abs(x - lastGutterX) > 0.5
+            || abs(gutter.frame.width - gw) > 0.5
+            || abs(gutter.frame.height - h) > 0.5 {
+            lastGutterX = x
+            gutter.frame = CGRect(x: x, y: 0, width: gw, height: h)
+            gutter.setNeedsDisplay()
+        }
     }
 
     /// 逻辑行起始的 UTF16 偏移（含缓存，滚动重绘不重复扫描）
@@ -496,10 +541,17 @@ final class EditorTextView: UITextView {
         return CGFloat(digits) * cw + 16
     }
 
+    /// 只量「字符数最多的那一行」：原来对全文做 1e6 宽度 boundingRect，
+    /// 每敲一个字都触发整套 TextKit 排版，长笔记会明显卡顿。
     private func measureLongestLine() -> CGFloat {
         guard textStorage.length > 0 else { return 0 }
         let f = font ?? UIFont.systemFont(ofSize: 17)
-        let rect = (textStorage.string as NSString).boundingRect(
+        var longest = ""
+        (textStorage.string as NSString).enumerateLines { line, _ in
+            if line.utf16.count > longest.utf16.count { longest = line }
+        }
+        guard !longest.isEmpty else { return 0 }
+        let rect = (longest as NSString).boundingRect(
             with: CGSize(width: 1_000_000, height: 1_000_000),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             attributes: [.font: f], context: nil)
@@ -541,7 +593,7 @@ final class EditorTextView: UITextView {
         }
 
         // 有限估算高度：必须 ≥ 实际排版高度（否则底部截断成「空白」），又不能过大。
-        // 换行模式按「总字符数 / 每行字符数」估折行量，避免超长行截断。
+        // 实际行高 = lineHeight + lineSpacing(5)；按行数精确计算并留余量。
         let f = font ?? UIFont.systemFont(ofSize: 17)
         let lineHeight = max(f.lineHeight, 12)
         let charW = max(("M" as NSString).size(withAttributes: [.font: f]).width, 1)
@@ -550,7 +602,7 @@ final class EditorTextView: UITextView {
         let estLines = wrapText
             ? textStorage.length / perLine + lines + 50
             : lines + 20
-        let height = min(max(CGFloat(estLines) * lineHeight * 1.3 + 300,
+        let height = min(max(CGFloat(estLines) * (lineHeight + 5) * 1.05 + 300,
                              bounds.height, 600), 500_000)
         let target = CGSize(width: width, height: height)
         if abs(textContainer.size.width - target.width) > 0.5
@@ -569,9 +621,14 @@ final class EditorTextView: UITextView {
             .foregroundColor: UIColor.tertiaryLabel
         ]
         let starts = lineStarts()
-        // 只画与脏区（可视区域）相交的行；y 转回 container 坐标
-        let visible = CGRect(x: 0, y: rect.minY - inset.top,
-                             width: tc.size.width, height: rect.height)
+        // gutter 覆盖层是「整篇文档高度」，setNeedsDisplay 可能把整块都标脏。
+        // 必须裁到当前可视窗口，否则每敲一个字就枚举全文所有行片段 → 越写越卡。
+        let visibleMinY = max(rect.minY, contentOffset.y)
+        let visibleMaxY = min(rect.maxY, contentOffset.y + bounds.height)
+        guard visibleMaxY > visibleMinY else { return }
+        let visibleW = max(bounds.width - inset.left - inset.right, 1)
+        let visible = CGRect(x: 0, y: visibleMinY - inset.top,
+                             width: visibleW, height: visibleMaxY - visibleMinY)
         let glyphRange = lm.glyphRange(forBoundingRect: visible, in: tc)
         var lastLine = -1
         lm.enumerateLineFragments(forGlyphRange: glyphRange) { fragRect, _, _, gr, _ in
