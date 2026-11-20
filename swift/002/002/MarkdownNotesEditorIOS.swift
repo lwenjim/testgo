@@ -248,6 +248,11 @@ struct NoteMarkdownTextView: UIViewRepresentable {
         Self.applyParagraphStyle(wrapText, to: tv)
         tv.invalidateMetrics()
         controller.textView = tv
+        // 打开笔记一律从文档左上角开始：避免带着上次的横向偏移进来，
+        // 显示成「行首被切掉一截」。（横向滚动仍是原生自由滚动）
+        DispatchQueue.main.async {
+            tv.setContentOffset(.zero, animated: false)
+        }
         if autoFocus {
             DispatchQueue.main.async { tv.becomeFirstResponder() }
         }
@@ -302,6 +307,9 @@ struct NoteMarkdownTextView: UIViewRepresentable {
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            if let et = scrollView as? EditorTextView {
+                noteDiag("ESC off=\(et.contentOffset) cs=\(et.contentSize) tc=\(et.textContainer.size) bd=\(et.bounds.size) fr=\(et.frame.size)")
+            }
             // 行号列钉在可视左缘：滚动时跟着 contentOffset 走并只重绘可见区
             (scrollView as? EditorTextView)?.syncGutter()
         }
@@ -495,7 +503,6 @@ final class EditorTextView: UITextView {
     /// 只在内容 / bounds 变化时重排，避免每一帧 layoutSubviews 都全量算文本
     private var lastBoundsSize: CGSize = .zero
     private var needsMetrics = true
-    private var lastGutterX: CGFloat = 0
     /// applyMetrics 算出的正确 contentSize。iOS 26.3 上系统会把 contentSize
     /// 重新算成 bounds 宽度（长行横向滚不动），存住期望值随时纠偏。
     private var expectedContentSize: CGSize?
@@ -578,16 +585,17 @@ final class EditorTextView: UITextView {
     /// 行号列钉在可视左缘并跟着横向滚动；只有位置真的变了才触发重绘
     func syncGutter() {
         guard showLineNumbers else { return }
+        // 行号列做成「可视窗口大小」的浮层，钉在屏幕左上角：只画可见行，
+        // 滚到哪都有号（原来铺满全文高度，滚出首次绘制区就一片空白）。
         let gw = gutterWidth()
-        let h = max(bounds.height, contentSize.height)
-        let x = contentOffset.x
-        if abs(x - lastGutterX) > 0.5
-            || abs(gutter.frame.width - gw) > 0.5
-            || abs(gutter.frame.height - h) > 0.5 {
-            lastGutterX = x
-            gutter.frame = CGRect(x: x, y: 0, width: gw, height: h)
-            gutter.setNeedsDisplay()
-        }
+        let target = CGRect(x: contentOffset.x, y: contentOffset.y,
+                            width: gw, height: bounds.height)
+        let moved = abs(gutter.frame.minX - target.minX) > 0.5
+            || abs(gutter.frame.minY - target.minY) > 0.5
+            || abs(gutter.frame.width - target.width) > 0.5
+            || abs(gutter.frame.height - target.height) > 0.5
+        if moved { gutter.frame = target }
+        gutter.setNeedsDisplay()
     }
 
     /// 逻辑行起始的 UTF16 偏移（含缓存，滚动重绘不重复扫描）
@@ -681,6 +689,11 @@ final class EditorTextView: UITextView {
         if abs(textContainer.size.width - target.width) > 0.5
             || abs(textContainer.size.height - target.height) > 0.5 {
             textContainer.size = target
+            // 容器改宽后必须让布局管理器重排：否则文字仍按旧宽度（屏宽）排好并被裁掉，
+            // 表现为「横向滚动时内容被截断、右边一片空白」。
+            let full = NSRange(location: 0, length: textStorage.length)
+            layoutManager.invalidateLayout(forCharacterRange: full, actualCharacterRange: nil)
+            layoutManager.ensureLayout(for: textContainer)
         }
         // iOS 26.3 系统自算 contentSize 会错成 bounds 宽度（长行滚不动），
         // 手工按容器 + inset 写入并记下期望值供 layoutSubviews 纠偏；
@@ -692,6 +705,9 @@ final class EditorTextView: UITextView {
             contentSize = wantContentSize
         }
         expectedContentSize = wantContentSize
+        #if os(iOS)
+        noteDiag("EDITM bounds=\(bounds.size) tc=\(textContainer.size) used=\(layoutManager.usedRect(for: textContainer).size) cs=\(contentSize) widest=\(widest) off=\(contentOffset)")
+        #endif
         let maxX = max(0, contentSize.width - bounds.width)
         if contentOffset.x > maxX + 0.5 { contentOffset.x = maxX }
         #if os(iOS)
@@ -709,14 +725,14 @@ final class EditorTextView: UITextView {
             .foregroundColor: UIColor.tertiaryLabel
         ]
         let starts = lineStarts()
-        // gutter 覆盖层是「整篇文档高度」，setNeedsDisplay 可能把整块都标脏。
-        // 必须裁到当前可视窗口，否则每敲一个字就枚举全文所有行片段 → 越写越卡。
-        let visibleMinY = max(rect.minY, contentOffset.y)
-        let visibleMaxY = min(rect.maxY, contentOffset.y + bounds.height)
-        guard visibleMaxY > visibleMinY else { return }
+        // 行号层已钉在可视窗口（frame.origin = contentOffset），绘制坐标是屏幕坐标，
+        // 需要把内容的 y 换算过来：屏幕 y = 内容 y - contentOffset.y。
+        let topInContent = rect.minY + contentOffset.y
+        let bottomInContent = rect.maxY + contentOffset.y
+        guard bottomInContent > topInContent else { return }
         let visibleW = max(bounds.width - inset.left - inset.right, 1)
-        let visible = CGRect(x: 0, y: visibleMinY - inset.top,
-                             width: visibleW, height: visibleMaxY - visibleMinY)
+        let visible = CGRect(x: 0, y: topInContent - inset.top,
+                             width: visibleW, height: bottomInContent - topInContent)
         let glyphRange = lm.glyphRange(forBoundingRect: visible, in: tc)
         var lastLine = -1
         lm.enumerateLineFragments(forGlyphRange: glyphRange) { fragRect, _, _, gr, _ in
@@ -731,7 +747,8 @@ final class EditorTextView: UITextView {
                 lastLine = n
                 let s = String(n)
                 let sz = (s as NSString).size(withAttributes: attrs)
-                let y = fragRect.minY + inset.top + (fragRect.height - sz.height) / 2
+                let y = fragRect.minY + inset.top - self.contentOffset.y
+                      + (fragRect.height - sz.height) / 2
                 (s as NSString).draw(at: CGPoint(x: self.gutter.bounds.width - sz.width - 6,
                                                  y: y),
                                      withAttributes: attrs)

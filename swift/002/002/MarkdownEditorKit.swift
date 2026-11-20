@@ -2039,7 +2039,6 @@ final class WrapModeTextView: UITextView {
     private var marksLen = -1
     private var needsApply = true
     private var lastBoundsSize: CGSize = .zero
-    private var lastGutterX: CGFloat = -1
     /// applyWrapMode 算出的正确 contentSize。iOS 26.3 上 UITextView 会被系统
     /// 重新算成 bounds 宽度（长行文档横向滚不动），这里存住期望值随时纠偏。
     private var expectedContentSize: CGSize?
@@ -2061,6 +2060,8 @@ final class WrapModeTextView: UITextView {
         gutter.isUserInteractionEnabled = false
         gutter.owner = self
         addSubview(gutter)
+        showsVerticalScrollIndicator = true
+        showsHorizontalScrollIndicator = true
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
@@ -2114,16 +2115,17 @@ final class WrapModeTextView: UITextView {
     /// 行号列钉在可视左缘，随横向滚动平移；仅位置真的变了才重绘
     private func syncGutter() {
         guard showLineNumbers else { return }
+        // 行号列钉在可视窗口（屏幕左上角），只画可见行：滚到哪都有号
         let gw = gutterWidth()
-        let h = max(bounds.height, contentSize.height)
-        let x = contentOffset.x
-        if abs(x - lastGutterX) > 0.5
-            || abs(gutter.frame.width - gw) > 0.5
-            || abs(gutter.frame.height - h) > 0.5 {
-            lastGutterX = x
-            gutter.frame = CGRect(x: x, y: 0, width: gw, height: h)
-            gutter.setNeedsDisplay()
+        let target = CGRect(x: contentOffset.x, y: contentOffset.y,
+                            width: gw, height: bounds.height)
+        if abs(gutter.frame.minX - target.minX) > 0.5
+            || abs(gutter.frame.minY - target.minY) > 0.5
+            || abs(gutter.frame.width - target.width) > 0.5
+            || abs(gutter.frame.height - target.height) > 0.5 {
+            gutter.frame = target
         }
+        gutter.setNeedsDisplay()
     }
 
     private func lineStarts() -> [Int] {
@@ -2150,13 +2152,14 @@ final class WrapModeTextView: UITextView {
             .font: Self.numberFont,
             .foregroundColor: UIColor.tertiaryLabel
         ]
-        let visibleMinY = contentOffset.y
-        let visibleMaxY = contentOffset.y + bounds.height
+        // rect 是行号层（已钉在可视窗口）的坐标，需换算成内容坐标筛行
+        let visibleMinY = rect.minY + contentOffset.y
+        let visibleMaxY = rect.maxY + contentOffset.y
         let right = gutter.bounds.width - 6
         for mark in lineMarks where mark.y >= visibleMinY - 2 && mark.y <= visibleMaxY + 2 {
             let s = String(mark.number)
             let sz = (s as NSString).size(withAttributes: attrs)
-            let y = mark.y + max(0, (mark.height - sz.height) / 2)
+            let y = mark.y - contentOffset.y + max(0, (mark.height - sz.height) / 2)
             (s as NSString).draw(at: CGPoint(x: right - sz.width, y: y),
                                  withAttributes: attrs)
         }
@@ -2296,6 +2299,10 @@ private struct MarkdownReadOnlyText: UIViewRepresentable {
         tv.wrapText = wrapText
         tv.attributedText = attributed
         tv.invalidateWrapMetrics()
+        // 打开笔记从左上角开始，避免带着上次横向偏移显示成「行首被切掉」
+        DispatchQueue.main.async {
+            tv.setContentOffset(.zero, animated: false)
+        }
         context.coordinator.lastVersion = version
 
         // 内置点按手势：UITextView 会吞掉 SwiftUI 层的 onTapGesture，必须挂在它自己身上
