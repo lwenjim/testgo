@@ -1774,6 +1774,17 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
 
 #else
 
+#if os(iOS)
+/// 临时诊断：把布局关键信息追加到 Application Support/diag.txt，供从真机取回分析。
+internal func noteDiag(_ msg: String) {
+    guard let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return }
+    let f = dir.appendingPathComponent("diag.txt")
+    let line = "\(Date().timeIntervalSince1970) \(msg)\n"
+    let old = (try? String(contentsOf: f, encoding: .utf8)) ?? ""
+    try? (old + line).write(to: f, atomically: true, encoding: .utf8)
+}
+#endif
+
 /// 可切换「自动换行 / 不换行横向滚动」的 UITextView（笔记固定用不换行）。
 ///
 /// 两个坑（都踩过）：
@@ -1816,7 +1827,12 @@ final class WrapModeTextView: UITextView {
     private var lastGutterX: CGFloat = -1
 
     override init(frame: CGRect, textContainer: NSTextContainer?) {
-        super.init(frame: frame, textContainer: textContainer)
+        // 自建容器并在创建时关闭跟踪：自动容器 tracks=true 会跟随视图 bounds，
+        // 使两段排版量不到全部内容高度（后半篇截断）、长行无法横向滚动。
+        let own = NSTextContainer(size: CGSize(width: 1_000_000, height: 1_000_000))
+        own.widthTracksTextView = false
+        own.heightTracksTextView = false
+        super.init(frame: frame, textContainer: own)
         gutter.backgroundColor = .white
         gutter.isUserInteractionEnabled = false
         gutter.owner = self
@@ -1908,14 +1924,14 @@ final class WrapModeTextView: UITextView {
         let lm = layoutManager
         guard lm.numberOfGlyphs > 0 else { return }
         let full = lm.glyphRange(for: textContainer)
-        let maxLoc = textStorage.length
-        lm.enumerateLineFragments(forGlyphRange: full) { _, _, _, gr, _ in
-            let charLoc = min(lm.characterRange(forGlyphRange: gr, actualGlyphRange: nil).location,
-                              maxLoc)
-            guard let pos = self.position(from: self.beginningOfDocument, offset: charLoc) else { return }
-            let caret = self.caretRect(for: pos)
-            self.lineMarks.append((y: caret.minY, height: max(caret.height, 12),
-                                   number: self.lineMarks.count + 1))
+        let insetTop = textContainerInset.top
+        // 用 lineFragmentRect 定位：caretRect 对纯空行（仅换行符）会返回退化矩形，
+        // 高度被压到约 12、y 偏上，导致相邻行号叠在一起。fragment 矩形对空行
+        // 仍保留完整行高，坐标加上容器顶部 inset 即内容坐标系。
+        lm.enumerateLineFragments(forGlyphRange: full) { fragRect, _, _, _, _ in
+            let y = fragRect.minY + insetTop
+            let h = max(fragRect.height, 12)
+            self.lineMarks.append((y: y, height: h, number: self.lineMarks.count + 1))
         }
     }
 
@@ -1967,6 +1983,10 @@ final class WrapModeTextView: UITextView {
                              height: tc.size.height + inset.top + inset.bottom)
         rebuildLineMarks()
         gutter.setNeedsDisplay()
+        #if os(iOS)
+        let marks = lineMarks.prefix(12).map { "(\(Int($0.y)),\(Int($0.height)))" }.joined(separator: " ")
+        noteDiag("PREV bounds=\(bounds.size) contentSize=\(contentSize) tc=\(tc.size) wideH=\(wideUsed.height) usedH=\(used.height) glyphs=\(lm.numberOfGlyphs) wTrack=\(tc.widthTracksTextView) hTrack=\(tc.heightTracksTextView) marks=\(lineMarks.count) [\(marks)]")
+        #endif
     }
 }
 
