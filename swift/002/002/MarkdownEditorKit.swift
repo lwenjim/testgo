@@ -2106,16 +2106,9 @@ final class WrapModeTextView: UITextView {
         }
     }
 
-    /// 手势结束后调用：纠偏尺寸 + 小幅横向偏移回正行首（竖读误漂按归零处理）
     func settleScroll() {
+        // 手势彻底结束后只做一次尺寸纠偏；偏移完全交给原生滚动（滚到哪就是哪）
         healContentSize()
-        let x = contentOffset.x
-        if x > 0.5, x < 60, !isTracking, !isDragging, !isDecelerating {
-            UIView.animate(withDuration: 0.22, delay: 0,
-                           options: [.allowUserInteraction, .beginFromCurrentState]) {
-                self.contentOffset.x = 0
-            }
-        }
     }
 
     /// 行号列钉在可视左缘，随横向滚动平移；仅位置真的变了才重绘
