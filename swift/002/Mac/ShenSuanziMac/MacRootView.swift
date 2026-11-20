@@ -79,8 +79,8 @@ struct MacRootView: View {
         }
     }
 
-    /// 顶部标签栏是否显示：启动即隐藏，鼠标移到窗口最上沿才拉出来
-    @State private var headerShown = false
+    /// 顶部标签栏是否显示：默认隐藏，⌘⇧M 呼出 / 收起；重启后保持上次状态
+    @AppStorage("macHeaderShown") private var headerShown = false
     /// 默认自动隐藏：启动后菜单不显示，鼠标离开标签栏 0.6 秒收起
     /// （图钉按钮可在本次运行内切回常显，并记住该选择）
     @AppStorage("macHeaderPinned") private var headerPinned = false
@@ -97,6 +97,16 @@ struct MacRootView: View {
         let title = "神算子 · \(section.rawValue)  v\(BuildInfo.versionTag)"
         for w in NSApp.windows where w.isVisible && w.title.hasPrefix("神算子") {
             w.title = title
+        }
+    }
+
+    /// 窗口大小 / 位置记忆：挂 autosave name，系统自动存 UserDefaults 并在下次启动还原
+    private func setupWindowFramePersistence() {
+        DispatchQueue.main.async {
+            let w = NSApplication.shared.keyWindow
+                ?? NSApplication.shared.windows.first { $0.isVisible }
+            guard let w, w.frameAutosaveName.isEmpty else { return }
+            w.setFrameAutosaveName("ShenSuanziMainWindow")
         }
     }
 
@@ -133,19 +143,13 @@ struct MacRootView: View {
         .frame(minWidth: 900, minHeight: 760)
         // 全局白色主题：所有板块底色统一纯白
         .background(Color.white)
-        .overlay(alignment: .top) {
-            // 顶部感应条：鼠标移到窗口最上沿就把标签栏拉出来
-            Color.clear
-                .frame(height: 6)
-                .contentShape(Rectangle())
-                .onContinuousHover { phase in
-                    if phase != .ended { revealHeader() }
-                }
+        .onAppear {
+            syncWindowTitle()
+            setupWindowFramePersistence()
         }
-        .onAppear { syncWindowTitle() }
         .onChange(of: sectionRaw) { _ in syncWindowTitle() }
         .background(
-            // 快捷键宿主：必须常驻，否则标签栏收起后 ⌘1–N 会跟着按钮一起被移出视图层而失效
+            // 快捷键宿主：必须常驻，否则标签栏收起后快捷键会跟着按钮一起被移出视图层而失效
             HStack(spacing: 0) {
                 ForEach(orderedSections) { item in
                     Button { select(item) } label: { Image(systemName: item.icon) }
@@ -154,6 +158,11 @@ struct MacRootView: View {
                             modifiers: .command
                         )
                 }
+                // 顶部标签栏显隐：⌘⇧M（不再鼠标滑过自动弹出）
+                Button {
+                    if headerShown { scheduleHideHeader() } else { revealHeader() }
+                } label: { Image(systemName: "menubar.rectangle") }
+                    .keyboardShortcut("m", modifiers: [.command, .shift])
             }
             .opacity(0)
             .frame(width: 0, height: 0)
@@ -170,7 +179,7 @@ struct MacRootView: View {
 
             Spacer(minLength: 8)
 
-            Text("⌘1–\(orderedSections.count) 切换 · 拖动标签可排序")
+            Text("⌘⇧M 显隐 · ⌘1–\(orderedSections.count) 切换 · 拖动标签可排序")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.tertiary)
                 .padding(.trailing, 6)

@@ -36,19 +36,35 @@ enum MarkdownBlock {
     case divider
     case blank
 
-    static func parse(_ text: String) -> [MarkdownBlock] {
-        var blocks: [MarkdownBlock] = []
+    /// 块 + 对应源文件行范围（0 起）。代码块范围含开头/结尾围栏行。
+    struct Sourced {
+        let block: MarkdownBlock
+        let start: Int
+        let end: Int
+    }
+
+    /// 与 parse 同一套解析，额外记录每个块来自源文件哪一行。
+    /// 预览行号按源文件行号编号，靠它把渲染片段映射回行号。
+    static func parseSourced(_ text: String) -> [Sourced] {
+        var sourced: [Sourced] = []
         var codeLines: [String] = []
         var codeLanguage = ""
         var inCode = false
+        var fenceStart = 0
+        let totalLines = text.components(separatedBy: "\n").count
 
-        for raw in text.components(separatedBy: "\n") {
+        for (idx, raw) in text.components(separatedBy: "\n").enumerated() {
             let trimmed = raw.trimmingCharacters(in: .whitespaces)
+
+            func put(_ block: MarkdownBlock) {
+                sourced.append(Sourced(block: block, start: idx, end: idx))
+            }
 
             // 代码围栏：``` 或 ~~~ 开头都算
             if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
                 if inCode {
-                    blocks.append(.code(codeLanguage, codeLines.joined(separator: "\n")))
+                    sourced.append(Sourced(block: .code(codeLanguage, codeLines.joined(separator: "\n")),
+                                           start: fenceStart, end: idx))
                     codeLines.removeAll()
                     codeLanguage = ""
                     inCode = false
@@ -56,6 +72,7 @@ enum MarkdownBlock {
                     // 围栏后面跟的就是语言名：```swift / ```python
                     let fence = trimmed.drop(while: { $0 == "`" || $0 == "~" })
                     codeLanguage = fence.trimmingCharacters(in: .whitespaces)
+                    fenceStart = idx
                     inCode = true
                 }
                 continue
@@ -65,15 +82,15 @@ enum MarkdownBlock {
                 continue
             }
 
-            if trimmed.isEmpty { blocks.append(.blank); continue }
+            if trimmed.isEmpty { put(.blank); continue }
             if trimmed == "---" || trimmed == "***" || trimmed == "___" {
-                blocks.append(.divider); continue
+                put(.divider); continue
             }
 
             // 标题
             if let r = trimmed.range(of: #"^#{1,6} "#, options: .regularExpression) {
                 let level = trimmed[trimmed.startIndex..<r.upperBound].filter { $0 == "#" }.count
-                blocks.append(.heading(level, String(trimmed[r.upperBound...])))
+                put(.heading(level, String(trimmed[r.upperBound...])))
                 continue
             }
 
@@ -81,13 +98,13 @@ enum MarkdownBlock {
             if let r = trimmed.range(of: #"^[-*] \[( |x|X)\] "#, options: .regularExpression) {
                 let marker = String(trimmed[r])
                 let done = marker.contains("x") || marker.contains("X")
-                blocks.append(.todo(done, String(trimmed[r.upperBound...])))
+                put(.todo(done, String(trimmed[r.upperBound...])))
                 continue
             }
 
             // 引用
             if trimmed.hasPrefix("> ") || trimmed == ">" {
-                blocks.append(.quote(trimmed == ">" ? "" : String(trimmed.dropFirst(2))))
+                put(.quote(trimmed == ">" ? "" : String(trimmed.dropFirst(2))))
                 continue
             }
 
@@ -95,24 +112,29 @@ enum MarkdownBlock {
             if let r = trimmed.range(of: #"^\d+\. "#, options: .regularExpression) {
                 let num = String(trimmed[trimmed.startIndex..<r.upperBound])
                     .trimmingCharacters(in: .whitespaces)
-                blocks.append(.numbered(num, String(trimmed[r.upperBound...])))
+                put(.numbered(num, String(trimmed[r.upperBound...])))
                 continue
             }
 
             // 无序列表（按前导空格算层级）
             if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") || trimmed.hasPrefix("+ ") {
                 let indent = raw.prefix { $0 == " " }.count / 2
-                blocks.append(.bullet(String(trimmed.dropFirst(2)), min(indent, 3)))
+                put(.bullet(String(trimmed.dropFirst(2)), min(indent, 3)))
                 continue
             }
 
-            blocks.append(.paragraph(trimmed))
+            put(.paragraph(trimmed))
         }
 
         if inCode, !codeLines.isEmpty {
-            blocks.append(.code(codeLanguage, codeLines.joined(separator: "\n")))
+            sourced.append(Sourced(block: .code(codeLanguage, codeLines.joined(separator: "\n")),
+                                   start: fenceStart, end: totalLines - 1))
         }
-        return blocks
+        return sourced
+    }
+
+    static func parse(_ text: String) -> [MarkdownBlock] {
+        parseSourced(text).map { $0.block }
     }
 }
 
@@ -753,13 +775,102 @@ enum CodeHighlighter {
 
 enum MarkdownRender {
 
+    /// 预览行号映射：源文件行号 ↔ 该行在渲染文本里的锚点。
+    /// 普通行锚在它唯一片段的起始字符偏移；围栏行本身不产生片段，
+    /// 行号合成挂在代码卡片首行上沿（fenceOpen）/末行下沿（fenceClose）。
+    struct PreviewLineEntry {
+        enum Kind { case line, fenceOpen, fenceClose }
+        let anchorOffset: Int
+        let sourceLine: Int   // 0 起
+        let kind: Kind
+    }
+
     static func attributed(_ text: String, size: CGFloat,
                            showCodeLanguage: Bool = true) -> NSAttributedString {
-        let out = NSMutableAttributedString()
-        for block in MarkdownBlock.parse(text) {
-            out.append(line(for: block, size: size, showCodeLanguage: showCodeLanguage))
+        attributedWithLineMap(text, size: size, showCodeLanguage: showCodeLanguage).0
+    }
+
+    /// 渲染 + 行号映射一次生成。行号按源文件行编号（含空行与围栏行），
+    /// 与编辑器侧行号一致：代码块之后的行号不再漂移。
+    /// 带单槽缓存：滚动/缩放等 SwiftUI body 重求值会高频调用本方法，
+    /// 全量重解析 + 重渲染（含语法高亮）是预览滚动卡顿的主因——同输入直接返回缓存。
+    /// 仅主线程访问（SwiftUI body / NSViewRepresentable 回调都在主线程）。
+    private static var memoText = ""
+    private static var memoSize: CGFloat = 0
+    private static var memoLabel = false
+    private static var memoResult: (NSAttributedString, [PreviewLineEntry])
+        = (NSAttributedString(string: ""), [])
+    static func attributedWithLineMap(_ text: String, size: CGFloat,
+                                      showCodeLanguage: Bool = true)
+        -> (NSAttributedString, [PreviewLineEntry]) {
+        if text == memoText, size == memoSize, showCodeLanguage == memoLabel {
+            return memoResult
         }
-        return out
+        let result = renderUnmemoized(text, size: size, showCodeLanguage: showCodeLanguage)
+        memoText = text
+        memoSize = size
+        memoLabel = showCodeLanguage
+        memoResult = result
+        return result
+    }
+
+    private static func renderUnmemoized(_ text: String, size: CGFloat,
+                                         showCodeLanguage: Bool)
+        -> (NSAttributedString, [PreviewLineEntry]) {
+        let out = NSMutableAttributedString()
+        var map: [PreviewLineEntry] = []
+        for s in MarkdownBlock.parseSourced(text) {
+            switch s.block {
+            case let .code(language, code):
+                let before = out.length
+                out.append(codeBlock(language: language, code: code, size: size,
+                                     showCodeLanguage: showCodeLanguage))
+                appendCodeLineMap(&map,
+                                  chunk: out.attributedSubstring(
+                                      from: NSRange(location: before, length: out.length - before)),
+                                  chunkStart: before, openLine: s.start, closeLine: s.end,
+                                  showCodeLanguage: showCodeLanguage)
+            default:
+                map.append(PreviewLineEntry(anchorOffset: out.length,
+                                            sourceLine: s.start, kind: .line))
+                out.append(line(for: s.block, size: size, showCodeLanguage: showCodeLanguage))
+            }
+        }
+        return (out, map)
+    }
+
+    /// 代码卡片 chunk 的结构：语言标签行（可选）+ 每行代码一行，每行都以 \n 结尾。
+    /// 按顺序登记每行的源行号；两个围栏行用合成锚点。
+    private static func appendCodeLineMap(_ map: inout [PreviewLineEntry],
+                                          chunk: NSAttributedString,
+                                          chunkStart: Int,
+                                          openLine: Int, closeLine: Int,
+                                          showCodeLanguage: Bool) {
+        let comps = (chunk.string as NSString).components(separatedBy: "\n")
+        var pos = chunkStart
+        var contentIndex = 0
+        var lastAnchor = chunkStart
+        for (i, comp) in comps.enumerated() {
+            if i == comps.count - 1 { break }   // 每行都以 \n 结尾，最后一段必然是空
+            let isLabel = showCodeLanguage && i == 0
+            if isLabel {
+                // 标签行就挂在卡片顶，天然充当开头围栏的行号
+                map.append(PreviewLineEntry(anchorOffset: pos, sourceLine: openLine, kind: .line))
+            } else {
+                if contentIndex == 0, !showCodeLanguage {
+                    // 不显示语言标签时，开头围栏行号合成在卡片首行上沿
+                    map.append(PreviewLineEntry(anchorOffset: pos, sourceLine: openLine, kind: .fenceOpen))
+                }
+                lastAnchor = pos
+                contentIndex += 1
+                map.append(PreviewLineEntry(anchorOffset: pos,
+                                            sourceLine: openLine + 1 + i - (showCodeLanguage ? 1 : 0),
+                                            kind: .line))
+            }
+            pos += (comp as NSString).length + 1
+        }
+        // 结尾围栏行号合成在卡片最后一行下沿
+        map.append(PreviewLineEntry(anchorOffset: lastAnchor, sourceLine: closeLine, kind: .fenceClose))
     }
 
     private static func line(for block: MarkdownBlock, size: CGFloat,
@@ -845,9 +956,14 @@ enum MarkdownRender {
             return attr
 
         case .blank:
-            return NSMutableAttributedString(string: "\n",
-                                             attributes: [.font: MarkdownStyle.font(size * 0.55),
-                                                          .foregroundColor: MarkdownStyle.label])
+            // 空行必须和普通段落同一节奏（同字号 + 同段落样式 = 28pt 行距）：
+            // 行号列的间距才不会忽大忽小。之前 0.55/0.72 倍字号是为了紧凑，
+            // 但连续空行的行号只有 ~12px 间距，和周围 28px 反差太大。
+            let attr = NSMutableAttributedString(string: "\n",
+                                                 attributes: [.font: MarkdownStyle.font(size),
+                                                              .foregroundColor: MarkdownStyle.label])
+            attr.addParagraph(MarkdownStyle.paragraph(after: 7))
+            return attr
         }
     }
 
@@ -874,7 +990,9 @@ enum MarkdownRender {
         block.backgroundColor = CodeTheme.background
         block.setBorderColor(CodeTheme.border)
         block.setWidth(1, type: .absoluteValueType, for: .border)
-        block.setWidth(12, type: .absoluteValueType, for: .padding)
+        // 24 而不是 12：上下留白要容得下围栏行的行号（挂在卡片内沿），
+        // 行号列的节奏才能和正文（28pt）接近；左右也统一 24，代码起点更整齐
+        block.setWidth(24, type: .absoluteValueType, for: .padding)
         block.setValue(100, type: .percentageValueType, for: .width)
 
         let out = NSMutableAttributedString()
@@ -902,7 +1020,8 @@ enum MarkdownRender {
                                                 attributes: [.font: MarkdownStyle.font(size, mono: true)]))
             }
             piece.addParagraph(cardParagraph(block,
-                                             lineSpacing: 2,
+                                             // 行距放宽到和正文接近（正文 28pt 节奏），行号列间距才均匀
+                                             lineSpacing: 6,
                                              after: index == lines.count - 1 ? 0 : 0))
             out.append(piece)
         }
@@ -1167,6 +1286,9 @@ struct MarkdownPreview: View {
     var onSingleTap: (() -> Void)? = nil
     /// 双击回调（例如还原缩放）
     var onDoubleTap: (() -> Void)? = nil
+    /// 预览里直接打字 = 请求修改：回调收到按键字符，由外层切回编辑并落到对应位置
+    /// （预览是渲染后的富文本，改富文本无法可靠映射回 Markdown，所以走这个桥）
+    var onEditRequest: ((String) -> Void)? = nil
     /// 滚动比例 / 渲染后纯文本 / 可见区锚点（Mac 端用于位置记忆与预览→编辑定位）
     var onScrollFraction: ((CGFloat) -> Void)? = nil
     var onRenderedText: ((String) -> Void)? = nil
@@ -1181,12 +1303,20 @@ struct MarkdownPreview: View {
         MarkdownRender.attributed(text, size: baseSize * scale,
                                   showCodeLanguage: showCodeLanguage)
     }
+    /// Mac 预览：渲染与行号映射一次生成，保证两份完全对应
+    private var renderedWithMap: (NSAttributedString, [MarkdownRender.PreviewLineEntry]) {
+        MarkdownRender.attributedWithLineMap(text, size: baseSize * scale,
+                                             showCodeLanguage: showCodeLanguage)
+    }
     private var version: Int { Int((baseSize * scale * 10).rounded()) }
 
     var body: some View {
         #if os(macOS)
-        MarkdownReadOnlyText(
-            attributed: attributed, version: version,
+        let rendered = renderedWithMap
+        return MarkdownReadOnlyText(
+            attributed: rendered.0,
+            lineMap: rendered.1,
+            version: version,
             findRanges: findRanges, currentFindRange: currentFindRange,
             initialFraction: initialFraction,
             initialAnchor: initialAnchor, restoreKey: restoreKey,
@@ -1194,7 +1324,8 @@ struct MarkdownPreview: View {
             onScrollFraction: onScrollFraction,
             onRenderedText: onRenderedText,
             onVisibleAnchor: onVisibleAnchor,
-            onSingleTap: onSingleTap, onDoubleTap: onDoubleTap
+            onSingleTap: onSingleTap, onDoubleTap: onDoubleTap,
+            onEditRequest: onEditRequest
         )
         #else
         MarkdownReadOnlyText(
@@ -1215,10 +1346,37 @@ struct MarkdownPreview: View {
 final class TapAwareTextView: NSTextView {
     var onSingleTap: (() -> Void)?
     var onDoubleTap: (() -> Void)?
+    /// 预览里直接打字 → 请求切回编辑（字符交给外层落到对应位置）
+    var onEditRequest: ((String) -> Void)?
     /// 右键按住拖动平移预览画布；关闭时右键恢复原生上下文菜单
     var isPanMode = true
 
     private var downPoint: NSPoint = .zero
+
+    /// 预览支持直接修改：打可打印字符（含中文输入法的首击字母）就切回编辑；
+    /// ⌘/⌃/⌥ 组合键、功能键、Esc、回车/Tab 等照旧交给系统。
+    override func keyDown(with event: NSEvent) {
+        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let combo = mods.subtracting([.capsLock, .shift, .numericPad, .function])
+        if combo.isEmpty, let chars = event.characters, !chars.isEmpty,
+           chars != "\u{1b}",
+           chars.allSatisfy(Self.isTypable) {
+            onEditRequest?(chars)
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    /// 可打字的字符：排除回车 / Tab、方向键等系统功能键（U+F700–F8FF）与控制字符
+    private static func isTypable(_ c: Character) -> Bool {
+        if c.isNewline || c.isWhitespace { return false }
+        for s in c.unicodeScalars {
+            if (0xF700...0xF8FF).contains(s.value) { return false }
+            if s.properties.isDefaultIgnorableCodePoint { return false }
+        }
+        if let a = c.asciiValue { return a >= 32 && a != 127 }
+        return true   // 非 ASCII（中文、常用符号等）都算可打字
+    }
 
     // 右键抓手状态
     private var isPanning = false
@@ -1229,51 +1387,74 @@ final class TapAwareTextView: NSTextView {
     private var panVelocity: NSPoint = .zero
     private var momentumTimer: Timer?
 
-    // MARK: 预览行号（画在自身内，与编辑态同一套手感）
+    // MARK: 预览行号（独立覆盖视图，钉在可视左缘）
     var showLineNumbers = true {
         didSet {
             syncLineNumberMetrics()
+            syncLineNumberOverlay()
             needsDisplay = true
         }
     }
-    private let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+    fileprivate let numberFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
     private(set) var lineNumberWidth: CGFloat = 38
     private var lineObserver: NSObjectProtocol?
-    private var lastClipX: CGFloat = -1
-    /// 按视觉行片段编号的行号标记（文档坐标 y + 行号），富文本排版确定后重建
-    private var lineMarks: [(y: CGFloat, height: CGFloat, number: Int)] = []
+    /// 行号标记（文档坐标 y + 行高 + 源行号），富文本排版确定后重建
+    fileprivate var lineMarks: [(y: CGFloat, height: CGFloat, number: Int)] = []
     private var marksSignature = ""
+    /// 渲染偏移 ↔ 源文件行号映射（MarkdownRender 渲染时生成）
+    var previewLineMap: [MarkdownRender.PreviewLineEntry] = []
+    /// 行号覆盖层：行号不画进正文视图（巨型视图 + 增量脏矩形会留下半截数字、
+    /// 残影列这类永远擦不掉的绘制残留），而是钉在可视左缘的小视图，
+    /// 每次全量重绘自身（只有可视条带大小，代价可忽略）
+    private lazy var lineNumberOverlay = LineNumberOverlayView()
 
-    /// 排版尺寸或内容变化后重建行号：每个视觉行片段恰好一个连续行号。
-    /// y 优先用 firstRect(for:)（window 坐标，TextKit 已换算 textContainerOrigin / inset
-    /// 与 NSTextBlock 偏移）——代码卡片段落的 lineFragmentRect 是卡片内相对坐标，
-    /// 直接用会把卡片内行号挤到卡片顶部。视图尚未入窗时退回 fragment rect。
+    /// 重建行号：**按源文件行号编号**，不再按视觉片段顺序编号。
+    /// 之前按片段顺序编号有两个后果：空行片段只有 ~10px 高，连续空行的号挤在一起；
+    /// 代码围栏行不产生片段，卡片之后的行号比源文件整体漂移（错位越积越多）。
+    /// 现在 y 从片段排版坐标来（lineFragmentRect + textContainerOrigin.y，纯排版
+    /// 坐标、无窗口依赖），行号数字从 previewLineMap 来；围栏行的号合成挂在
+    /// 代码卡片首行上沿 / 末行下沿。
     func rebuildLineMarks(signature: String) {
+        defer { syncLineNumberOverlay() }
         guard let lm = layoutManager, let tc = textContainer, lm.numberOfGlyphs > 0 else {
             lineMarks = []
             marksSignature = signature
             return
         }
-        var marks: [(y: CGFloat, height: CGFloat, number: Int)] = []
-        let maxLoc = (string as NSString).length
+        // 片段起始字符偏移 → (文档 y, 行高)。usedRect 是纯文字行高（不含段后距）
+        var fragY: [Int: (y: CGFloat, h: CGFloat)] = [:]
         lm.enumerateLineFragments(forGlyphRange: lm.glyphRange(for: tc)) {
-            fragRect, _, _, gr, _ in
-            let charLoc = lm.characterRange(forGlyphRange: gr, actualGlyphRange: nil).location
-            let y: CGFloat
-            let h: CGFloat
-            if charLoc < maxLoc, let window = self.window {
-                let len = max(1, min(1, maxLoc - charLoc))
-                // firstRect 返回屏幕坐标（头文件注明），转回视图坐标使用
-                let screenRect = self.firstRect(forCharacterRange: NSRange(location: charLoc, length: len),
-                                                actualRange: nil)
-                let local = self.convert(window.convertFromScreen(screenRect), from: nil)
-                y = local.minY
-                h = max(local.height, 12)
-            } else {
-                y = fragRect.minY + self.textContainerInset.height
-                h = max(fragRect.height, 12)
+            frag, used, _, gr, _ in
+            let loc = lm.characterRange(forGlyphRange: gr, actualGlyphRange: nil).location
+            guard loc != NSNotFound else { return }
+            fragY[loc] = (frag.minY + self.textContainerOrigin.y, max(used.height, 12))
+        }
+        guard !previewLineMap.isEmpty else {
+            // 没有映射（防御）：退回按片段顺序编号
+            var marks: [(y: CGFloat, height: CGFloat, number: Int)] = []
+            lm.enumerateLineFragments(forGlyphRange: lm.glyphRange(for: tc)) {
+                frag, used, _, _, _ in
+                marks.append((frag.minY + self.textContainerOrigin.y,
+                              max(used.height, 12), marks.count + 1))
             }
-            marks.append((y: y, height: h, number: marks.count + 1))
+            lineMarks = marks
+            marksSignature = signature
+            return
+        }
+        var marks: [(y: CGFloat, height: CGFloat, number: Int)] = []
+        for e in previewLineMap {
+            guard let a = fragY[e.anchorOffset] else { continue }
+            let number = e.sourceLine + 1
+            switch e.kind {
+            case .line:
+                marks.append((a.y, a.h, number))
+            case .fenceOpen:
+                // 开头围栏行号落在卡片顶部留白带里：与上一行、首行代码各留 ~25pt 节奏
+                marks.append((max(0, a.y - 22), 12, number))
+            case .fenceClose:
+                // 结尾围栏行号落在卡片底部留白带里：与末行代码、下一行各留 ~24pt 节奏
+                marks.append((a.y + a.h + 5, 12, number))
+            }
         }
         lineMarks = marks
         marksSignature = signature
@@ -1394,11 +1575,11 @@ final class TapAwareTextView: NSTextView {
         momentumTimer = nil
     }
 
-    /// makeNSView 阶段视图还没进 window，行号重建只能走 fragment 回退（代码卡片会挤）；
-    /// 入窗后用 firstRect 重排一次
+    /// 入窗后再排一次（此时 SwiftUI 的首帧布局已就位）；行号计算已不依赖窗口，
+    /// 这里只是兜底保证最终态被重排到
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if window != nil, !lineMarks.isEmpty {
+        if window != nil {
             rebuildLineMarks(signature: marksSignature)
             needsDisplay = true
         }
@@ -1408,6 +1589,7 @@ final class TapAwareTextView: NSTextView {
 
     /// 按行数位数定行号带宽，并同步正文 inset（不要在 draw 里改，会抖动）
     func syncLineNumberMetrics() {
+        defer { syncLineNumberOverlay() }
         guard showLineNumbers else {
             if abs(lineNumberWidth) > 0.5 || abs(textContainerInset.width - 14) > 0.5 {
                 lineNumberWidth = 0
@@ -1424,64 +1606,65 @@ final class TapAwareTextView: NSTextView {
         }
     }
 
-    /// 横向滚动时行号要钉在可视左缘：监听 clip 的 x 变化强制重绘
+    /// 行号覆盖层同步：钉在可视左缘、覆盖可见高度。滚动（横/竖）、窗口尺寸、
+    /// 排版变化都会走到这里；frame 变了就挪过去，并全量重绘自身。
+    func syncLineNumberOverlay() {
+        guard showLineNumbers, lineNumberWidth > 0 else {
+            if lineNumberOverlay.superview != nil { lineNumberOverlay.removeFromSuperview() }
+            return
+        }
+        guard enclosingScrollView != nil else { return }
+        if lineNumberOverlay.superview == nil {
+            lineNumberOverlay.textView = self
+            addSubview(lineNumberOverlay)
+        }
+        let vis = visibleRect
+        let target = NSRect(x: vis.minX, y: vis.minY,
+                            width: lineNumberWidth, height: vis.height)
+        if lineNumberOverlay.frame != target { lineNumberOverlay.frame = target }
+        lineNumberOverlay.needsDisplay = true
+    }
+
+    /// 滚动 / 窗口尺寸变化都触发：覆盖层全量重绘，无增量脏矩形残影
     func installLineNumberSupport() {
         syncLineNumberMetrics()
         guard lineObserver == nil, let clip = enclosingScrollView?.contentView else { return }
-        lastClipX = clip.bounds.origin.x
         clip.postsBoundsChangedNotifications = true
         lineObserver = NotificationCenter.default.addObserver(
             forName: NSView.boundsDidChangeNotification, object: clip, queue: .main
         ) { [weak self] _ in
-            guard let self, let clip = self.enclosingScrollView?.contentView else { return }
-            if abs(clip.bounds.origin.x - self.lastClipX) > 0.5 {
-                self.lastClipX = clip.bounds.origin.x
-                self.needsDisplay = true
-            }
+            self?.syncLineNumberOverlay()
         }
+        syncLineNumberOverlay()
     }
+}
+
+/// 行号覆盖视图：加在正文视图（文档坐标、flipped）上，frame 始终等于可视区
+/// 左侧条带。每次显示全量重绘自己的全部 bounds——条带只有可视区大小，
+/// 全量重绘代价可忽略，且从根上杜绝「增量脏矩形裁切出的半截数字 / 旧位置
+/// 号带残影列」这类绘制残留。
+private final class LineNumberOverlayView: NSView {
+    weak var textView: TapAwareTextView?
+    override var isFlipped: Bool { true }
+    /// 点击穿透到正文：行号区域照常可选中文本
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard showLineNumbers, lineNumberWidth > 0 else {
-            super.draw(dirtyRect)
-            return
-        }
-        drawPreviewLineNumbers(dirtyRect)
-        // 正文裁掉行号条带：横滚时长行从条带下方穿过也不会盖住行号
-        let visible = visibleRect
-        let textRegion = NSRect(x: visible.minX + lineNumberWidth, y: visible.minY,
-                                width: max(0, visible.width - lineNumberWidth),
-                                height: visible.height)
-        let textClip = textRegion.intersection(dirtyRect)
-        if textClip.width > 0, textClip.height > 0 {
-            NSGraphicsContext.saveGraphicsState()
-            NSBezierPath(rect: textClip).addClip()
-            super.draw(dirtyRect)
-            NSGraphicsContext.restoreGraphicsState()
-        }
-    }
-
-    private func drawPreviewLineNumbers(_ dirtyRect: NSRect) {
-        guard let lm = layoutManager, textContainer != nil else { return }
-        guard !lineMarks.isEmpty else { return }
-        let visible = visibleRect
+        guard let tv = textView, !tv.lineMarks.isEmpty, tv.lineNumberWidth > 0 else { return }
+        // 不透明底色，盖住从下方穿过的正文
+        (tv.enclosingScrollView?.backgroundColor ?? .white).setFill()
+        bounds.fill()
         let attrs: [NSAttributedString.Key: Any] = [
-            .font: numberFont, .foregroundColor: NSColor.secondaryLabelColor
+            .font: tv.numberFont, .foregroundColor: NSColor.secondaryLabelColor
         ]
-        let bandRight = visible.minX + lineNumberWidth
-        // 条带铺不透明底色，盖住从下方穿过的正文
-        let band = NSRect(x: visible.minX, y: visible.minY,
-                          width: lineNumberWidth, height: visible.height)
-        if band.intersects(dirtyRect) {
-            (enclosingScrollView?.backgroundColor ?? .white).setFill()
-            band.intersection(dirtyRect).fill()
-        }
-        let numberX = bandRight - 6
-        for mark in lineMarks where mark.y >= visible.minY - 2 && mark.y <= visible.maxY + 2 {
+        let originY = frame.origin.y   // overlay 原点 = 可视区左上角（文档坐标）
+        for mark in tv.lineMarks {
+            let localY = mark.y - originY
+            if localY < -16 || localY > bounds.height + 16 { continue }
             let label = "\(mark.number)" as NSString
             let size = label.size(withAttributes: attrs)
-            let y = mark.y + max(0, (mark.height - size.height) / 2)
-            label.draw(at: NSPoint(x: numberX - size.width, y: y),
+            let y = localY + max(0, (mark.height - size.height) / 2)
+            label.draw(at: NSPoint(x: bounds.maxX - 6 - size.width, y: y),
                        withAttributes: attrs)
         }
     }
@@ -1489,6 +1672,8 @@ final class TapAwareTextView: NSTextView {
 
 private struct MarkdownReadOnlyText: NSViewRepresentable {
     let attributed: NSAttributedString
+    /// 渲染偏移 ↔ 源文件行号映射（预览行号按源行编号就靠它）
+    var lineMap: [MarkdownRender.PreviewLineEntry] = []
     /// 排版指纹：字号变化（缩放）时字符串可能相同，靠它触发重排
     let version: Int
     /// 预览内查找（范围基于渲染后的纯文本）
@@ -1505,15 +1690,23 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
     var onVisibleAnchor: ((String) -> Void)? = nil
     var onSingleTap: (() -> Void)? = nil
     var onDoubleTap: (() -> Void)? = nil
+    /// 预览里打字 → 请求切回编辑（仅 macOS）
+    var onEditRequest: ((String) -> Void)? = nil
 
     final class Coordinator {
         var lastVersion = -1
+        /// 上一次装进文本视图的渲染结果：配合 MarkdownRender 的单槽缓存，
+        /// 未变化时是同一实例，用 === 判断即可跳过全文比对（O(n) 字符串拷贝）
+        var lastAttributed: NSAttributedString?
+        /// 滚动上报的合并任务：滚动中每帧都取消重排，停下 120ms 后只上报一次
+        var scrollReport: DispatchWorkItem?
         var selectionObserver: NSObjectProtocol?
         var scrollObserver: NSObjectProtocol?
         var lastFindSignature = ""
         /// 位置恢复的签名：key 变化才重新定位，避免 body 重算 / 滚动回调反复把视图拽回原处
         var lastRestoreKey = ""
         deinit {
+            scrollReport?.cancel()
             if let selectionObserver { NotificationCenter.default.removeObserver(selectionObserver) }
             if let scrollObserver { NotificationCenter.default.removeObserver(scrollObserver) }
         }
@@ -1543,11 +1736,19 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
         let tv = TapAwareTextView(frame: .zero, textContainer: container)
         tv.isEditable = false
         tv.isSelectable = true
-        tv.drawsBackground = false
+        // 必须不透明白底：行号带画在「当前可视左缘」的文档坐标上，origin.x 一变
+        // （拖窗口时 NSScrollView 会微调）旧位置的号带像素就成了正文区的残留。
+        // 透明底的重绘只画字形擦不掉它们（表现为一列列重复行号）；不透明底
+        // 让任何重绘都先把脏区刷白，残留像素必然被擦掉。
+        tv.drawsBackground = true
+        tv.backgroundColor = .white
         tv.textContainerInset = NSSize(width: 22, height: 16)
         storage.setAttributedString(attributed)
+        tv.previewLineMap = lineMap
+        context.coordinator.lastAttributed = attributed
         tv.onSingleTap = onSingleTap
         tv.onDoubleTap = onDoubleTap
+        tv.onEditRequest = onEditRequest
         tv.isPanMode = panMode
         tv.isVerticallyResizable = true
         tv.isHorizontallyResizable = true
@@ -1575,15 +1776,18 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
         let onText = onRenderedText
         DispatchQueue.main.async { onText?(rendered) }
 
-        // 滚动比例 / 可见区锚点上报：预览→编辑定位、再次打开停在原位置都靠它
+        // 滚动比例 / 可见区锚点上报：预览→编辑定位、再次打开停在原位置都靠它。
+        // 上报会触发 SwiftUI 状态更新（body 重求值），滚动中每帧上报是卡顿主因之一，
+        // 所以合并为「滚动停止 120ms 后只上报一次」。
         let onScroll = onScrollFraction
         let onAnchor = onVisibleAnchor
         let clip = scroll.contentView
         clip.postsBoundsChangedNotifications = true
         var lastClipWidth = clip.bounds.width
+        let coord = context.coordinator
         context.coordinator.scrollObserver = NotificationCenter.default.addObserver(
             forName: NSView.boundsDidChangeNotification, object: clip, queue: .main
-        ) { [weak tv, weak scroll] _ in
+        ) { [weak tv, weak scroll, weak coord] _ in
             guard let tv, let scroll else { return }
             let c = scroll.contentView
             // 窗口宽度变化后重算最长行宽度；只在这种变化时才做，滚动引起的 bounds 变化不重排
@@ -1591,22 +1795,28 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
                 lastClipWidth = c.bounds.width
                 Self.relayoutForNoWrap(scroll, tv: tv)
             }
-            let f = Self.fraction(scroll)
-            let ns = tv.string as NSString
+            guard onScroll != nil || onAnchor != nil else { return }
+            // 只取可见区一小段算锚点，不拷贝全文（tv.string 是 O(n) 全量拷贝）
+            let storage = tv.textStorage
             var anchor = ""
-            if ns.length > 0 {
+            if let storage, storage.length > 0 {
                 let point = NSPoint(x: c.bounds.minX + 24, y: c.bounds.minY + 6)
-                let idx = min(max(tv.characterIndexForInsertion(at: point), 0), ns.length)
-                let len = min(80, ns.length - idx)
+                let idx = min(max(tv.characterIndexForInsertion(at: point), 0), storage.length - 1)
+                let len = min(80, storage.length - idx)
                 if len > 0 {
-                    anchor = Self.visibleAnchor(in: ns.substring(
-                        with: NSRange(location: idx, length: len)))
+                    anchor = Self.visibleAnchor(in: storage.attributedSubstring(
+                        from: NSRange(location: idx, length: len)).string)
                 }
             }
-            DispatchQueue.main.async {
+            let f = Self.fraction(scroll)
+            // 滚动进行中每帧取消上一次上报、排新的：停下 120ms 后才真正回调一次
+            coord?.scrollReport?.cancel()
+            let report = DispatchWorkItem {
                 onScroll?(f)
                 if !anchor.isEmpty { onAnchor?(anchor) }
             }
+            coord?.scrollReport = report
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: report)
         }
         return scroll
     }
@@ -1615,14 +1825,19 @@ private struct MarkdownReadOnlyText: NSViewRepresentable {
         guard let tv = scroll.documentView as? TapAwareTextView else { return }
         tv.onSingleTap = onSingleTap
         tv.onDoubleTap = onDoubleTap
+        tv.onEditRequest = onEditRequest
         tv.isPanMode = panMode
-        if tv.textStorage?.string != attributed.string || context.coordinator.lastVersion != version {
+        if tv.textStorage?.length != attributed.length
+                || context.coordinator.lastAttributed !== attributed
+                || context.coordinator.lastVersion != version {
             // 记住缩放前的滚动位置比例，缩放后恢复，避免跳回顶部
             let ratio = Self.fraction(scroll)
             tv.textStorage?.setAttributedString(attributed)
+            tv.previewLineMap = lineMap
             tv.syncLineNumberMetrics()
             Self.relayoutForNoWrap(scroll, tv: tv)
             tv.needsDisplay = true
+            context.coordinator.lastAttributed = attributed
             context.coordinator.lastVersion = version
             context.coordinator.lastFindSignature = ""
             let rendered = attributed.string

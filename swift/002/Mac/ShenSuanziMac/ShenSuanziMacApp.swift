@@ -33,10 +33,21 @@ struct ShenSuanziMacApp: App {
                         // 残留的小窗口会让内容比窗口高、底部被裁（科学计算器顶栏被顶掉就是它）。
                         // 启动时把小于最小尺寸的窗口补齐。
                         let minSize = NSSize(width: 900, height: 760)
-                        if w.frame.width < minSize.width || w.frame.height < minSize.height {
+                        // 窗口大小 / 位置记忆：MacRootView.onAppear 已挂 autosave name 并还原；
+                        // 这里兜底再挂一次（窗口此时一定就绪），命中已保存的窗口框。
+                        // 只有从未保存过窗口框（首次启动）才给默认尺寸并居中；
+                        // 有记忆的窗口只补齐最小尺寸、保留用户的位置。
+                        if w.frameAutosaveName.isEmpty {
+                            w.setFrameAutosaveName("ShenSuanziMainWindow")
+                        }
+                        let hasSavedFrame = UserDefaults.standard
+                            .object(forKey: "NSWindow Frame ShenSuanziMainWindow") != nil
+                        if !hasSavedFrame {
+                            w.setContentSize(NSSize(width: 1060, height: 780))
+                            w.center()
+                        } else if w.frame.width < minSize.width || w.frame.height < minSize.height {
                             w.setContentSize(NSSize(width: max(w.frame.width, 1060),
                                                     height: max(w.frame.height, minSize.height)))
-                            w.center()
                         }
                     }
                 }

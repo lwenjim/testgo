@@ -142,7 +142,7 @@ final class NotesModel: ObservableObject {
 // MARK: - 界面
 
 /// 每篇笔记上次打开时停留的位置（比例 + 可见区锚点）
-private struct NotePosition {
+private struct NotePosition: Codable {
     var fraction: CGFloat
     var anchor: String
 }
@@ -156,8 +156,9 @@ struct NotesView: View {
     @State private var draft = ""
     @State private var isNew = false
     @State private var flashSaved = false
-    @State private var previewMode = true   // 默认预览模式，点「编辑」进入编辑
-    /// 预览缩放倍率（1 = 原始排版）
+    /// 预览/编辑模式（默认预览，点「编辑」进入编辑；重启后保持上次模式）
+    @AppStorage("macNotesPreviewMode") private var previewMode = true
+    /// 预览缩放倍率（1 = 原始排版；重启后保持上次倍率，切换笔记时重置）
     @State private var previewScale: CGFloat = 1
     /// 捏合缩放的起点倍率（手势开始时记录）
     @State private var pinchStartScale: CGFloat?
@@ -169,11 +170,12 @@ struct NotesView: View {
     /// 多选模式：批量删除用
     @State private var selectMode = false
     @State private var multiSelection = Set<UUID>()
-    /// 编辑区铺满窗口（收起左侧列表）
-    @State private var listCollapsed = false
+    /// 编辑区铺满窗口（收起左侧列表；重启后保持开关状态）
+    @AppStorage("macNotesListCollapsed") private var listCollapsed = false
     /// 编辑区内查找（⌘F）：当前匹配序号、总数、跳转
-    @State private var showFind = false
-    @State private var findQuery = ""
+    /// 查找面板开合与查找词也持久化：重启后保持上次的查找状态
+    @AppStorage("macNotesFindShown") private var showFind = false
+    @AppStorage("macNotesFindQuery") private var findQuery = ""
     @State private var findIndex = 0
     @FocusState private var findFocused: Bool
     /// 查找选项
@@ -181,7 +183,7 @@ struct NotesView: View {
     @AppStorage("macNotesFindCase") private var findCaseSensitive = false
     @AppStorage("macNotesFindWholeWord") private var findWholeWord = false
     @AppStorage("macNotesFindReplaceShown") private var showReplace = false
-    @State private var replaceText = ""
+    @AppStorage("macNotesFindReplaceText") private var replaceText = ""
     /// 状态栏开关（默认隐藏）、抓手平移开关
     @AppStorage("macNotesStatusBar") private var showStatusBar = false
     @AppStorage("macNotesPanMode") private var panMode = true
@@ -210,6 +212,9 @@ struct NotesView: View {
     @State private var mappedPath: String?
     /// 切换笔记 / 新建时抑制一次「模式切换位置同步」，避免旧笔记位置覆盖新笔记
     @State private var skipModeSync = false
+    /// 启动后的第一次选笔记：保持上次退出时的模式 / 缩放 / 查找状态，
+    /// 不做「换笔记重置」（重置只发生在用户主动切换笔记时）
+    @State private var firstSelectAfterLaunch = true
 
     private var list: [Note] { model.filtered(query) }
     private var selected: Note? { model.notes.first { $0.id == selectedID } }
@@ -230,7 +235,20 @@ struct NotesView: View {
         .onAppear {
             fileSync.bind(model)
             fileSync.start()
-            if selectedID == nil, let first = list.first { select(first, fromList: false) }
+            // 状态记忆：阅读位置、缩放倍率、上次选中的笔记（重启后回到原样）
+            loadPositions()
+            if let saved = UserDefaults.standard.object(forKey: "macNotesPreviewScale") as? Double {
+                previewScale = CGFloat(min(max(saved, 0.6), 3.0))
+            }
+            if selectedID == nil {
+                if let raw = UserDefaults.standard.string(forKey: Self.lastNoteKey),
+                   let uuid = UUID(uuidString: raw),
+                   let note = list.first(where: { $0.id == uuid }) {
+                    select(note, fromList: false)
+                } else if let first = list.first {
+                    select(first, fromList: false)
+                }
+            }
             // 从别的板块切回笔记页时 noteKey 不变，updateNSView 不会触发位置恢复，
             // 这里按当前记录兜底恢复一次（延后一拍等编辑器挂到窗口上）。
             DispatchQueue.main.async {
@@ -270,6 +288,10 @@ struct NotesView: View {
                 previewAnchor = p.anchor
                 restoreKey += 1
             }
+        }
+        // 缩放倍率持久化：重启后保持上次的缩放
+        .onChange(of: previewScale) { scale in
+            UserDefaults.standard.set(Double(scale), forKey: "macNotesPreviewScale")
         }
         // 预览渲染文本回传后，正在预览搜索时重算匹配
         .onChange(of: previewText) { _ in
@@ -535,7 +557,7 @@ struct NotesView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help("一键给笔记里未标记的代码段加上 ``` 代码块标记，已有代码块自动补语言标签（可 ⌘Z 撤销）")
+                    .help("一键给笔记里未标记的代码段加上 ``` 代码块标记（识别不出语言默认 bash），已有代码块自动补语言标签（可 ⌘Z 撤销）")
                     // 撤销 / 重做（⌘Z 由 NSTextView 原生处理，这里给可点按钮）
                     Button { editor.undo(); saveDraft(flash: false) } label: {
                         Image(systemName: "arrow.uturn.backward")
@@ -653,6 +675,8 @@ struct NotesView: View {
                                     // 点按内容直接回到编辑（位置由 onChange 带过去）；双击还原缩放
                                     onSingleTap: { previewMode = false },
                                     onDoubleTap: { previewScale = 1 },
+                                    // 预览里直接打字 = 修改请求：切回编辑并落到对应位置
+                                    onEditRequest: { beginEditFromPreview($0) },
                                     onScrollFraction: { f in
                                         if abs(previewFraction - f) > 0.002 { previewFraction = f }
                                     },
@@ -1056,12 +1080,18 @@ struct NotesView: View {
         rememberPosition()
         saveDraft(flash: false)
         selectedID = note.id
+        UserDefaults.standard.set(note.id.uuidString, forKey: Self.lastNoteKey)
         isNew = false
         draft = note.text
         baseline = note.text
-        setPreviewMode(true, skipSync: true)   // 打开已有笔记默认预览
-        previewScale = 1
-        resetFind()
+        if firstSelectAfterLaunch {
+            // 启动后第一次进笔记：保持上次退出时的模式 / 缩放 / 查找状态
+            firstSelectAfterLaunch = false
+        } else {
+            setPreviewMode(true, skipSync: true)   // 打开已有笔记默认预览
+            previewScale = 1
+            resetFind()
+        }
         applyPosition(for: note)               // 恢复到上次打开的位置
         refreshMappedPath()
         if fromList, autoHideSidebar { withAnimation { listCollapsed = true } }
@@ -1078,6 +1108,26 @@ struct NotesView: View {
         previewMode = value
     }
 
+    /// 预览里直接打字 → 切回编辑，光标落到预览可见区对应位置并写入字符。
+    /// 预览渲染后的富文本无法可靠映射回 Markdown 原文，
+    /// 用「可见区锚点文字在原文里的位置」做对应（与预览→编辑定位同一机制）。
+    private func beginEditFromPreview(_ chars: String) {
+        let anchor = previewAnchor
+        setPreviewMode(false)   // onChange(previewMode) 会带锚点/比例切到编辑并聚焦
+        // 等编辑器挂载、位置恢复的多拍收敛跑完，再落光标和字符
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            guard let tv = editor.textView else { return }
+            let ns = tv.string as NSString
+            var loc = 0
+            if !anchor.isEmpty, ns.length > 0 {
+                let r = ns.range(of: anchor)
+                if r.location != NSNotFound { loc = r.location }
+            }
+            tv.setSelectedRange(NSRange(location: min(loc, ns.length), length: 0))
+            if !chars.isEmpty { tv.insertText(chars) }
+        }
+    }
+
     /// 记住当前笔记的可见位置（预览用上报值，编辑态读编辑器）
     private func rememberPosition() {
         guard let id = selectedID, !isNew else { return }
@@ -1086,6 +1136,27 @@ struct NotesView: View {
         } else {
             let p = editor.currentPosition()
             positions[id] = NotePosition(fraction: p.fraction, anchor: p.anchor)
+        }
+        persistPositions()
+    }
+
+    // MARK: 阅读位置持久化（重启后每篇笔记回到上次看到的地方）
+
+    private static let positionsKey = "macNotesPositions"
+    private static let lastNoteKey = "macNotesLastNoteID"
+
+    private func loadPositions() {
+        guard let data = UserDefaults.standard.data(forKey: Self.positionsKey) else { return }
+        guard let raw = try? JSONDecoder().decode([String: NotePosition].self, from: data) else { return }
+        positions = Dictionary(uniqueKeysWithValues: raw.compactMap { key, value in
+            UUID(uuidString: key).map { ($0, value) }
+        })
+    }
+
+    private func persistPositions() {
+        let raw = Dictionary(uniqueKeysWithValues: positions.map { ($0.key.uuidString, $0.value) })
+        if let data = try? JSONEncoder().encode(raw) {
+            UserDefaults.standard.set(data, forKey: Self.positionsKey)
         }
     }
 

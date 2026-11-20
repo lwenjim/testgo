@@ -371,10 +371,9 @@ final class MarkdownEditorController: ObservableObject {
                 if lang.isEmpty, block.count >= 3 {
                     let inner = block[1...(block.count - 2)].joined(separator: "\n")
                     let detected = CodeLanguageDetector.detect(inner)
-                    if !detected.isEmpty {
-                        block[0] = "```" + detected
-                        changed += 1
-                    }
+                    // 没有语言标签时补：识别得出来用识别结果，识别不出来默认 bash
+                    block[0] = "```" + (detected.isEmpty ? "bash" : detected)
+                    changed += 1
                 }
                 out.append(contentsOf: block)
                 i = j
@@ -395,7 +394,9 @@ final class MarkdownEditorController: ObservableObject {
             }
             if Self.looksLikeCode(para) {
                 let code = para.joined(separator: "\n")
-                let lang = CodeLanguageDetector.detect(code)
+                let detected = CodeLanguageDetector.detect(code)
+                // 识别不出来默认 bash（命令行操作场景最多）
+                let lang = detected.isEmpty ? "bash" : detected
                 // 与前面的文字之间留一个空行，Markdown 才不会把围栏粘在上一段里
                 if let last = out.last, !last.trimmingCharacters(in: .whitespaces).isEmpty {
                     out.append("")
@@ -425,7 +426,8 @@ final class MarkdownEditorController: ObservableObject {
         let body = trailing ? String(raw.dropLast()) : raw
         let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !trimmed.hasPrefix("```") else { return 0 }
-        let lang = CodeLanguageDetector.detect(body)
+        let detected = CodeLanguageDetector.detect(body)
+        let lang = detected.isEmpty ? "bash" : detected
         let replacement = "```" + lang + "\n" + body + "\n```" + (trailing ? "\n" : "")
         tv.insertText(replacement, replacementRange: lineRange)
         tv.setSelectedRange(NSRange(location: lineRange.location,
@@ -434,15 +436,21 @@ final class MarkdownEditorController: ObservableObject {
         return 1
     }
 
-    /// 段落是否像代码：≥2/3 的行有代码特征，且不含 Markdown 结构行（列表/引用/表格等）
+    /// 段落是否像代码：≥2/3 的行有代码特征，结构行（列表/引用/表格）不超过 1/3
     private static func looksLikeCode(_ lines: [String]) -> Bool {
         let meaningful = lines.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard !meaningful.isEmpty else { return false }
         var codeLines = 0
+        var structural = 0
         for line in meaningful {
-            if isStructuralLine(line) { return false }
+            if isStructuralLine(line) {
+                structural += 1
+                continue
+            }
             if isCodeLine(line) { codeLines += 1 }
         }
+        // 代码里偶尔混一行注释输出 / 重定向不算什么，但结构行超过 1/3 就整体否掉
+        guard structural * 3 <= meaningful.count else { return false }
         return codeLines * 3 >= meaningful.count * 2
     }
 
@@ -457,11 +465,81 @@ final class MarkdownEditorController: ObservableObject {
         "await ", "async ", "throw ", "throws ", "guard ", "defer ", "elif ", "lambda "
     ]
 
+    /// 常见命令行工具名：行首词命中即视为代码（覆盖 redis-cli、psql、xargs 这类
+    /// 关键字表和符号统计都认不出来的裸命令）
+    private static let cliCommands: Set<String> = [
+        "redis-cli", "redis-cli3", "redis", "mysql", "mysqladmin", "psql", "sqlite3",
+        "mongo", "mongosh", "mysqlcheck", "pg_dump", "pg_restore", "nginx", "systemctl",
+        "service", "launchctl", "brew", "port", "apt", "apt-get", "yum", "dnf",
+        "gem", "cargo", "pod", "carthage", "xcodebuild", "xcrun", "swift", "swiftc",
+        "gcc", "clang", "cmake", "gradle", "mvn", "sbt", "python", "python3", "pip",
+        "pip3", "node", "deno", "bun", "php", "composer", "dotnet", "java", "javac",
+        "ssh", "scp", "sftp", "rsync", "wget", "ping", "dig", "nslookup", "traceroute",
+        "netstat", "lsof", "ifconfig", "iptables", "tcpdump", "nc", "telnet", "openssl",
+        "ls", "pwd", "cat", "head", "tail", "less", "more", "touch", "mkdir", "rmdir",
+        "cp", "mv", "rm", "ln", "find", "locate", "diff", "patch", "chmod", "chown",
+        "tar", "gzip", "gunzip", "zip", "unzip", "xz", "bzip2", "sort", "uniq", "cut",
+        "awk", "sed", "grep", "egrep", "rg", "ag", "jq", "xargs", "tee", "wc", "tr",
+        "column", "paste", "join", "split", "nl", "od", "hexdump", "xxd", "base64",
+        "md5", "md5sum", "shasum", "sha256sum", "file", "stat", "du", "df", "ps",
+        "top", "htop", "kill", "killall", "pkill", "pgrep", "nice", "nohup", "time",
+        "watch", "which", "whoami", "su", "doas", "env", "printenv", "alias",
+        "unalias", "source", "crontab", "date", "uname", "hostname", "open", "pbcopy",
+        "pbpaste", "osascript", "defaults", "hg", "svn", "gh", "docker",
+        "docker-compose", "podman", "helm", "terraform", "vagrant", "ansible",
+        "colima", "lima", "virsh", "aws", "gcloud", "az"
+    ]
+
+    /// 行内是否出现命令行长选项：--scan、--pattern、--no-auth-warning …
+    private static func hasLongFlag(_ t: String) -> Bool {
+        t.range(of: #"(^|\s)--[A-Za-z][\w-]*"#, options: .regularExpression) != nil
+    }
+
+    /// 行内是否出现文件路径：/tmp/…、~/…、./…（出现 ≥2 处才算，避免把
+    /// 「文件放在 /tmp/x 下」这类提了一句路径的中文说明当成代码）
+    private static func hasPaths(_ t: String) -> Bool {
+        let m = t.range(of: #"(\s|^)(/|~/|\./)[\w./@:-]+"#, options: .regularExpression)
+        guard let r = m else { return false }
+        let rest = String(t[r.upperBound...])
+        return rest.range(of: #"(\s|^)(/|~/|\./)[\w./@:-]+"#, options: .regularExpression) != nil
+    }
+
+    /// host:port（127.0.0.1:6379）
+    private static func hasHostPort(_ t: String) -> Bool {
+        t.range(of: #"\b\d{1,3}(\.\d{1,3}){3}:\d+"#, options: .regularExpression) != nil
+    }
+
+    /// 变量赋值：FOO=bar、TZ=Asia/Tokyo
+    private static func isAssignment(_ t: String) -> Bool {
+        t.range(of: #"^\w+=\S+"#, options: .regularExpression) != nil
+    }
+
+    /// 含中文标点的句子当说明文字，不参与命令行启发式
+    private static func hasCJKPunctuation(_ t: String) -> Bool {
+        t.contains { "，。；：！？、（）【】《》".contains($0) }
+    }
+
     private static func isCodeLine(_ raw: String) -> Bool {
         let t = raw.trimmingCharacters(in: .whitespaces)
         if t.isEmpty { return false }
         if codeKeywords.contains(where: { t.hasPrefix($0) }) { return true }
+        // 命令行启发式：裸命令 / 长选项 / 路径 / host:port / 赋值
+        if !hasCJKPunctuation(t), !isProse(t) {
+            if hasLongFlag(t) || hasHostPort(t) || isAssignment(t) || hasPaths(t) {
+                return true
+            }
+            let first = t.split(separator: " ", omittingEmptySubsequences: true).first
+            if let first, cliCommands.contains(first.lowercased()) { return true }
+        }
         let symbols = t.filter { "{}()[];=<>$#/\\|`:&".contains($0) }.count
+        // 中文为主的行若全部代码证据只是路径斜杠（如「日志在 /var/log/system.log」），
+        // 仍按说明文字处理
+        let hasChinese = t.contains { $0 >= "\u{4e00}" && $0 <= "\u{9fff}" }
+        if hasChinese,
+           t.filter({ "/\\".contains($0) }).count == symbols,
+           symbols > 0 {
+            return false
+        }
         if symbols >= 2 { return true }
         let indented = raw.first == " " || raw.first == "\t"
         if indented && symbols >= 1 { return true }
