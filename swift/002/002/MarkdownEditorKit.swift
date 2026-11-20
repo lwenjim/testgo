@@ -2040,6 +2040,9 @@ final class WrapModeTextView: UITextView {
     private var needsApply = true
     private var lastBoundsSize: CGSize = .zero
     private var lastGutterX: CGFloat = -1
+    /// applyWrapMode 算出的正确 contentSize。iOS 26.3 上 UITextView 会被系统
+    /// 重新算成 bounds 宽度（长行文档横向滚不动），这里存住期望值随时纠偏。
+    private var expectedContentSize: CGSize?
 
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         // 自建容器并在创建时关闭跟踪：自动容器 tracks=true 会跟随视图 bounds，
@@ -2081,7 +2084,25 @@ final class WrapModeTextView: UITextView {
             needsApply = false
             applyWrapMode()
         }
+        healContentSize()
         syncGutter()
+    }
+
+    /// iOS 26.3 会把 contentSize 重新算成 bounds 宽度（长行横向滚不动、
+    /// contentOffset 卡在半截表现为"内容被裁掉一块且滑不动"）。
+    /// 发现被改掉就纠正回来，并把越界的横向偏移拉回可滚范围。
+    private func healContentSize() {
+        guard let want = expectedContentSize else { return }
+        if abs(contentSize.width - want.width) > 1
+            || abs(contentSize.height - want.height) > 1 {
+            contentSize = want
+        }
+        // 拖拽 / 减速期间不动偏移，避免破坏回弹手感；只在静止时纠偏
+        guard !isTracking, !isDecelerating, !isDragging else { return }
+        let maxX = max(0, contentSize.width - bounds.width)
+        if contentOffset.x > maxX + 0.5 || contentOffset.x < -0.5 {
+            contentOffset.x = min(max(contentOffset.x, 0), maxX)
+        }
     }
 
     /// 行号列钉在可视左缘，随横向滚动平移；仅位置真的变了才重绘
@@ -2157,6 +2178,10 @@ final class WrapModeTextView: UITextView {
     }
 
     private func applyWrapMode() {
+        // iOS 26.3 UITextView 接管自定义栈时会把跟踪标志改回 true（宽高跟随
+        // bounds，长行被裁、横向滚不动），每次排版前必须重新关掉。
+        if textContainer.widthTracksTextView { textContainer.widthTracksTextView = false }
+        if textContainer.heightTracksTextView { textContainer.heightTracksTextView = false }
         // 左侧给行号留出固定宽度，正文从行号列右侧开始
         var inset = textContainerInset
         let desiredLeft: CGFloat = showLineNumbers ? gutterWidth() + 10 : 14
@@ -2199,14 +2224,20 @@ final class WrapModeTextView: UITextView {
         showsHorizontalScrollIndicator = !wrapText
         showsVerticalScrollIndicator = true
 
-        // contentSize 交给 UITextView 按最终容器算，不手工写死，避免截断
+        // contentSize 手工按容器写（iOS 26.3 系统自算会错成 bounds 宽度），
+        // 并记下期望值供 layoutSubviews 纠偏；随后把越界的横向偏移拉回范围
         contentSize = CGSize(width: contentW + inset.left + inset.right,
                              height: tc.size.height + inset.top + inset.bottom)
+        expectedContentSize = contentSize
+        if !isTracking, !isDecelerating, !isDragging {
+            let maxX = max(0, contentSize.width - bounds.width)
+            if contentOffset.x > maxX + 0.5 { contentOffset.x = maxX }
+        }
         rebuildLineMarks()
         gutter.setNeedsDisplay()
         #if os(iOS)
         let marks = lineMarks.prefix(12).map { "(\(Int($0.y)),\(Int($0.height)))" }.joined(separator: " ")
-        noteDiag("PREV bounds=\(bounds.size) contentSize=\(contentSize) tc=\(tc.size) wideH=\(wideUsed.height) usedH=\(used.height) glyphs=\(lm.numberOfGlyphs) wTrack=\(tc.widthTracksTextView) hTrack=\(tc.heightTracksTextView) marks=\(lineMarks.count) [\(marks)]")
+        noteDiag("PREV bounds=\(bounds.size) contentSize=\(contentSize) tc=\(tc.size) wideH=\(wideUsed.height) usedH=\(used.height) glyphs=\(lm.numberOfGlyphs) wTrack=\(tc.widthTracksTextView) hTrack=\(tc.heightTracksTextView) offset=\(contentOffset) marks=\(lineMarks.count) [\(marks)]")
         #endif
     }
 }

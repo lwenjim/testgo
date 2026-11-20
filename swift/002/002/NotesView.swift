@@ -578,7 +578,10 @@ struct NoteEditor: View {
     private func togglePreview() {
         if !previewMode { editor.endEditing() }
         withAnimation(.easeInOut(duration: 0.15)) { previewMode.toggle() }
-        if !previewMode { editor.focus() }
+        if !previewMode {
+            // 光标带回开头：默认光标在文末，直接 focus 会把长文滚到底
+            editor.focusAtStart()
+        }
     }
 
     private func save() {

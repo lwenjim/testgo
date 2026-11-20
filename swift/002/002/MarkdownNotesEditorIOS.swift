@@ -47,6 +47,18 @@ final class NoteEditorController: ObservableObject {
         if !tv.isFirstResponder { tv.becomeFirstResponder() }
     }
 
+    /// 预览切回编辑用：光标落到开头并滚到顶部。
+    /// 直接 focus() 会沿用默认在文末的光标，UITextView 立刻把长文
+    /// （几万 pt 高）滚到底，表现为"内容不见了 / 白屏"。
+    func focusAtStart() {
+        guard let tv = textView, tv.window != nil else { return }
+        tv.selectedRange = NSRange(location: 0, length: 0)
+        if !tv.isFirstResponder { tv.becomeFirstResponder() }
+        DispatchQueue.main.async {
+            tv.setContentOffset(CGPoint(x: 0, y: 0), animated: false)
+        }
+    }
+
     /// 切到预览时收起键盘
     func endEditing() {
         textView?.resignFirstResponder()
@@ -468,6 +480,9 @@ final class EditorTextView: UITextView {
     private var lastBoundsSize: CGSize = .zero
     private var needsMetrics = true
     private var lastGutterX: CGFloat = 0
+    /// applyMetrics 算出的正确 contentSize。iOS 26.3 上系统会把 contentSize
+    /// 重新算成 bounds 宽度（长行横向滚不动），存住期望值随时纠偏。
+    private var expectedContentSize: CGSize?
 
     private static let numberFont = UIFont.monospacedDigitSystemFont(ofSize: 10.5, weight: .regular)
 
@@ -517,7 +532,25 @@ final class EditorTextView: UITextView {
             needsMetrics = false
             applyMetrics()
         }
+        healContentSize()
         syncGutter()
+    }
+
+    /// iOS 26.3 会把 contentSize 重新算成 bounds 宽度（长行横向滚不动、
+    /// contentOffset 卡在半截表现为"内容被裁掉一块且滑不动"）。
+    /// 发现被改掉就纠正回来，并把越界的横向偏移拉回可滚范围。
+    private func healContentSize() {
+        guard let want = expectedContentSize else { return }
+        if abs(contentSize.width - want.width) > 1
+            || abs(contentSize.height - want.height) > 1 {
+            contentSize = want
+        }
+        // 拖拽 / 减速期间不动偏移，避免破坏回弹手感；只在静止时纠偏
+        guard !isTracking, !isDecelerating, !isDragging else { return }
+        let maxX = max(0, contentSize.width - bounds.width)
+        if contentOffset.x > maxX + 0.5 || contentOffset.x < -0.5 {
+            contentOffset.x = min(max(contentOffset.x, 0), maxX)
+        }
     }
 
     /// 行号列钉在可视左缘并跟着横向滚动；只有位置真的变了才触发重绘
@@ -574,6 +607,10 @@ final class EditorTextView: UITextView {
 
     private func applyMetrics() {
         guard bounds.width > 10 else { return }
+        // iOS 26.3 UITextView 接管自定义栈时会把跟踪标志改回 true（宽高跟随
+        // bounds，长行被裁、横向滚不动），每次排版前必须重新关掉。
+        if textContainer.widthTracksTextView { textContainer.widthTracksTextView = false }
+        if textContainer.heightTracksTextView { textContainer.heightTracksTextView = false }
         let len = textStorage.length
         let textChanged = (len != lastLen)
         lastLen = len
@@ -623,6 +660,18 @@ final class EditorTextView: UITextView {
             || abs(textContainer.size.height - target.height) > 0.5 {
             textContainer.size = target
         }
+        // iOS 26.3 系统自算 contentSize 会错成 bounds 宽度（长行滚不动），
+        // 手工按容器 + inset 写入并记下期望值供 layoutSubviews 纠偏；
+        // 随后把越界的横向偏移拉回可滚范围。
+        let wantContentSize = CGSize(width: target.width + inset2.left + inset2.right,
+                                     height: target.height + inset2.top + inset2.bottom)
+        if abs(contentSize.width - wantContentSize.width) > 1
+            || abs(contentSize.height - wantContentSize.height) > 1 {
+            contentSize = wantContentSize
+        }
+        expectedContentSize = wantContentSize
+        let maxX = max(0, contentSize.width - bounds.width)
+        if contentOffset.x > maxX + 0.5 { contentOffset.x = maxX }
         #if os(iOS)
         noteDiag("EDIT bounds=\(bounds.size) contentSize=\(contentSize) tc=\(textContainer.size) target=\(target) lines=\(lineCount()) offset=\(contentOffset)")
         #endif
