@@ -853,6 +853,24 @@ final class ColumnTextView: NSTextView {
     /// 抓手模式：按住「右键」拖动即可平移画布；左键始终是原生文本编辑
     var isPanMode = true
 
+    /// 双击选词：去掉词尾粘带的空白。AppKit 的智能插入/删除（smart insert/delete）
+    /// 会把词后面的空格/换行一起并入双击选中范围（便于替换后不留双空格），
+    /// 但复制出来的词总是带着尾部空白，不符合直觉——这里对选词结果把
+    /// 末尾的空白字符（空格/Tab/换行）修剪掉，至少保留 1 个字符；
+    /// 智能粘贴（覆盖粘贴时自动留空格）等其他行为不受影响。
+    override func selectionRange(forProposedRange proposedRange: NSRange,
+                                 granularity: NSSelectionGranularity) -> NSRange {
+        let range = super.selectionRange(forProposedRange: proposedRange, granularity: granularity)
+        guard granularity == .selectByWord, range.length > 1 else { return range }
+        let ns = string as NSString
+        var end = NSMaxRange(range)
+        while end > range.location + 1 {
+            let ch = ns.character(at: end - 1)
+            if ch == 32 || ch == 9 || ch == 10 || ch == 13 { end -= 1 } else { break }
+        }
+        return NSRange(location: range.location, length: end - range.location)
+    }
+
     // MARK: 行号（画在文本视图自身内，不再走 NSScrollView 的 vertical ruler）
     //
     // 不用 NSRulerView 的原因：SwiftUI 首帧下 NSScrollView 不会为 ruler 顶开
