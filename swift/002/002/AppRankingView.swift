@@ -250,6 +250,25 @@ final class RankingModel: ObservableObject {
         save()
     }
 
+    /// 下拉静默补齐：把目录里还没进列表的软件直接加进来（已在列表里的忽略）。
+    /// 被用户主动删过的（removedSchemes）不补回，避免长按删除被下拉"复活"。
+    /// 不弹任何窗口；返回本次加入的数量。
+    @discardableResult
+    func addMissingSilently() -> Int {
+        var added = 0
+        for app in Self.catalog
+        where !contains(scheme: app.scheme) && !removedSchemes.contains(app.scheme) {
+            var a = app
+            a.id = UUID()
+            a.count = 0
+            a.installed = nil
+            apps.append(a)
+            added += 1
+        }
+        if added > 0 { save() }
+        return added
+    }
+
     func contains(scheme: String) -> Bool {
         apps.contains { $0.scheme == scheme }
     }
@@ -1025,14 +1044,16 @@ struct AppRankingView: View {
 
     // MARK: 下拉触发添加（不占版面，靠手势本体）
 
-    /// 下拉超过阈值就打开「添加 App」，一次下拉只触发一次
+    /// 下拉超过阈值就静默补齐目录里还没加入的 App，一次下拉只触发一次；
+    /// 已在列表里的忽略，不弹窗口，只在真有新增时给一条轻提示。
     private func handlePull(_ y: CGFloat) {
         let pull = max(0, -y)
         if pull <= 2 { pullArmed = true }
-        guard pullArmed, pull >= Self.pullThreshold, !showCatalog else { return }
+        guard pullArmed, pull >= Self.pullThreshold else { return }
         pullArmed = false
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        showCatalog = true
+        let n = model.addMissingSilently()
+        if n > 0 { model.flash("已加入 \(n) 个 App") }
     }
 
     // MARK: 搜索框

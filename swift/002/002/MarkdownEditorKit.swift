@@ -2044,9 +2044,15 @@ final class WrapModeTextView: UITextView {
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         // 自建容器并在创建时关闭跟踪：自动容器 tracks=true 会跟随视图 bounds，
         // 使两段排版量不到全部内容高度（后半篇截断）、长行无法横向滚动。
+        // iOS 26.3 起自定义容器必须自带完整 TextKit1 栈（NSTextStorage →
+        // NSLayoutManager → NSTextContainer），否则断言崩溃或文字写不进栈。
+        let storage = NSTextStorage()
+        let lm = NSLayoutManager()
+        storage.addLayoutManager(lm)
         let own = NSTextContainer(size: CGSize(width: 1_000_000, height: 1_000_000))
         own.widthTracksTextView = false
         own.heightTracksTextView = false
+        lm.addTextContainer(own)
         super.init(frame: frame, textContainer: own)
         gutter.backgroundColor = .white
         gutter.isUserInteractionEnabled = false

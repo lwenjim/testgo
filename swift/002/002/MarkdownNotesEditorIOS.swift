@@ -475,9 +475,17 @@ final class EditorTextView: UITextView {
         // 自建容器并在创建时关闭跟踪：默认自动容器 tracks=true 会把宽高跟随
         // 视图 bounds，导致长行横向排不出去、纵向内容高度被压断。改自动容器的
         // tracks 标志在 UIKit 初始化后可能被还原，故与 Mac 端一致显式建容器。
+        // 注意：iOS 26.3 起 UITextView 自定义容器必须自带完整 TextKit1 栈
+        //（NSTextStorage → NSLayoutManager → NSTextContainer），只传裸容器会
+        // 断言崩溃（"text container must already have a layout manager"），
+        // 只挂 layoutManager 不挂 textStorage 则文字写不进栈、整页空白。
+        let storage = NSTextStorage()
+        let lm = NSLayoutManager()
+        storage.addLayoutManager(lm)
         let own = NSTextContainer(size: CGSize(width: 1_000_000, height: 1_000_000))
         own.widthTracksTextView = false
         own.heightTracksTextView = false
+        lm.addTextContainer(own)
         super.init(frame: frame, textContainer: own)
         gutter.backgroundColor = .white
         gutter.isUserInteractionEnabled = false   // 不拦截文本视图的滚动 / 点按手势
