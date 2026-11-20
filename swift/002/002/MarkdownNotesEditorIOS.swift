@@ -210,19 +210,20 @@ struct NoteMarkdownTextView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    /// 笔记统一不换行：段落样式默认是 byWordWrapping，会盖掉 textContainer.lineBreakMode
-    private static func noWrapParagraph() -> NSMutableParagraphStyle {
+    /// 段落样式随换行模式走：wrap=true 折行（笔记默认），false 单行裁切
+    private static func paragraph(for wrap: Bool) -> NSMutableParagraphStyle {
         let p = NSMutableParagraphStyle()
         p.lineSpacing = 5
-        p.lineBreakMode = .byClipping
+        p.lineBreakMode = wrap ? .byWordWrapping : .byClipping
         return p
     }
 
-    /// 给整段纯文本套上不换行段落样式（普通 UITextView 没有段落样式时会按默认折行）
-    private static func applyNoWrapStyle(to tv: UITextView) {
+    /// 给整段文本套上与当前换行模式一致的段落样式（ UITextView 需要段落样式
+    /// 才不会被默认 byWordWrapping / byClipping 覆盖容器设置）
+    private static func applyParagraphStyle(_ wrap: Bool, to tv: UITextView) {
         let full = NSRange(location: 0, length: tv.textStorage.length)
         guard full.length > 0 else { return }
-        tv.textStorage.addAttribute(.paragraphStyle, value: noWrapParagraph(), range: full)
+        tv.textStorage.addAttribute(.paragraphStyle, value: paragraph(for: wrap), range: full)
     }
 
     func makeUIView(context: Context) -> UITextView {
@@ -241,10 +242,10 @@ struct NoteMarkdownTextView: UIViewRepresentable {
         tv.smartInsertDeleteType = .no
         tv.typingAttributes = [.font: UIFont.systemFont(ofSize: effectiveFontSize),
                                .foregroundColor: UIColor.label,
-                               .paragraphStyle: Self.noWrapParagraph()]
+                               .paragraphStyle: Self.paragraph(for: wrapText)]
         tv.font = UIFont.systemFont(ofSize: effectiveFontSize)
         tv.text = text
-        Self.applyNoWrapStyle(to: tv)
+        Self.applyParagraphStyle(wrapText, to: tv)
         tv.invalidateMetrics()
         controller.textView = tv
         if autoFocus {
@@ -258,20 +259,21 @@ struct NoteMarkdownTextView: UIViewRepresentable {
         controller.textView = tv
         if let et = tv as? EditorTextView, et.wrapText != wrapText {
             et.wrapText = wrapText
+            Self.applyParagraphStyle(wrapText, to: tv)
         }
         // 外部换笔记时同步内容（保留光标位置，避免打字时被回写打断）
         if tv.text != text {
             let max = (text as NSString).length
             let loc = min(tv.selectedRange.location, max)
             tv.text = text
-            Self.applyNoWrapStyle(to: tv)
+            Self.applyParagraphStyle(wrapText, to: tv)
             tv.selectedRange = NSRange(location: loc, length: 0)
             (tv as? EditorTextView)?.invalidateMetrics()
         }
         // 缩放变化：整体重设字号（保留光标）
         if context.coordinator.lastZoom != zoomScale {
             context.coordinator.lastZoom = zoomScale
-            let para = Self.noWrapParagraph()
+            let para = Self.paragraph(for: wrapText)
             let font = UIFont.systemFont(ofSize: effectiveFontSize)
             tv.typingAttributes = [.font: font, .foregroundColor: UIColor.label,
                                    .paragraphStyle: para]
@@ -302,6 +304,20 @@ struct NoteMarkdownTextView: UIViewRepresentable {
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             // 行号列钉在可视左缘：滚动时跟着 contentOffset 走并只重绘可见区
             (scrollView as? EditorTextView)?.syncGutter()
+        }
+
+        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+            guard !decelerate else { return }
+            // isDragging 要到下一轮 runloop 才复位，延后一拍再做回正
+            DispatchQueue.main.async {
+                (scrollView as? EditorTextView)?.settleScroll()
+            }
+        }
+
+        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+            DispatchQueue.main.async {
+                (scrollView as? EditorTextView)?.settleScroll()
+            }
         }
 
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange,
@@ -455,7 +471,7 @@ private final class EditorGutterView: UIView {
 }
 
 final class EditorTextView: UITextView {
-    /// 默认不换行（长行保持单行，横向滚动查看）
+    /// 默认不换行（长行保持单行，横向滚动查看的原生排版）
     var wrapText: Bool = false {
         didSet {
             guard oldValue != wrapText else { return }
@@ -541,15 +557,30 @@ final class EditorTextView: UITextView {
     /// 发现被改掉就纠正回来，并把越界的横向偏移拉回可滚范围。
     private func healContentSize() {
         guard let want = expectedContentSize else { return }
+        // 拖拽 / 减速期间不写 contentSize、不动偏移：写回会打断系统回弹的锚点，
+        // 表现为横向滑动来回弹、滑不动。统一等手势结束（settleScroll）再纠偏。
+        guard !isTracking, !isDragging, !isDecelerating else { return }
         if abs(contentSize.width - want.width) > 1
             || abs(contentSize.height - want.height) > 1 {
             contentSize = want
         }
-        // 拖拽 / 减速期间不动偏移，避免破坏回弹手感；只在静止时纠偏
-        guard !isTracking, !isDecelerating, !isDragging else { return }
         let maxX = max(0, contentSize.width - bounds.width)
         if contentOffset.x > maxX + 0.5 || contentOffset.x < -0.5 {
             contentOffset.x = min(max(contentOffset.x, 0), maxX)
+        }
+    }
+
+    /// 手势结束（拖完/减速停）后调用：先纠偏尺寸，再把小幅横向偏移回正到行首。
+    /// 竖向阅读时手指稍带横向就会把行首滑出屏幕，用户感知为「内容被遮住」；
+    /// 小于阈值的偏移按误漂处理，动画归零；刻意横向滚动（大于阈值）保持不动。
+    func settleScroll() {
+        healContentSize()
+        let x = contentOffset.x
+        if x > 0.5, x < 60, !isTracking, !isDragging, !isDecelerating {
+            UIView.animate(withDuration: 0.22, delay: 0,
+                           options: [.allowUserInteraction, .beginFromCurrentState]) {
+                self.contentOffset.x = 0
+            }
         }
     }
 

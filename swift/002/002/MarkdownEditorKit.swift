@@ -2093,15 +2093,28 @@ final class WrapModeTextView: UITextView {
     /// 发现被改掉就纠正回来，并把越界的横向偏移拉回可滚范围。
     private func healContentSize() {
         guard let want = expectedContentSize else { return }
+        // 拖拽 / 减速期间不写 contentSize、不动偏移：写回会打断系统回弹的锚点，
+        // 表现为横向滑动来回弹、滑不动。统一等手势结束（settleScroll）再纠偏。
+        guard !isTracking, !isDragging, !isDecelerating else { return }
         if abs(contentSize.width - want.width) > 1
             || abs(contentSize.height - want.height) > 1 {
             contentSize = want
         }
-        // 拖拽 / 减速期间不动偏移，避免破坏回弹手感；只在静止时纠偏
-        guard !isTracking, !isDecelerating, !isDragging else { return }
         let maxX = max(0, contentSize.width - bounds.width)
         if contentOffset.x > maxX + 0.5 || contentOffset.x < -0.5 {
             contentOffset.x = min(max(contentOffset.x, 0), maxX)
+        }
+    }
+
+    /// 手势结束后调用：纠偏尺寸 + 小幅横向偏移回正行首（竖读误漂按归零处理）
+    func settleScroll() {
+        healContentSize()
+        let x = contentOffset.x
+        if x > 0.5, x < 60, !isTracking, !isDragging, !isDecelerating {
+            UIView.animate(withDuration: 0.22, delay: 0,
+                           options: [.allowUserInteraction, .beginFromCurrentState]) {
+                self.contentOffset.x = 0
+            }
         }
     }
 
@@ -2250,9 +2263,22 @@ private struct MarkdownReadOnlyText: UIViewRepresentable {
     var onSingleTap: (() -> Void)? = nil
     var onDoubleTap: (() -> Void)? = nil
 
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate, UIScrollViewDelegate, UITextViewDelegate {
         var lastVersion = -1
         var onSingleTap: (() -> Void)?
+
+        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+            guard !decelerate else { return }
+            DispatchQueue.main.async {
+                (scrollView as? WrapModeTextView)?.settleScroll()
+            }
+        }
+
+        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+            DispatchQueue.main.async {
+                (scrollView as? WrapModeTextView)?.settleScroll()
+            }
+        }
         var onDoubleTap: (() -> Void)?
 
         @objc func handleSingleTap() { onSingleTap?() }
@@ -2270,6 +2296,7 @@ private struct MarkdownReadOnlyText: UIViewRepresentable {
         let tv = WrapModeTextView()
         tv.isEditable = false
         tv.isSelectable = true
+        tv.delegate = context.coordinator   // 只读视图，仅用于滚动结束的回正回调
         tv.backgroundColor = .clear
         tv.textContainerInset = UIEdgeInsets(top: 14, left: 14, bottom: 20, right: 14)
         tv.alwaysBounceVertical = true
